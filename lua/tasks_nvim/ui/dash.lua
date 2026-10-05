@@ -1033,6 +1033,9 @@ end
 
 -- ── entry ────────────────────────────────────────────────────────────────────
 
+---Whether the "no snacks.nvim" hint was shown already.
+local told_no_snacks = false
+
 ---@param state Tasks.DashState
 ---@param opts? Tasks.DashOpts
 function open_state(state, opts)
@@ -1045,6 +1048,14 @@ function open_state(state, opts)
         return
       end
       notify.warn(("snacks picker failed (%s), using the plain list"):format(tostring(err)))
+    else
+      -- Said once per session: a plain list that silently lacks marks, filters and the live refresh reads as a bug.
+      if not told_no_snacks then
+        told_no_snacks = true
+        notify.info(
+          "snacks.nvim is not installed: showing a plain selection list (no marks, filter chips or live refresh)"
+        )
+      end
     end
   end
   open_select(state)
