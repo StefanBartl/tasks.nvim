@@ -93,7 +93,8 @@ local FOLD = {
 ---@param title string
 ---@return string
 function M.slugify(title)
-  local lowered = vim.fn.tolower(title)
+  -- Not a string (nil, a number): the empty slug, not "v-null" from `vim.fn.tolower(nil)`.
+  local lowered = vim.fn.tolower(type(title) == "string" and title or "")
   local out = {}
   for ch in lowered:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
     if ch:match("^[a-z0-9]$") then

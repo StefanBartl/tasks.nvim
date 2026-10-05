@@ -253,4 +253,18 @@ return function(H)
     "a marker below the first line is not one"
   )
   vim.fn.delete(own)
+
+  -- ── odd input at the edges ──────────────────────────────────────────────
+  local pf, pe = model.filter_from_options({ prio = "<=0" })
+  eq(pf, nil, "--prio=<=0 is an error, not a filter that matches nothing")
+  has(pe, "--prio must be")
+  eq(select(1, model.filter_from_options({ prio = "<=9" })), nil, "and so is <=9")
+  ok(model.filter_from_options({ prio = "<=2" }) ~= nil, "<=2 still works")
+  ok(not tostring(mutate.slugify(nil)):find("null", 1, true), "slugify(nil) is not `v-null`")
+  eq(model.split_commas(nil), {}, "split_commas(nil) is an empty list, not a raise")
+  eq(
+    select(1, model.filter_from_options({ status = true })),
+    nil,
+    "--status as a bare flag is an error"
+  )
 end

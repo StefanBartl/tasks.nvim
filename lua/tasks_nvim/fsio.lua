@@ -14,7 +14,8 @@
 ---
 --- Key responsibilities:
 ---  - forward-slash paths everywhere the engine hands one out
----  - never raise: every function answers `value|nil, err` or `ok, err`
+---  - I/O failures are answers (`value|nil, err` or `ok, err`), never raised; the path helpers expect strings
+---    (`norm(nil)` raises: the callers validate their input first)
 ---
 --- Not its job: deciding what to write or where (that is `mutate`/`index`).
 

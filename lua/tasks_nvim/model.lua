@@ -732,6 +732,9 @@ end
 ---@return string[]
 function M.split_commas(s)
   local out = {}
+  if type(s) ~= "string" then
+    return out
+  end
   for item in s:gmatch("[^,]+") do
     local t = trim(item)
     if t ~= "" then
@@ -797,6 +800,10 @@ function M.filter_from_options(opt)
   if opt.prio ~= nil then
     local raw = tostring(opt.prio)
     local max = raw:match("^<=(%d)$")
+    if raw:sub(1, 2) == "<=" and not (max and M.to_prio(max)) then
+      -- `<=0` and `<=9` used to be accepted and matched nothing (or everything) with exit 0.
+      return nil, "--prio must be 1, 2, 3 (comma list) or <=1, <=2, <=3, got " .. raw
+    end
     if max then
       f.prio_max = tonumber(max)
     else
