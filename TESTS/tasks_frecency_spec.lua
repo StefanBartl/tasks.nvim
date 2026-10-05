@@ -2,6 +2,9 @@
 -- the arithmetic with an injected clock, pruning and the entry cap, the file format, persistence (including a
 -- corrupt and an unreadable file) and how `model.sort` uses the scores. Every file lives in a temp directory.
 
+---@diagnostic disable: need-check-nil
+-- Why: a value is bound with assert()/ok() in the same body, so a nil fails the spec at that line.
+
 return function(H)
   local eq, ok, has = H.eq, H.ok, H.has
 

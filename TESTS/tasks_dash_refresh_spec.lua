@@ -4,6 +4,9 @@
 -- second scan, closing releases every handle, the opt-out and a failing watcher fall back to `r`, and opening or
 -- changing a task feeds the frecency sort. Skipped (reported, not failed) when snacks.nvim is not installed.
 
+---@diagnostic disable: duplicate-set-field
+-- Why: specs replace module functions with test doubles on purpose.
+
 return function(H)
   local eq, ok, has, lacks = H.eq, H.ok, H.has, H.lacks
   local F = dofile(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)) .. "/fixture.lua")

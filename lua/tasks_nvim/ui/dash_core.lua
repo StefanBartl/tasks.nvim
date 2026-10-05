@@ -679,7 +679,7 @@ function M.apply_set(plan, opts)
       and current ~= nil
       and tostring(current[step.field]) ~= tostring(step.from)
     local r, err
-    if stale then
+    if stale and current then
       err = ("%s changed since the list was read (%s is now %s, not %s); press r to rescan"):format(
         step.id,
         step.field,

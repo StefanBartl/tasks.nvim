@@ -1,6 +1,9 @@
 -- TESTS/tasks_effort_severity_spec.lua -- the effort filter, the `prio-effort` / `severity` sort orders and the
 -- `severity` field (concept section 12.5): model, check, mutate, CLI and the dashboard core.
 
+---@diagnostic disable: need-check-nil
+-- Why: a value is bound with assert()/ok() in the same body, so a nil fails the spec at that line.
+
 return function(H)
   local eq, ok, has = H.eq, H.ok, H.has
   local F = dofile(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)) .. "/fixture.lua")

@@ -207,7 +207,9 @@ local function day_of(ts)
   -- `os.date` answers nil (it does not raise) for a timestamp outside its range, e.g. a `%ct` of
   -- 99999999999999999999 from a forged commit; "0000-00-00" sorts before every real day, so such a file
   -- is never reported as changed after a task's `updated`.
-  return os.date("%Y-%m-%d", ts) or "0000-00-00"
+  return (
+    os.date("%Y-%m-%d", ts) --[[@as string|nil]]
+  ) or "0000-00-00"
 end
 
 ---Folders `git log` answered "not a git repository" for, with the time of the answer. Only that answer is
@@ -513,13 +515,14 @@ function M.compute(tasks, opts)
           report.unresolved = report.unresolved + 1
         else
           local key = found_base .. "\0" .. rel
+          local counted_here = true
           if not distinct[key] then
             if distinct_n >= cap then
               if not over_cap[key] then
                 over_cap[key] = true
                 report.capped = report.capped + 1
               end
-              key = nil
+              counted_here = false
             else
               distinct[key] = true
               distinct_n = distinct_n + 1
@@ -533,7 +536,7 @@ function M.compute(tasks, opts)
               group.seen[rel] = true
             end
           end
-          if key then
+          if counted_here then
             hits[#hits + 1] =
               { task = t, ref = ref, base = found_base, rel = rel, full = found_full }
             if not with_refs[t.id] then

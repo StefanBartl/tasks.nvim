@@ -390,9 +390,8 @@ end
 ---refresh: events during and shortly after it are dropped, and a refresh that
 ---was already pending is cancelled -- the caller rescans right after the batch.
 ---Returns what `fn` returns; an error in `fn` is re-raised after the books are straight.
----@generic T
----@param fn fun(): T
----@return T
+---@param fn fun(...): ...
+---@return ...
 function Watcher:hold(fn)
   local outer = self.held
   self.held = true

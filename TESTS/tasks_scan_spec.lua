@@ -1,5 +1,8 @@
 -- TESTS/tasks/tasks_scan_spec.lua -- tasks.scan against a fixture vault.
 
+---@diagnostic disable: need-check-nil
+-- Why: a value is bound with assert()/ok() in the same body, so a nil fails the spec at that line.
+
 return function(H)
   local eq, ok = H.eq, H.ok
   local F = dofile(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)) .. "/fixture.lua")

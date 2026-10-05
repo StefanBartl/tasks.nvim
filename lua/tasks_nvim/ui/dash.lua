@@ -62,6 +62,8 @@ local STORE_KEY = "tasks/dashboard-filter"
 local MAX_CONFIRM_LINES = 8
 
 ---@class Tasks.DashState
+---@field errors_seen? string  # The read errors of the last reload (so the same set is not announced twice).
+---@field notes_seen? string   # Likewise for the `--stale=refs` notes.
 ---@field root string
 ---@field area string|nil
 ---@field filter Tasks.Filter
@@ -632,12 +634,12 @@ local function start_watch(state, picker)
   }, M.config.watch_opts or {}))
   -- A handle factory that raises must not take the open picker down with it (the caller's pcall
   -- would open the plain list on top of it) and must not leave the handles it did start behind.
-  local ran, ok, err = pcall(w.start, w)
+  local ran, started, err = pcall(w.start, w)
   if not ran then
     pcall(w.stop, w)
-    ok, err = false, ok
+    err, started = started, false
   end
-  if not ok then
+  if not started then
     notify.info(("no live refresh (%s) -- press r to rescan"):format(tostring(err)))
     return nil
   end

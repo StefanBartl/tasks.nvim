@@ -1,6 +1,9 @@
 -- TESTS/tasks_staleness_spec.lua -- `--stale=refs`: tasks.staleness (ref classification, resolution,
 -- git and mtime dating, caps), the filter option, the CLI `list --stale-refs` and the dashboard filter state.
 
+---@diagnostic disable: need-check-nil
+-- Why: a value is bound with assert()/ok() in the same body, so a nil fails the spec at that line.
+
 return function(H)
   local eq, ok, has, lacks = H.eq, H.ok, H.has, H.lacks
   local F = dofile(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)) .. "/fixture.lua")

@@ -1,5 +1,8 @@
 -- TESTS/tasks/tasks_mutate_spec.lua -- tasks.mutate: template, new, set, done, the Backlog README.
 
+---@diagnostic disable: duplicate-set-field, need-check-nil
+-- Why: a value is bound with assert()/ok() in the same body, so a nil fails the spec at that line; specs replace module functions with test doubles on purpose.
+
 return function(H)
   local eq, ok, has = H.eq, H.ok, H.has
   local F = dofile(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)) .. "/fixture.lua")

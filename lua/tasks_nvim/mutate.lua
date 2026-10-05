@@ -985,6 +985,7 @@ function M.done(id, opts)
     return nil, ("a finished task with this id already exists: %s"):format(existing.path)
   end
   if task.folder then
+    ---@cast target_dir string
     if fsio.is_dir(target_dir) then
       return nil, "target folder exists: " .. target_dir
     end
@@ -1039,6 +1040,8 @@ function M.done(id, opts)
   )
   local function run()
     if task.folder then
+      ---@cast src_dir string
+      ---@cast target_dir string
       if changed_meanwhile() then
         return nil, changed_msg
       end

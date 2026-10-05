@@ -165,7 +165,7 @@ function M.area(area, opts)
   opts = opts or {}
   local root, err = resolve_root(opts)
   if not root then
-    return nil, err
+    return nil, err or "vault not found"
   end
   if not vault.valid_area(area) then
     return nil, "invalid area name: " .. tostring(area)
@@ -192,7 +192,7 @@ function M.all(opts)
   opts = opts or {}
   local root, err = resolve_root(opts)
   if not root then
-    return nil, err
+    return nil, err or "vault not found"
   end
   local all, all_errors = {}, {}
   for _, area in ipairs(vault.areas(root)) do
@@ -216,7 +216,7 @@ function M.backlog(area, opts)
   opts = opts or {}
   local root, err = resolve_root(opts)
   if not root then
-    return nil, err
+    return nil, err or "vault not found"
   end
   if not vault.valid_area(area) then
     return nil, "invalid area name: " .. tostring(area)
@@ -257,7 +257,7 @@ function M.backlog_slugs(area, opts)
   opts = opts or {}
   local root, err = resolve_root(opts)
   if not root then
-    return nil, err
+    return nil, err or "vault not found"
   end
   if not vault.valid_area(area) then
     return nil, "invalid area name: " .. tostring(area)
@@ -290,7 +290,7 @@ end
 function M.find(id, opts)
   local root, err = resolve_root(opts)
   if not root then
-    return nil, err
+    return nil, err or "vault not found"
   end
   local area, slug, id_err = vault.parse_id(id)
   if not area or not slug then

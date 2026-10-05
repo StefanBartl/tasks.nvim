@@ -204,7 +204,9 @@ function M.is_date(s)
   if not ys then
     return false
   end
-  local y, m, d = tonumber(ys), tonumber(ms), tonumber(ds)
+  local y = tonumber(ys) --[[@as integer]]
+  local m = tonumber(ms) --[[@as integer]]
+  local d = tonumber(ds) --[[@as integer]]
   return m >= 1 and m <= 12 and d >= 1 and d <= days_in_month(y, m)
 end
 
@@ -786,7 +788,7 @@ function M.filter_from_options(opt)
       return nil, lerr
     end
     f.status = list
-    for _, s in ipairs(f.status) do
+    for _, s in ipairs(list) do
       if not M.is_status(s) then
         return nil, "unknown status in --status: " .. s
       end
@@ -818,7 +820,7 @@ function M.filter_from_options(opt)
       return nil, lerr
     end
     f.kind = list
-    for _, k in ipairs(f.kind) do
+    for _, k in ipairs(list) do
       if not M.is_kind(k) then
         return nil, "unknown kind in --kind: " .. k
       end
@@ -837,7 +839,7 @@ function M.filter_from_options(opt)
       return nil, lerr
     end
     f.category = list
-    for _, c in ipairs(f.category) do
+    for _, c in ipairs(list) do
       if not M.is_category(c) then
         return nil, "unknown category in --category: " .. c
       end
@@ -870,7 +872,9 @@ function M.filter_from_options(opt)
     if #f.severity == 0 then
       return nil, "--severity needs a value (" .. table.concat(M.SEVERITIES, ", ") .. ")"
     end
-    for _, v in ipairs(f.severity) do
+    for _, v in
+      ipairs(f.severity --[[@as string[] ]])
+    do
       if not M.is_severity(v) then
         return nil, "unknown severity in --severity: " .. v
       end
@@ -983,6 +987,7 @@ function M.filter(tasks, f)
       }
       report = staleness.last
     end
+    ---@cast report Tasks.StalenessReport
     local dated = {}
     for _, t in ipairs(out) do
       if report.stale[t.id] then

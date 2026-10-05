@@ -2,6 +2,9 @@
 -- list lines, header and filter chips, the s/p cycles, batch planning, and the batch apply against a
 -- fixture vault (one index regeneration per touched area, failures do not stop the batch).
 
+---@diagnostic disable: duplicate-set-field, need-check-nil
+-- Why: a value is bound with assert()/ok() in the same body, so a nil fails the spec at that line; specs replace module functions with test doubles on purpose.
+
 return function(H)
   local eq, ok, has, lacks = H.eq, H.ok, H.has, H.lacks
   local F = dofile(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)) .. "/fixture.lua")

@@ -237,9 +237,12 @@ function M.write_area(area, opts)
   return result
 end
 
+---@class Tasks.WriteAllOpts : Tasks.IndexOpts
+---@field areas? string[]   # Only these areas (default: every area of the vault).
+
 ---`write_area` for every area (or only `opts.areas`). Best effort: one failing
 ---area does not stop the others (ERR-42); each failure is listed in `errors`.
----@param opts? Tasks.IndexOpts & { areas?: string[] }
+---@param opts? Tasks.WriteAllOpts
 ---@return Tasks.IndexResult[]|nil results
 ---@return string[] errors
 function M.write_all(opts)

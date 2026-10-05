@@ -1,12 +1,9 @@
 -- luacheck configuration for tasks.nvim.
 --
--- Scope: lua/, init.lua, after/ — the configuration's own code. The imported
--- third-party patch snippets under docs/ are notes, not code, and several do
--- not even parse; they are excluded here and from the stylua gate.
+-- Scope: lua/, TESTS/, scripts/ and plugin/ (CI runs `luacheck lua TESTS scripts`).
 std = "luajit"
 
--- The config favours readable prose in comments and @type annotations over a
--- hard column cap, same call the plugin repos make.
+-- Readable prose in comments and @type annotations over a hard column cap, same call the other plugin repos make.
 max_line_length = false
 
 globals = { "vim" }
@@ -19,7 +16,7 @@ read_globals = {
 }
 
 -- 212/213: unused argument / loop variable — pervasive in event callbacks and
---          NvChad override shims that must keep a fixed signature.
+--          callbacks that must keep a fixed signature.
 -- 542: empty if/else branch — used deliberately as a documented no-op (each
 --      instance carries an explanatory "continue upward" / "stop here" comment).
 ignore = {
