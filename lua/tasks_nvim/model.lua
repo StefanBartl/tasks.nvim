@@ -764,8 +764,28 @@ end
 function M.filter_from_options(opt)
   ---@type Tasks.Filter
   local f = { today = opt.today }
+  -- "No value" and "an invalid value" are different answers: `--status=` (a variable that expanded to
+  -- nothing) is an error, not a filter that matches nothing and exits 0 (ERR-10).
+  if opt.today ~= nil and not M.is_date(opt.today) then
+    return nil, "--today must be YYYY-MM-DD, got '" .. tostring(opt.today) .. "'"
+  end
+  ---@param raw string
+  ---@param flag string
+  ---@return string[]|nil list
+  ---@return string|nil err
+  local function listed(raw, flag)
+    local list = M.split_commas(raw)
+    if #list == 0 then
+      return nil, ("--%s needs a value"):format(flag)
+    end
+    return list, nil
+  end
   if opt.status then
-    f.status = M.split_commas(opt.status)
+    local list, lerr = listed(opt.status, "status")
+    if not list then
+      return nil, lerr
+    end
+    f.status = list
     for _, s in ipairs(f.status) do
       if not M.is_status(s) then
         return nil, "unknown status in --status: " .. s
@@ -779,7 +799,11 @@ function M.filter_from_options(opt)
       f.prio_max = tonumber(max)
     else
       f.prio = {}
-      for _, p in ipairs(M.split_commas(raw)) do
+      local plist, perr = listed(raw, "prio")
+      if not plist then
+        return nil, perr
+      end
+      for _, p in ipairs(plist) do
         local n = M.to_prio(p)
         if not n then
           return nil, "--prio must be 1, 2, 3 (comma list) or <=N, got " .. raw
@@ -789,7 +813,11 @@ function M.filter_from_options(opt)
     end
   end
   if opt.kind then
-    f.kind = M.split_commas(opt.kind)
+    local list, lerr = listed(opt.kind, "kind")
+    if not list then
+      return nil, lerr
+    end
+    f.kind = list
     for _, k in ipairs(f.kind) do
       if not M.is_kind(k) then
         return nil, "unknown kind in --kind: " .. k
@@ -797,10 +825,18 @@ function M.filter_from_options(opt)
     end
   end
   if opt.tag then
-    f.tag = M.split_commas(opt.tag)
+    local list, lerr = listed(opt.tag, "tag")
+    if not list then
+      return nil, lerr
+    end
+    f.tag = list
   end
   if opt.category then
-    f.category = M.split_commas(opt.category)
+    local list, lerr = listed(opt.category, "category")
+    if not list then
+      return nil, lerr
+    end
+    f.category = list
     for _, c in ipairs(f.category) do
       if not M.is_category(c) then
         return nil, "unknown category in --category: " .. c

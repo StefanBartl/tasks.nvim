@@ -532,6 +532,9 @@ function commands.attach(ctx)
     return 1
   end
   ctx.say(("attached\t%s\t%s\t%s"):format(res.id, res.rel, res.link))
+  if res.updated_err then
+    ctx.warn("warning: the asset is attached, but `updated` was not changed: " .. res.updated_err)
+  end
   if res.folderized then
     ctx.say(("folderized\t%s\t%s"):format(res.id, res.path))
   end

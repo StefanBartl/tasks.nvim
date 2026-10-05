@@ -183,6 +183,19 @@ local function reload(state)
     state.shown = {}
   else
     state.shown = res.tasks
+    -- Files or folders that could not be read are not "no tasks": say so once per distinct set of errors
+    -- (the watcher reloads often), so a transiently locked folder does not make tasks vanish silently.
+    local errs = res.errors or {}
+    local sig = #errs > 0 and table.concat(errs, "\n") or ""
+    if sig ~= "" and sig ~= state.errors_seen then
+      notify.warn(
+        ("%d path(s) could not be read, the list may be incomplete: %s"):format(
+          #errs,
+          tostring(errs[1])
+        )
+      )
+    end
+    state.errors_seen = sig
   end
   state.widths = core.widths(state.shown)
   state.signature = core.signature(state.shown)
@@ -450,7 +463,10 @@ function M.open_area_doc(state, task, which)
   end
   local path = ("%s/%s/ROADMAP/ROADMAP.md"):format(state.root, task.area)
   if vim.fn.filereadable(path) == 1 then
-    vim.cmd("edit " .. vim.fn.fnameescape(path))
+    local ok, err = pcall(vim.cmd, "edit " .. vim.fn.fnameescape(path))
+    if not ok then
+      notify.error(("cannot open %s: %s"):format(path, tostring(err)))
+    end
   else
     notify.warn(("%s has no ROADMAP/ROADMAP.md"):format(task.area))
   end
@@ -824,7 +840,10 @@ local function open_select(state)
         label = "open the file",
         run = function()
           M.touch({ task })
-          vim.cmd("edit " .. vim.fn.fnameescape(task.path))
+          local ok, err = pcall(vim.cmd, "edit " .. vim.fn.fnameescape(task.path))
+          if not ok then
+            notify.error(("cannot open %s: %s"):format(task.path, tostring(err)))
+          end
         end,
       },
       {

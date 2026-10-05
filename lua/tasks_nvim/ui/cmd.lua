@@ -178,12 +178,27 @@ function M.retarget_buffers(from, to)
       if vim.bo[buf].modified then
         notify.warn("buffer for the finished task has unsaved changes and still points at " .. from)
       else
+        -- `edit` can refuse (a window with 'winfixbuf': E1513). The task is already finished on disk by now,
+        -- so a refusal must not raise out of the command and eat its own report: it is collected and said.
+        local refused = 0
         for _, win in ipairs(vim.fn.win_findbuf(buf)) do
-          vim.api.nvim_win_call(win, function()
+          local moved = pcall(vim.api.nvim_win_call, win, function()
             vim.cmd("silent keepalt edit " .. vim.fn.fnameescape(to))
           end)
+          if not moved then
+            refused = refused + 1
+          end
         end
-        pcall(vim.api.nvim_buf_delete, buf, {})
+        if refused > 0 then
+          notify.warn(
+            ("%d window(s) could not be moved to %s and still show the old file (it moved)"):format(
+              refused,
+              to
+            )
+          )
+        else
+          pcall(vim.api.nvim_buf_delete, buf, {})
+        end
       end
     end
   end
@@ -191,7 +206,10 @@ end
 
 ---@param path string
 local function open_file(path)
-  vim.cmd("edit " .. vim.fn.fnameescape(path))
+  local ok, err = pcall(vim.cmd, "edit " .. vim.fn.fnameescape(path))
+  if not ok then
+    notify.error(("cannot open %s: %s"):format(path, tostring(err)))
+  end
 end
 
 ---Describe the active filter for the table heading.
@@ -807,6 +825,9 @@ function M.task_attach(ctx)
   if res.index_err then
     notify.warn("asset attached, but the index was not updated: " .. res.index_err)
   end
+  if res.updated_err then
+    notify.warn("asset attached, but `updated` was not changed: " .. res.updated_err)
+  end
   local copied = pcall(vim.fn.setreg, "+", res.link)
   notify.info(
     ("attached %s -> %s%s"):format(
@@ -896,9 +917,10 @@ function M.task_open(ctx)
     return
   end
   local id = ctx.args.id
-  local task = scan.find(id) or scan.find_done(id)
+  local task, find_err = scan.find(id)
+  task = task or scan.find_done(id)
   if not task then
-    notify.error("no such task: " .. id)
+    notify.error(find_err or ("no such task: " .. id))
     return
   end
   open_file(task.path)
@@ -912,9 +934,10 @@ function M.task_preview(ctx)
     return
   end
   local id = ctx.args.id
-  local task = scan.find(id) or scan.find_done(id)
+  local task, find_err = scan.find(id)
+  task = task or scan.find_done(id)
   if not task then
-    notify.error("no such task: " .. id)
+    notify.error(find_err or ("no such task: " .. id))
     return
   end
   local ok, err = require("tasks_nvim.ui.preview").open_file(task.path)

@@ -11,8 +11,13 @@ local state = vim.deepcopy(DEFAULTS)
 ---@type table<string, true>
 local KNOWN_KEYS = { vault = true, extra_areas = true }
 
+---What `validate` threw away, for `:checkhealth` (a one-time notification is easy to miss).
+---@type string[]
+local ignored = {}
+
 ---@param msg string
 local function warn(msg)
+  ignored[#ignored + 1] = msg
   vim.schedule(function()
     vim.notify("[tasks.nvim] " .. msg, vim.log.levels.WARN)
   end)
@@ -36,6 +41,7 @@ end
 ---@param opts any
 ---@return Tasks.Opts validated  only the keys that passed
 function M.validate(opts)
+  ignored = {}
   if opts == nil then
     return {}
   end
@@ -79,9 +85,16 @@ function M.merge(opts)
   return state
 end
 
+---A copy: the state changes only through `merge`.
 ---@return Tasks.Opts
 function M.get()
-  return state
+  return vim.deepcopy(state)
+end
+
+---What the last `setup()` ignored (unknown keys, wrong types), one message each.
+---@return string[]
+function M.ignored()
+  return vim.deepcopy(ignored)
 end
 
 return M

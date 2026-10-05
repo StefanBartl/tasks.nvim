@@ -66,7 +66,7 @@ end
 function M.extra_areas()
   local env = vim.env.TASKS_EXTRA_AREAS
   if not env or env == "" then
-    return M.EXTRA_AREAS
+    return vim.list_extend({}, M.EXTRA_AREAS)
   end
   local out = vim.list_extend({}, M.EXTRA_AREAS)
   for name in env:gmatch("[^,]+") do

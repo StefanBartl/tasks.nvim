@@ -9,6 +9,7 @@
 local M = {}
 
 local registered = false
+local warned = false
 
 ---Register `:Tasks`. Safe to call twice; needs `lib.nvim` (the composer), otherwise it warns once and returns false.
 ---@return boolean ok
@@ -26,9 +27,13 @@ function M.register()
     })
   end)
   if not ok then
-    vim.schedule(function()
-      vim.notify("[tasks.nvim] :Tasks is unavailable: " .. tostring(err), vim.log.levels.WARN)
-    end)
+    -- Once: `plugin/` and `setup()` both call this.
+    if not warned then
+      warned = true
+      vim.schedule(function()
+        vim.notify("[tasks.nvim] :Tasks is unavailable: " .. tostring(err), vim.log.levels.WARN)
+      end)
+    end
     return false
   end
   registered = true

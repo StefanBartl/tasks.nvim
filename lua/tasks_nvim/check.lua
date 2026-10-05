@@ -163,7 +163,19 @@ function M.run(opts)
     for _, e in ipairs(type(walk_errors) == "table" and walk_errors or {}) do
       add(findings, "error", "unreadable", { area = name, path = vault.tasks_dir(root, name) }, e)
     end
-    local finished = scan.backlog(name, scan_opts) or {}
+    local finished, backlog_errors = scan.backlog(name, scan_opts)
+    finished = finished or {}
+    -- A Backlog that could not be read is reported: without it `duplicate-id` stays silent and a blocker that
+    -- was finished looks dangling.
+    for _, e in ipairs(type(backlog_errors) == "table" and backlog_errors or {}) do
+      add(
+        findings,
+        "error",
+        "unreadable",
+        { area = name, path = vault.backlog_dir(root, name, "TASKS") },
+        e
+      )
+    end
     local finished_ids = {}
     for _, t in ipairs(finished) do
       finished_ids[t.id] = t

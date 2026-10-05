@@ -123,4 +123,61 @@ return function(H)
   has(e1, "asset name may only use", "a C1 control character (CSI) in the name is refused")
   local good = mutate.attach(made.id, src, vim.tbl_extend("force", o, { name = "gr\195\188n.txt" }))
   ok(good ~= nil, "a non-ASCII letter is still fine")
+
+  -- ── done: the rollback never deletes a finished copy this run did not create ──
+  local plain = assert(mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "Race task" })))
+  local target = root .. "/lib.nvim/Backlog/TASKS/" .. F.TODAY .. "_" .. plain.slug .. ".md"
+  local orig_create = fsio.create_exclusive
+  fsio.create_exclusive = function(path, body)
+    -- Another process finished the same task between this run's snapshot and this call.
+    H.write(path, body)
+    return false, "exists"
+  end
+  local okc, dres, derr = pcall(mutate.done, plain.id, o)
+  fsio.create_exclusive = orig_create
+  assert(okc, dres)
+  eq(dres, nil, "done reports the failure")
+  has(derr, "exists")
+  ok(H.exists(target), "the other process's finished copy survives the rollback")
+  ok(H.exists(plain.path), "and the original is untouched")
+
+  -- ── set: a missing patch is an answer, not a raise ──────────────────────
+  local sres, serr = mutate.set(plain.id, nil, o)
+  eq(sres, nil)
+  has(serr, "patch must be a table")
+
+  -- ── an unreadable Backlog README stops done instead of "missing" ────────
+  local second =
+    assert(mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "Readme task" })))
+  local readme = root .. "/lib.nvim/Backlog/README.md"
+  local rf = assert(io.open(readme, "wb"))
+  rf:write(string.rep("x", fsio.MAX_READ_BYTES + 1))
+  rf:close()
+  local rres, rerr = mutate.done(second.id, o)
+  eq(rres, nil, "done refuses to guess about a README it cannot read")
+  has(rerr, "cannot read")
+  ok(H.exists(second.path), "and the task stays where it was")
+
+  -- ── filter options: no value is not "matches nothing" ───────────────────
+  for _, flag in ipairs({ "status", "kind", "tag", "category", "prio" }) do
+    local f, ferr = model.filter_from_options({ [flag] = "" })
+    eq(f, nil, "--" .. flag .. "= is an error")
+    has(ferr, "--" .. flag .. " needs a value")
+  end
+  local _, terr = model.filter_from_options({ today = "garbage" })
+  has(terr, "--today must be YYYY-MM-DD")
+
+  -- ── retarget_buffers survives a window that refuses `:edit` ─────────────
+  if vim.fn.exists("&winfixbuf") == 1 then
+    local ui_cmd = require("tasks_nvim.ui.cmd")
+    local from, to = dir .. "/old-task.md", dir .. "/new-task.md"
+    H.write(from, "x")
+    H.write(to, "x")
+    vim.cmd("edit " .. vim.fn.fnameescape(from))
+    vim.wo.winfixbuf = true
+    local rok, rerr2 = pcall(ui_cmd.retarget_buffers, from, to)
+    vim.wo.winfixbuf = false
+    vim.cmd("enew")
+    ok(rok, "no E1513 escapes retarget_buffers: " .. tostring(rerr2))
+  end
 end

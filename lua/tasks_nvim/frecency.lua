@@ -308,7 +308,13 @@ function M.record(ids, opts)
     return false, "frecency file not readable: " .. tostring(lerr)
   end
   if status == "corrupt" then
-    pcall(uv.fs_rename, path, path .. ".bad")
+    -- The old bytes are kept as `.bad`. When they cannot be moved aside, nothing is overwritten (`pcall` would
+    -- not notice: `fs_rename` answers `nil, err` instead of raising).
+    local called, moved, merr = pcall(uv.fs_rename, path, path .. ".bad")
+    if not called or not moved then
+      return false,
+        "corrupt frecency file could not be moved aside: " .. tostring(called and merr or moved)
+    end
   end
   local now = now_of(opts)
   local seen = {}

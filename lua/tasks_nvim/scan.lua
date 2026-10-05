@@ -265,7 +265,12 @@ function M.backlog_slugs(area, opts)
   local slugs = {}
   for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
     local dir = vault.backlog_dir(root, area, bucket)
-    for _, entry in ipairs(backlog_files(dir, (markdown_files(dir, opts)))) do
+    local files, walk_errors = markdown_files(dir, opts)
+    if #walk_errors > 0 then
+      -- A listing that failed is not an empty one: a new task would be given a slug a finished task has.
+      return nil, ("cannot list %s: %s"):format(dir, tostring(walk_errors[1]))
+    end
+    for _, entry in ipairs(backlog_files(dir, files)) do
       slugs[model.slug_of(entry.path, "backlog")] = entry.path
     end
     -- A folder in Backlog/ that is not a task folder still takes its name.

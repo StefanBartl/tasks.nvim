@@ -703,6 +703,9 @@ end
 ---@return string|nil err
 function M.set(id, patch, opts)
   opts = opts or {}
+  if type(patch) ~= "table" then
+    return nil, "patch must be a table of key = value"
+  end
   local root, rerr = vault.root(opts)
   if not root then
     return nil, rerr
@@ -994,7 +997,15 @@ function M.done(id, opts)
   end
 
   local readme_path = vault.backlog_readme(root, area)
-  local readme_old = fsio.is_file(readme_path) and fsio.read(readme_path) or nil
+  -- An existing README that cannot be read is an error, not "missing": the row would silently not be added.
+  local readme_old
+  if fsio.is_file(readme_path) then
+    local text, r_err = fsio.read(readme_path)
+    if not text then
+      return nil, "cannot read " .. readme_path .. ": " .. tostring(r_err)
+    end
+    readme_old = text
+  end
   local readme_new, readme_state = readme_old, "missing"
   if readme_old then
     local changed
@@ -1017,7 +1028,7 @@ function M.done(id, opts)
     return nil, "cannot snapshot before moving: " .. tostring(cerr)
   end
 
-  local moved, removed_original = false, false
+  local moved, removed_original, created_target = false, false, false
   -- Someone (the editor, another `tasks` run) may have written the task file since it was read
   -- above; finishing would then drop that change. Looked at right before the original goes.
   local function changed_meanwhile()
@@ -1045,6 +1056,11 @@ function M.done(id, opts)
         return nil, "cannot write " .. target .. ": " .. tostring(werr)
       end
       local old_name = target_dir .. "/" .. slug .. ".md"
+      -- Looked at once more right before the original goes: an edit since the check above (the folder was
+      -- renamed in between) would otherwise be dropped with it. The rollback below puts the folder back.
+      if fsio.read(old_name) ~= old_text then
+        return nil, changed_msg
+      end
       local removed, rm_err = fsio.remove(old_name)
       if not removed then
         return nil, "cannot remove " .. old_name .. ": " .. tostring(rm_err)
@@ -1055,6 +1071,7 @@ function M.done(id, opts)
         if not ok then
           return nil, "cannot create " .. target .. ": " .. tostring(err)
         end
+        created_target = true
       end
       if changed_meanwhile() then
         return nil, changed_msg
@@ -1081,12 +1098,32 @@ function M.done(id, opts)
     return true, nil
   end
 
+  ---Drop `path` from the snapshot, so the restore neither deletes nor overwrites it.
+  ---@param path string
+  local function forget(path)
+    for i = #cp.entries, 1, -1 do
+      local entry = cp.entries[i]
+      if entry.path == path then
+        if entry.backup then
+          pcall(os.remove, entry.backup)
+        end
+        table.remove(cp.entries, i)
+      end
+    end
+  end
+
   local ok, res, err = pcall(run)
   if not ok then
     err = tostring(res)
     res = nil
   end
   if not res then
+    -- The snapshot noted `target` as "did not exist". When this run never created it (`create_exclusive`
+    -- answered `exists`: another process finished the same task first), the restore would delete THEIR finished
+    -- copy and the task would be gone from the working tree.
+    if not task.folder and not resume and not created_target then
+      forget(target)
+    end
     -- What could not be undone, named in the message (a silent half state is the worst answer).
     local stuck = {}
     if moved then
@@ -1100,7 +1137,13 @@ function M.done(id, opts)
         wrote, w_err = attempt(fsio.write_atomic, old_name, old_text)
       end
       if wrote then
-        attempt(fsio.remove, target)
+        local dropped, d_err = attempt(fsio.remove, target)
+        if not dropped and fsio.is_file(target) then
+          stuck[#stuck + 1] = ("%s (cannot remove the finished copy: %s)"):format(
+            target,
+            tostring(d_err)
+          )
+        end
         local back, b_err = attempt(fsio.rename, target_dir, src_dir)
         if not back then
           stuck[#stuck + 1] = ("%s (cannot move it back to %s: %s)"):format(
@@ -1128,15 +1171,7 @@ function M.done(id, opts)
           target
         )
         -- `target` is now the only holder of the text: the restore must not delete it.
-        for i = #cp.entries, 1, -1 do
-          local entry = cp.entries[i]
-          if entry.path == target then
-            if entry.backup then
-              pcall(os.remove, entry.backup)
-            end
-            table.remove(cp.entries, i)
-          end
-        end
+        forget(target)
       end
     end
     local _, restore_errors = checkpoint.restore(cp)
@@ -1292,7 +1327,7 @@ end
 ---@param id string
 ---@param src string                 # The file to attach.
 ---@param opts? { root?: string, today?: string, name?: string, index?: boolean }
----@return { id: string, path: string, asset: string, rel: string, link: string, folderized: boolean, index?: Tasks.IndexResult, index_err?: string }|nil result
+---@return { id: string, path: string, asset: string, rel: string, link: string, folderized: boolean, updated_err?: string, index?: Tasks.IndexResult, index_err?: string }|nil result
 ---@return string|nil err
 function M.attach(id, src, opts)
   opts = opts or {}
@@ -1356,7 +1391,9 @@ function M.attach(id, src, opts)
   local ext = name:match("%.([%w]+)$")
   local is_image = ext ~= nil and IMAGE_EXT[ext:lower()] == true
   local link = (is_image and "![%s](%s)" or "[%s](%s)"):format(name, rel)
-  fm.update(path, { { "updated", today } })
+  -- The asset is copied and the link is valid; only the `updated` bump can fail (a locked file, say). It is
+  -- reported in the result instead of being dropped.
+  local bumped, bump_err = fm.update(path, { { "updated", today } })
 
   local result = {
     id = task.id,
@@ -1365,6 +1402,7 @@ function M.attach(id, src, opts)
     rel = rel,
     link = link,
     folderized = folderized,
+    updated_err = (not bumped) and tostring(bump_err) or nil,
   }
   if opts.index ~= false then
     result.index, result.index_err = index.write_area(task.area, { root = root })

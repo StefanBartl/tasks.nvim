@@ -157,7 +157,7 @@ function M.parse(lines)
   for _, raw in ipairs(lines) do
     local line = rtrim(raw)
     if line:sub(1, 1) == "!" or line:sub(1, 4) == "<!--" then
-      -- report or hint: not form content
+    -- report or hint: not form content
     else
       local name = line:match("^##%s+([%w_]+)")
       if name then

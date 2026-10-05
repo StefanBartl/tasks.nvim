@@ -62,6 +62,14 @@ function M.check()
     end
   end
 
+  local ignored = require("tasks_nvim.config").ignored()
+  for _, msg in ipairs(ignored) do
+    warn("setup() ignored an option: " .. msg)
+  end
+  if #ignored == 0 then
+    ok("setup() options are valid")
+  end
+
   start("tasks.nvim: optional pieces")
   if pcall(require, "snacks") then
     ok("snacks.nvim -- the interactive dashboard")

@@ -111,13 +111,15 @@ function M.register_types()
       if not vim.tbl_contains(area_names(), area) then
         return false, nil, ("'%s' is not an area of the vault"):format(area)
       end
-      if scan.find(raw, { root = root }) then
+      local found, find_err = scan.find(raw, { root = root })
+      if found then
         return true, raw, nil
       end
       if spec and spec.allow_done and scan.find_done(raw, { root = root }) then
         return true, raw, nil
       end
-      return false, nil, "no such open task: " .. raw
+      -- `find_err` is "no such open task" or the more useful "exists as file and as folder".
+      return false, nil, find_err or ("no such open task: " .. raw)
     end,
     complete = function(arg_lead)
       local ok, tasks = pcall(scan.all, { ttl_seconds = COMPLETE_TTL })
