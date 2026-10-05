@@ -410,6 +410,9 @@ local function bases_for(area, ctx)
   return out
 end
 
+---The date a task without `updated` and `created` is compared from: before every real day.
+local UNDATED = "0000-00-00"
+
 ---Check the refs of `tasks` against the file system and git.
 ---@param tasks Tasks.Task[]
 ---@param opts? Tasks.StalenessOpts
@@ -471,12 +474,9 @@ function M.compute(tasks, opts)
   local over_cap = {}
   local with_refs = {}
   for _, t in ipairs(tasks) do
-    local since = t.updated or t.created
     for _, ref in ipairs(t.refs or {}) do
       local kind, rel = M.classify(ref)
       if kind ~= "path" or not rel then
-        report.skipped = report.skipped + 1
-      elseif not since then
         report.skipped = report.skipped + 1
       else
         local found_base, found_full
@@ -582,8 +582,10 @@ function M.compute(tasks, opts)
   -- Pass 3: compare with each task's own date.
   for _, h in ipairs(hits) do
     local d = dated[h.base] and dated[h.base][h.rel]
-    local since = h.task.updated or h.task.created
-    if d and since and d.date > since then
+    -- A task with neither `updated` nor `created` has no date to compare with: every dated change counts, the same
+    -- way `--stale=<days>` counts a task without a date as stale (an unknowable answer is not "fresh").
+    local since = h.task.updated or h.task.created or UNDATED
+    if d and d.date > since then
       local list = report.stale[h.task.id]
       if not list then
         list = {}

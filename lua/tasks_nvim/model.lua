@@ -991,8 +991,20 @@ function M.filter(tasks, f)
         unresolved = 0,
         skipped = 0,
         capped = 0,
-        notes = { "refs could not be checked: " .. tostring(report) },
+        notes = {
+          "refs could not be checked: "
+            .. tostring(report)
+            .. " -- showing every task that has refs (unverified)",
+        },
       }
+      -- Fail open: an optional signal that cannot be read must not look like "nothing is stale". Every task
+      -- with refs stays in the list, marked as unverified.
+      for _, t in ipairs(out) do
+        if #(t.refs or {}) > 0 then
+          report.stale[t.id] =
+            { { ref = "(refs could not be checked)", date = "?", source = "unverified" } }
+        end
+      end
     end
     ---@cast report Tasks.StalenessReport
     stale_report = report

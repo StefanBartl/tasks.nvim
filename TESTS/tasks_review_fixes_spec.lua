@@ -267,4 +267,30 @@ return function(H)
     nil,
     "--status as a bare flag is an error"
   )
+
+  -- ── --stale=refs fails open: a check that cannot run does not look like "nothing is stale" ──
+  local staleness = require("tasks_nvim.staleness")
+  local with_refs = assert(
+    mutate.new(
+      "lib.nvim",
+      vim.tbl_extend("force", o, { title = "Has refs", refs = { "lua/x.lua" } })
+    )
+  )
+  local without_refs =
+    assert(mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "No refs" })))
+  local pair = {
+    assert(scan.find(with_refs.id, { root = root })),
+    assert(scan.find(without_refs.id, { root = root })),
+  }
+  local real_compute = staleness.compute
+  staleness.compute = function()
+    error("boom")
+  end
+  local okf, kept, report = pcall(model.filter, pair, { stale_refs = true })
+  staleness.compute = real_compute
+  assert(okf, kept)
+  eq(#kept, 1, "the task with refs stays, the one without is not a candidate")
+  eq(kept[1].id, with_refs.id)
+  has(report.notes[1], "refs could not be checked")
+  has(report.notes[1], "unverified")
 end

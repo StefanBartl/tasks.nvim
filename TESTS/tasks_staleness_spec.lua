@@ -146,6 +146,7 @@ return function(H)
       "lib.nvim/mtime-untracked",
       "lib.nvim/stale-git",
       "lib.nvim/two-changed",
+      "lib.nvim/undated",
     }, "which tasks are stale by refs")
     local c = rep.stale["lib.nvim/stale-git"][1]
     eq(c.ref, "lua/a.lua")
@@ -174,7 +175,7 @@ return function(H)
       "b.lua did not change after updated; a.lua and sub/c.lua did"
     )
     ok(rep.unresolved >= 1, "the missing file is counted, not fatal")
-    ok(rep.skipped >= 4, "commit, URL, anchor and the undated task are skipped")
+    ok(rep.skipped >= 3, "commit, URL and anchor are skipped")
     ok(
       not rep.stale["lib.nvim/repo-wins"],
       "README.md resolved to the repo's old file, not the vault's new one"
@@ -209,7 +210,10 @@ return function(H)
     seen[rel] = true
   end
   ok(rep.stale["lib.nvim/old-file"], "the fake says every file changed in 2030")
-  ok(not rep.stale["lib.nvim/undated"], "a task without a date is skipped")
+  ok(
+    rep.stale["lib.nvim/undated"],
+    "a task without a date counts as stale (like --stale=N): an unknowable answer is not fresh"
+  )
   ok(not rep.stale["lib.nvim/noise-only"], "commits, URLs and anchors are no files")
 
   -- the cap
