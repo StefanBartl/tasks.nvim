@@ -94,7 +94,9 @@ local FOLD = {
 ---@return string
 function M.slugify(title)
   -- Not a string (nil, a number): the empty slug, not "v-null" from `vim.fn.tolower(nil)`.
-  local lowered = vim.fn.tolower(type(title) == "string" and title or "")
+  -- A NUL byte would make `vim.fn.tolower` raise ("Using a Blob as a String"); it becomes a hyphen like any other
+  -- unusable character, so it is swapped for a space first.
+  local lowered = vim.fn.tolower(((type(title) == "string" and title or ""):gsub("%z", " ")))
   local out = {}
   for ch in lowered:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
     if ch:match("^[a-z0-9]$") then
