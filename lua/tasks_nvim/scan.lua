@@ -61,7 +61,7 @@ local function markdown_files(dir, opts)
   return out, errors or {}
 end
 
----Sort the markdown files below `dir` into task files and the rest.
+---Sort the markdown files below `dir` (a `tasks` or a `Backlog/<bucket>` folder) into task files and the rest.
 ---
 ---A task file is `<name>.md` directly in `dir`, or `<name>/<name>.md` (a folder
 ---task). Any other file inside a folder that holds its own `<name>.md` is an
@@ -91,38 +91,6 @@ local function classify(dir, files)
       end
     else
       out[#out + 1] = { path = path, folder = false, nested = true }
-    end
-  end
-  return out
-end
-
----The task files among the markdown files of a `Backlog/<bucket>` folder: a
----file directly in it, a folder task's `<name>/<name>.md`, and (as before) any
----other nested file. The other files inside a folder task are assets.
----@param dir string
----@param files string[]
----@return { path: string, folder: boolean }[] entries
-local function backlog_files(dir, files)
-  local has_task_file = {}
-  for _, path in ipairs(files) do
-    local name, base = path:sub(#dir + 2):match("^([^/]+)/([^/]+)%.md$")
-    if name and name == base then
-      has_task_file[name] = true
-    end
-  end
-  local out = {}
-  for _, path in ipairs(files) do
-    local rel = path:sub(#dir + 2)
-    local top = rel:match("^([^/]+)/")
-    if not top then
-      out[#out + 1] = { path = path, folder = false }
-    elseif has_task_file[top] then
-      local name, base = rel:match("^([^/]+)/([^/]+)%.md$")
-      if name and name == base then
-        out[#out + 1] = { path = path, folder = true }
-      end
-    else
-      out[#out + 1] = { path = path, folder = false }
     end
   end
   return out
@@ -256,7 +224,7 @@ function M.backlog(area, opts)
     for _, e in ipairs(errors) do
       all_errors[#all_errors + 1] = e
     end
-    for _, entry in ipairs(backlog_files(dir, files)) do
+    for _, entry in ipairs(classify(dir, files)) do
       local path = entry.path
       local text = fsio.read(path)
       -- Cheap pre-test: most old Backlog documents have no frontmatter at all.
@@ -298,7 +266,7 @@ function M.backlog_slugs(area, opts)
       -- A listing that failed is not an empty one: a new task would be given a slug a finished task has.
       return nil, ("cannot list %s: %s"):format(dir, tostring(walk_errors[1]))
     end
-    for _, entry in ipairs(backlog_files(dir, files)) do
+    for _, entry in ipairs(classify(dir, files)) do
       slugs[model.slug_of(entry.path, "backlog")] = entry.path
     end
     -- A folder in Backlog/ that is not a task folder still takes its name.
@@ -355,7 +323,7 @@ function M.find_done(id, opts)
   end
   for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
     local dir = vault.backlog_dir(root, area, bucket)
-    for _, entry in ipairs(backlog_files(dir, markdown_files(dir, opts or {}))) do
+    for _, entry in ipairs(classify(dir, markdown_files(dir, opts or {}))) do
       if model.slug_of(entry.path, "backlog") == slug then
         return model.from_file(entry.path, {
           area = area,

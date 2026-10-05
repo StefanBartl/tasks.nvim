@@ -182,13 +182,6 @@ function M.parse_id(id)
   return area, slug, nil
 end
 
----@param root string
----@param area string
----@return string
-function M.area_dir(root, area)
-  return root .. "/" .. area
-end
-
 ---`<area>/ROADMAP/tasks`
 ---@param root string
 ---@param area string

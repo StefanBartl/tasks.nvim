@@ -135,7 +135,7 @@ end
 ---@param v Tasks.View
 ---@param opts? Tasks.DashOpts
 ---@return Tasks.DashState
-function M.new_state(v, opts)
+local function new_state(v, opts)
   opts = opts or {}
   local filter = v.filter or {}
   -- A sort the command carried (even `default`) is the user's explicit choice; only an absent one falls
@@ -232,7 +232,7 @@ end
 ---not worth interrupting the user for.
 ---@param tasks Tasks.Task[]|{ id: string }[]
 ---@return boolean recorded
-function M.touch(tasks)
+local function touch(tasks)
   local ids = {}
   for _, t in ipairs(tasks) do
     ids[#ids + 1] = t.id
@@ -301,7 +301,7 @@ function M.cycle(state, tasks, field, count)
     error(res, 0)
   end
   refresh_buffers(res)
-  M.touch(res.changed)
+  touch(res.changed)
   local level, text = core.describe_set(field, res)
   if prog then
     prog:finish(("%d changed, %d failed"):format(#res.changed, #res.failed))
@@ -357,7 +357,7 @@ end
 ---`f`: pick a dimension, then a value; empty choices clear.
 ---@param state Tasks.DashState
 ---@param after fun()  # Called once, changed or not.
-function M.set_filter(state, after)
+local function set_filter(state, after)
   local dims = vim.deepcopy(core.FILTER_DIMS)
   dims[#dims + 1] = core.CLEAR_ALL
   local chips = core.chips(state.filter)
@@ -487,7 +487,7 @@ end
 
 ---`gp`: the task file rendered in the browser (mdview.nvim, a soft dependency).
 ---@param task Tasks.Task|nil
-function M.preview_task(task)
+local function preview_task(task)
   if not task then
     return
   end
@@ -501,7 +501,7 @@ end
 ---@param state Tasks.DashState
 ---@param task Tasks.Task|nil
 ---@param which "backlog"|"roadmap"
-function M.open_area_doc(state, task, which)
+local function open_area_doc(state, task, which)
   if not task then
     return
   end
@@ -546,7 +546,7 @@ M.HELP = {
 }
 
 ---Float with the key help; any key closes it again (the picker keeps focus).
-function M.show_help()
+local function show_help()
   require("tasks_nvim.ui.help_float").open(M.HELP, "tasks_dash_help")
 end
 
@@ -753,7 +753,7 @@ local function open_snacks(Snacks, state)
     end,
     ---`<CR>`: a visit for the frecency sort, then snacks' own jump.
     tasks_open = function(picker, item, action)
-      M.touch(targets(picker, true))
+      touch(targets(picker, true))
       return Snacks.picker.actions.jump(picker, item, action)
     end,
     tasks_done = function(picker)
@@ -766,7 +766,7 @@ local function open_snacks(Snacks, state)
     end,
     tasks_filter = function(picker)
       detour(picker, function(reopen)
-        M.set_filter(state, reopen)
+        set_filter(state, reopen)
       end)
     end,
     tasks_export = function(picker)
@@ -786,25 +786,25 @@ local function open_snacks(Snacks, state)
       local task = current_task(picker)
       picker:close()
       vim.schedule(function()
-        M.open_area_doc(state, task, "backlog")
+        open_area_doc(state, task, "backlog")
       end)
     end,
     tasks_roadmap = function(picker)
       local task = current_task(picker)
       picker:close()
       vim.schedule(function()
-        M.open_area_doc(state, task, "roadmap")
+        open_area_doc(state, task, "roadmap")
       end)
     end,
     tasks_preview = function(picker)
       local task = current_task(picker)
       picker:close()
       vim.schedule(function()
-        M.preview_task(task)
+        preview_task(task)
       end)
     end,
     tasks_help = function()
-      M.show_help()
+      show_help()
     end,
   }
 
@@ -937,7 +937,7 @@ local function open_select(state)
       {
         label = "open the file",
         run = function()
-          M.touch({ task })
+          touch({ task })
           local ok, err = pcall(vim.cmd, "edit " .. vim.fn.fnameescape(task.path))
           if not ok then
             notify.error(("cannot open %s: %s"):format(task.path, tostring(err)))
@@ -947,7 +947,7 @@ local function open_select(state)
       {
         label = "preview the file (mdview)",
         run = function()
-          M.preview_task(task)
+          preview_task(task)
         end,
       },
       {
@@ -973,7 +973,7 @@ local function open_select(state)
       {
         label = "filter ...",
         run = function()
-          M.set_filter(state, again)
+          set_filter(state, again)
         end,
       },
       {
@@ -996,13 +996,13 @@ local function open_select(state)
       {
         label = "Backlog of the area",
         run = function()
-          M.open_area_doc(state, task, "backlog")
+          open_area_doc(state, task, "backlog")
         end,
       },
       {
         label = "ROADMAP.md of the area",
         run = function()
-          M.open_area_doc(state, task, "roadmap")
+          open_area_doc(state, task, "roadmap")
         end,
       },
     }
@@ -1043,7 +1043,7 @@ end
 ---@param opts? Tasks.DashOpts
 ---@return Tasks.DashState|nil state
 function M.open(v, opts)
-  local ok, state = pcall(M.new_state, v, opts)
+  local ok, state = pcall(new_state, v, opts)
   if not ok then
     notify.error(("cannot open the dashboard: %s"):format(tostring(state)))
     return nil
