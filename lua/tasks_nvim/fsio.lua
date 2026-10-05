@@ -211,6 +211,16 @@ function M.write_atomic(path, content)
   return true, nil
 end
 
+---The error `create_exclusive` and `copy` answer when the target was already there. Compare through
+---`is_exists`, not against the word: the word is an implementation detail of this module.
+M.EXISTS = "exists"
+
+---@param err any
+---@return boolean
+function M.is_exists(err)
+  return err == M.EXISTS
+end
+
 ---Create `path` with `content`, failing with `"exists"` when the file is
 ---already there. The existence test and the creation are one syscall.
 ---@param path string
@@ -225,7 +235,7 @@ function M.create_exclusive(path, content)
   local fd, open_err = uv.fs_open(path, "wx", 420) -- 0644
   if not fd then
     if tostring(open_err):match("^EEXIST") then
-      return false, "exists"
+      return false, M.EXISTS
     end
     return false, "open failed: " .. tostring(open_err)
   end
@@ -270,7 +280,7 @@ function M.copy(from, to)
   local copied, err = uv.fs_copyfile(from, to, { excl = true })
   if not copied then
     if tostring(err):match("^EEXIST") then
-      return false, "exists"
+      return false, M.EXISTS
     end
     return false, tostring(err)
   end

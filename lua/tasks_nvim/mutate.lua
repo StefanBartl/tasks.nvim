@@ -677,7 +677,7 @@ function M.new(area, opts)
           result.index, result.index_err = index.write_area(area, { root = root })
         end
         return result, nil
-      elseif err ~= "exists" then
+      elseif not fsio.is_exists(err) then
         return nil, "cannot create " .. path .. ": " .. tostring(err)
       end
     end
@@ -1370,7 +1370,7 @@ function M.attach(id, src, opts)
   local asset = fsio.dirname(path) .. "/" .. M.ASSETS_DIR .. "/" .. name
   local copied, cerr = fsio.copy(src, asset)
   if not copied then
-    local why = cerr == "exists" and ("asset exists: " .. asset .. " (pass --name=)")
+    local why = fsio.is_exists(cerr) and ("asset exists: " .. asset .. " (pass --name=)")
       or ("cannot copy to " .. asset .. ": " .. tostring(cerr))
     if not folderized then
       return nil, why

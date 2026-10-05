@@ -279,7 +279,7 @@ function M.write_temp(text, label)
       temp_files[path] = true
       return path, nil
     end
-    if err ~= "exists" then
+    if not fsio.is_exists(err) then
       return nil, "cannot write " .. path .. ": " .. tostring(err)
     end
   end
