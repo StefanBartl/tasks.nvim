@@ -23,7 +23,12 @@ local check = require("tasks_nvim.check")
 local index = require("tasks_nvim.index")
 local model = require("tasks_nvim.model")
 local done_flow = require("tasks_nvim.done_flow")
+local estimate = require("tasks_nvim.estimate")
 local mutate = require("tasks_nvim.mutate")
+local next_pick = require("tasks_nvim.next_pick")
+local plan = require("tasks_nvim.plan")
+local plan_scope = require("tasks_nvim.plan_scope")
+local plan_view = require("tasks_nvim.plan_view")
 local scan = require("tasks_nvim.scan")
 local staleness = require("tasks_nvim.staleness")
 local vault = require("tasks_nvim.vault")
@@ -50,13 +55,19 @@ usage: nvim --headless -u NONE -l scripts/tasks.lua <command> [args]
 commands:
   list [<area>] [--status=a,b] [--prio=1,2|<=2] [--effort=S,M|<=M] [--kind=k] [--tag=t]
        [--category=c,d] [--severity=high,critical] [--value=4,5|>=4] [--actor=cdx,me,pair,none]
-       [--stale=<days>|refs] [--stale-refs] [--blocked]
+       [--stale=<days>|refs] [--stale-refs] [--blocked] [--ready|--waiting] [--unestimated]
        [--sort=default|prio-effort|severity|frecency|roi] [--format=tsv|ids]   open tasks, sorted; one line each
        (categories: bug security performance docs ruleset; --category=bug also finds kind=bug;
         --sort=prio-effort: small first within a prio; --sort=severity: critical first;
         --sort=roi: most value per effort first, tasks without value or effort last;
         --actor=me also finds status=decision and the tag needs-user; none = nobody classified it;
         --sort=frecency: what the dashboard opened or changed most, from the frecency file)
+       (--ready: nothing open blocks it; --waiting: an open blocker; --unestimated: no effort or no value)
+  plan [<area>] [--for=<id>] [filters as for list] [--ready] [--format=md|tsv|ids]
+                                          stages, ready tasks, decisions by leverage, critical path
+                                          (--for: the task and everything that has to be finished before it)
+  next [<area>] [--n=3] [--actor=cdx|me|pair|none]   the best ready tasks, with the reason
+  estimate [<area>] [--for=<id>] [filters as for list]   sums of effort and value, what is missing, quick wins
   index [<area>] [--check]                (re)write ROADMAP/TASKS.md; --check only reports
   migrate-actor [<area>] [--write]        propose actor=me for tasks that wait for you (status decision, tag
                                           needs-user) and leave every other task EMPTY; dry run unless --write
@@ -66,7 +77,8 @@ commands:
        [--lang=de|en] [--folder]             create a task file (--lang: body headings;
                                                --folder: a folder task that can hold assets)
   set <area>/<slug> key=value ...         change frontmatter (empty value removes the key)
-  done <area>/<slug> [--done-in=text] [--date=YYYY-MM-DD]   finish: move to Backlog/
+  done <area>/<slug> [--done-in=text] [--date=YYYY-MM-DD] [--no-next]   finish: move to Backlog/; prints
+                                          the tasks it freed and what to start next
   attach <area>/<slug> <file> [--name=n]  copy a file to <slug>/assets/ (a plain task becomes a
                                           folder task) and print the Markdown link
   folderize <area>/<slug>                 turn a plain task file into a folder task
@@ -104,8 +116,42 @@ local SPECS = {
       "sort",
       "format",
     },
-    flag = { "blocked", "all", "stale-refs" },
+    flag = { "blocked", "all", "stale-refs", "ready", "waiting", "unestimated" },
   },
+  plan = {
+    value = {
+      "for",
+      "status",
+      "prio",
+      "effort",
+      "kind",
+      "tag",
+      "category",
+      "severity",
+      "value",
+      "actor",
+      "stale",
+      "format",
+    },
+    flag = { "blocked", "stale-refs", "ready", "unestimated" },
+  },
+  estimate = {
+    value = {
+      "for",
+      "status",
+      "prio",
+      "effort",
+      "kind",
+      "tag",
+      "category",
+      "severity",
+      "value",
+      "actor",
+      "stale",
+    },
+    flag = { "blocked", "stale-refs", "unestimated" },
+  },
+  next = { value = { "n", "actor" }, flag = {} },
   index = { value = {}, flag = { "check", "all" } },
   new = {
     value = {
@@ -128,7 +174,7 @@ local SPECS = {
   },
   set = { value = {}, flag = { "no-index" } },
   ["migrate-actor"] = { value = {}, flag = { "write", "no-index" } },
-  done = { value = { "done-in", "date" }, flag = { "no-index" } },
+  done = { value = { "done-in", "date" }, flag = { "no-index", "no-next" } },
   attach = { value = { "name" }, flag = { "no-index" } },
   folderize = { value = {}, flag = { "no-index" } },
   check = { value = {}, flag = { "all" } },
@@ -241,6 +287,7 @@ local function filter_from(opt)
     stale = opt.stale --[[@as string|nil]],
     stale_refs = opt["stale-refs"] == true,
     blocked = opt.blocked == true,
+    unestimated = opt.unestimated == true,
     today = opt.today --[[@as string|nil]],
   })
 end
@@ -317,6 +364,29 @@ function commands.list(ctx)
   end
   -- `--stale=refs`: the second result of `model.filter` is the report that names the changed files.
   local filtered, report = model.filter(open, filter)
+  if args.opt.ready or args.opt.waiting then
+    if args.opt.ready and args.opt.waiting then
+      ctx.warn("error: --ready and --waiting exclude each other")
+      return 2
+    end
+    -- The same definition of "ready" as the plan, the dashboard and `next`: judged against EVERY open task of the
+    -- vault (a blocker may be in another area), not just the ones listed.
+    local readiness, everything = plan_scope.index(eo.root)
+    if not readiness then
+      ctx.warn("error: " .. tostring(everything))
+      return 1
+    end
+    local keep = {}
+    for _, t in ipairs(filtered) do
+      local state = plan.classify(t, readiness)
+      local is_ready = state == "ready" or state == "decision"
+      local is_waiting = state == "waiting" or state == "stuck"
+      if (args.opt.ready and is_ready) or (args.opt.waiting and is_waiting) then
+        keep[#keep + 1] = t
+      end
+    end
+    filtered = keep
+  end
   local shown = model.sort(filtered, order)
   for _, t in ipairs(shown) do
     if format == "ids" then
@@ -362,6 +432,147 @@ function commands.list(ctx)
       ctx.warn("warn: cannot read directory " .. e)
     end
     return 1
+  end
+  return 0
+end
+
+---The area argument shared by `plan`, `next` and `estimate`.
+---@param ctx Tasks.CliCtx
+---@param name string  The command, for the message.
+---@return string|nil area
+---@return boolean ok
+local function area_arg(ctx, name)
+  local given = ctx.args.pos[1]
+  if #ctx.args.pos > 1 then
+    ctx.warn("error: " .. name .. " takes at most one area")
+    return nil, false
+  end
+  if not given then
+    return nil, true
+  end
+  local root, rerr = vault.root(ctx.eo)
+  if not root then
+    ctx.warn("error: " .. tostring(rerr))
+    return nil, false
+  end
+  if not vault.has_area(root, given) then
+    ctx.warn("error: unknown area: " .. given)
+    return nil, false
+  end
+  return given, true
+end
+
+---@param ctx Tasks.CliCtx
+---@param name string
+---@return Tasks.PlanScope|nil scope
+---@return integer|nil code  # Set when the command must stop.
+local function load_scope(ctx, name)
+  local area, ok = area_arg(ctx, name)
+  if not ok then
+    return nil, 2
+  end
+  local filter, ferr = filter_from(ctx.args.opt)
+  if not filter then
+    ctx.warn("error: " .. ferr)
+    return nil, 2
+  end
+  filter.ref_opts = { root = ctx.eo.root }
+  local scope, err = plan_scope.load({
+    root = ctx.eo.root,
+    area = area,
+    for_id = ctx.args.opt["for"] --[[@as string|nil]],
+    filter = filter,
+  })
+  if not scope then
+    ctx.warn("error: " .. tostring(err))
+    return nil, 1
+  end
+  for _, e in ipairs(scope.errors) do
+    ctx.warn("warn: cannot read directory " .. e)
+  end
+  return scope, nil
+end
+
+function commands.plan(ctx)
+  local format = ctx.args.opt.format or "md"
+  if format ~= "md" and format ~= "tsv" and format ~= "ids" then
+    ctx.warn("error: --format must be md, tsv or ids")
+    return 2
+  end
+  local scope, code = load_scope(ctx, "plan")
+  if not scope then
+    return code
+  end
+  local ready_only = ctx.args.opt.ready == true
+  if format == "ids" then
+    for _, id in ipairs(plan_view.ids(scope.plan, { ready_only = ready_only })) do
+      ctx.say(id)
+    end
+  elseif format == "tsv" then
+    for _, line in ipairs(plan_view.tsv(scope.plan, { ready_only = ready_only })) do
+      ctx.say(line)
+    end
+  else
+    ctx.out(plan_view.markdown(scope.plan, {
+      title = scope.title,
+      today = ctx.eo.today or model.today(),
+      done = scope.done,
+      ready_only = ready_only,
+    }))
+  end
+  return #scope.errors > 0 and 1 or 0
+end
+
+function commands.estimate(ctx)
+  local scope, code = load_scope(ctx, "estimate")
+  if not scope then
+    return code
+  end
+  local sums = estimate.rollup(scope.tasks, { done = scope.done })
+  ctx.say(estimate.describe(sums))
+  if #sums.quick_wins > 0 then
+    ctx.say("quick wins: " .. table.concat(sums.quick_wins, ", "))
+  end
+  if #sums.unestimated > 0 then
+    ctx.say(("unestimated: %d (list them: list --unestimated)"):format(#sums.unestimated))
+  end
+  return #scope.errors > 0 and 1 or 0
+end
+
+commands["next"] = function(ctx)
+  local area, ok = area_arg(ctx, "next")
+  if not ok then
+    return 2
+  end
+  local count = 3
+  if ctx.args.opt.n then
+    local n, nerr = to_int(ctx.args.opt.n --[[@as string]], "--n")
+    if not n or n < 1 then
+      ctx.warn("error: " .. (nerr or "--n must be at least 1"))
+      return 2
+    end
+    count = n
+  end
+  local actor = ctx.args.opt.actor --[[@as string|nil]]
+  if actor and not (model.is_actor(actor) or actor == "none") then
+    ctx.warn("error: unknown actor in --actor: " .. actor .. " (expected cdx, me, pair or none)")
+    return 2
+  end
+  local pick, err = next_pick.pick_from_vault({
+    root = ctx.eo.root,
+    area = area,
+    actor = actor,
+    n = count - 1,
+  })
+  if not pick then
+    ctx.warn("error: " .. tostring(err))
+    return 1
+  end
+  for _, line in ipairs(plan_view.next_lines(pick)) do
+    ctx.say(line)
+  end
+  for _, e in ipairs(pick.incomplete or {}) do
+    ctx.warn("warn: cannot read directory " .. e .. " (the answer may be incomplete)")
   end
   return 0
 end
@@ -572,6 +783,11 @@ function commands.done(ctx)
   end
   for _, note in ipairs(flow.notes) do
     ctx.warn(("warn: %s: %s"):format(res.id, note))
+  end
+  if flow.next and not args.opt["no-next"] then
+    for _, line in ipairs(plan_view.next_lines(flow.next)) do
+      ctx.say(line)
+    end
   end
   report_index(ctx, res)
   return 0

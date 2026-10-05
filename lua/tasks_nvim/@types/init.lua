@@ -57,6 +57,7 @@
 ---@field actor? string|string[]       # `cdx`, `me`, `pair` or `none`; matches `model.actor` (the written value, else derived).
 ---@field area? string|string[]
 ---@field blocked? boolean            # status `blocked` or a non-empty `blocked_by`.
+---@field unestimated? boolean        # Missing the effort or the value (the tasks `estimate` walks).
 ---@field stale? integer              # Not updated for at least this many days (undated counts as stale).
 ---@field stale_refs? boolean         # A file named in `refs` changed after `updated` (`tasks.staleness`; reads files and git).
 ---@field ref_stale? table<string, Tasks.RefChange[]>  # Ready answer for `stale_refs` (task id -> changes); computed when absent.

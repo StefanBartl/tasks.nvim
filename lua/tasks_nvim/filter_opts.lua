@@ -47,7 +47,7 @@ end
 ---words the same way. Unknown words are an error, never silently ignored.
 ---`stale` may be a number, a digit string or `refs` (same as `stale_refs`: a
 ---file named in `refs` changed since `updated`); `today` is passed through.
----@param opt { status?: string, prio?: string|integer, effort?: string, kind?: string, tag?: string, category?: string, severity?: string, value?: string|integer, actor?: string, stale?: string|integer, stale_refs?: boolean, blocked?: boolean, today?: string }
+---@param opt { status?: string, prio?: string|integer, effort?: string, kind?: string, tag?: string, category?: string, severity?: string, value?: string|integer, actor?: string, stale?: string|integer, stale_refs?: boolean, blocked?: boolean, unestimated?: boolean, today?: string }
 ---@return Tasks.Filter|nil filter
 ---@return string|nil err
 function M.parse(opt)
@@ -221,6 +221,9 @@ function M.parse(opt)
   end
   if opt.blocked then
     f.blocked = true
+  end
+  if opt.unestimated then
+    f.unestimated = true
   end
   return f, nil
 end

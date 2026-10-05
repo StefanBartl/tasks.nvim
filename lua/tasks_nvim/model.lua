@@ -989,6 +989,9 @@ function M.filter(tasks, f)
       local who = M.actor(t) or "none"
       keep = actor[who] == true
     end
+    if keep and f.unestimated and t.value ~= nil and M.effort_days(t.effort) ~= nil then
+      keep = false
+    end
     if keep and f.blocked and not (t.status == "blocked" or #t.blocked_by > 0) then
       keep = false
     end
