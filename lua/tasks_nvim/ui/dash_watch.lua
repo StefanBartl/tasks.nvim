@@ -62,6 +62,11 @@ local M = {}
 
 M.DEFAULTS = { debounce_ms = 250, mute_ms = 300, raw_debounce_ms = 20, backlog = true }
 
+---At most this many folders are watched at once (one `fs_event` handle each). A vault with thousands of folder
+---tasks would otherwise run into the system's watch limit (inotify) and take other watchers with it; the rest is
+---reported as a partial watch and `r` rescans.
+M.MAX_HANDLES = 400
+
 ---The last path component, either slash.
 ---@param name string|nil
 ---@return string|nil
@@ -332,7 +337,11 @@ end
 ---@return integer wanted
 ---@return string|nil first_err
 function Watcher:sync()
-  local wanted = M.dirs(self.opts.root, self.opts.area, { backlog = self.opts.backlog })
+  local all_wanted = M.dirs(self.opts.root, self.opts.area, { backlog = self.opts.backlog })
+  local wanted = all_wanted
+  if #all_wanted > M.MAX_HANDLES then
+    wanted = vim.list_slice(all_wanted, 1, M.MAX_HANDLES)
+  end
   local want = {}
   for _, d in ipairs(wanted) do
     want[d.path] = d
@@ -359,7 +368,8 @@ function Watcher:sync()
       end
     end
   end
-  return self:count(), #wanted, first_err
+  -- The third answer counts what is WANTED, the cap included: a capped watch reads as partial.
+  return self:count(), #all_wanted, first_err
 end
 
 ---Start watching. `false, err` when there was something to watch and nothing

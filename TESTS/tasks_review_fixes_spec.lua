@@ -324,6 +324,29 @@ return function(H)
   ok(not watcher.stopped, "and the watcher is still there")
   watcher:stop()
 
+  -- ── at most MAX_HANDLES folders are watched; the rest reads as a partial watch ──
+  local W = require("tasks_nvim.ui.dash_watch")
+  local was_max = W.MAX_HANDLES
+  W.MAX_HANDLES = 1
+  local started_dirs = {}
+  local capped = W.new({
+    root = root,
+    on_refresh = function() end,
+    start = function(watched_dir)
+      started_dirs[#started_dirs + 1] = watched_dir
+      return { stop = function() end }
+    end,
+  })
+  local started_ok = capped:start()
+  W.MAX_HANDLES = was_max
+  ok(started_ok, "a capped watch still starts")
+  eq(#started_dirs, 1, "only MAX_HANDLES handles are started")
+  ok(
+    capped.partial ~= nil and capped.partial.wanted > capped.partial.started,
+    "and it is reported as partial"
+  )
+  capped:stop()
+
   -- ── an unreadable (here: oversized) index is an error, not "missing" ──
   local big_index = root .. "/lib.nvim/ROADMAP/TASKS.md"
   local bf = assert(io.open(big_index, "wb"))

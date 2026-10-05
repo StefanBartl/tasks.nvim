@@ -893,6 +893,9 @@ local function open_snacks(Snacks, state)
     -- Every way out of the picker (jump, detour, <Esc>, focus lost) ends here:
     -- the watcher's handles and timer go with it.
     on_close = function()
+      -- A scan the watcher left for the next finder run belongs to this picker: dropped with it, so a reopened
+      -- picker (after a detour) never shows the list of the version before.
+      state.preload = nil
       if watcher then
         watcher:stop()
         watcher = nil
