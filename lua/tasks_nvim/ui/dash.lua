@@ -147,7 +147,12 @@ function M.new_state(v, opts)
     shown = {},
     widths = core.widths({}),
     persist = do_persist,
-    watch = opts.watch == nil and M.config.watch or opts.watch,
+    watch = (function()
+      if opts.watch == nil then
+        return M.config.watch
+      end
+      return opts.watch
+    end)(),
   }
 end
 
