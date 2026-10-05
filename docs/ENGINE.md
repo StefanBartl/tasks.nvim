@@ -63,7 +63,7 @@ TESTS/              specs (run with TESTS/run.lua)
   into this plugin as `:Tasks <verb>` in the next stage. They add only what an editor needs on top of the
   engine: composer routes and completion, the `--to=` delivery, a form for a missing title, a confirmation
   before `done`, opening files and re-pointing buffers, a picker over one area folder. The filter words
-  (`--status=`, `--prio=<=2`, ...) are parsed by `model.filter_from_options`, shared with the CLI, and
+  (`--status=`, `--prio=<=2`, ...) are parsed by `filter_opts.parse`, shared with the CLI, and
   the keys `task set` accepts are `mutate.SETTABLE`.
 - **Headless:** `scripts/tasks.lua` (below).
 

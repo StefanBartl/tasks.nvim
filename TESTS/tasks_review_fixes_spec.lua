@@ -164,11 +164,11 @@ return function(H)
 
   -- ── filter options: no value is not "matches nothing" ───────────────────
   for _, flag in ipairs({ "status", "kind", "tag", "category", "prio" }) do
-    local f, ferr = model.filter_from_options({ [flag] = "" })
+    local f, ferr = require("tasks_nvim.filter_opts").parse({ [flag] = "" })
     eq(f, nil, "--" .. flag .. "= is an error")
     has(ferr, "--" .. flag .. " needs a value")
   end
-  local _, terr = model.filter_from_options({ today = "garbage" })
+  local _, terr = require("tasks_nvim.filter_opts").parse({ today = "garbage" })
   has(terr, "--today must be YYYY-MM-DD")
 
   -- ── retarget_buffers survives a window that refuses `:edit` ─────────────
@@ -280,15 +280,19 @@ return function(H)
   vim.fn.delete(own)
 
   -- ── odd input at the edges ──────────────────────────────────────────────
-  local pf, pe = model.filter_from_options({ prio = "<=0" })
+  local pf, pe = require("tasks_nvim.filter_opts").parse({ prio = "<=0" })
   eq(pf, nil, "--prio=<=0 is an error, not a filter that matches nothing")
   has(pe, "--prio must be")
-  eq(select(1, model.filter_from_options({ prio = "<=9" })), nil, "and so is <=9")
-  ok(model.filter_from_options({ prio = "<=2" }) ~= nil, "<=2 still works")
+  eq(select(1, require("tasks_nvim.filter_opts").parse({ prio = "<=9" })), nil, "and so is <=9")
+  ok(require("tasks_nvim.filter_opts").parse({ prio = "<=2" }) ~= nil, "<=2 still works")
   ok(not tostring(mutate.slugify(nil)):find("null", 1, true), "slugify(nil) is not `v-null`")
-  eq(model.split_commas(nil), {}, "split_commas(nil) is an empty list, not a raise")
   eq(
-    select(1, model.filter_from_options({ status = true })),
+    require("tasks_nvim.filter_opts").split_commas(nil),
+    {},
+    "split_commas(nil) is an empty list, not a raise"
+  )
+  eq(
+    select(1, require("tasks_nvim.filter_opts").parse({ status = true })),
     nil,
     "--status as a bare flag is an error"
   )

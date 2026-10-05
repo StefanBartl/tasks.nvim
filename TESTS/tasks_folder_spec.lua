@@ -89,9 +89,9 @@ return function(H)
   eq(ids(model.filter(list, { category = { "bug" } })), { "a/t2" }, "kind bug counts as bug")
   eq(ids(model.filter(list, { category = { "docs", "security" } })), { "a/t1", "a/t3" })
   eq(#model.filter(list, {}), 4)
-  local f = assert(model.filter_from_options({ category = "bug,docs" }))
+  local f = assert(require("tasks_nvim.filter_opts").parse({ category = "bug,docs" }))
   eq(f.category, { "bug", "docs" })
-  local _, ferr = model.filter_from_options({ category = "nope" })
+  local _, ferr = require("tasks_nvim.filter_opts").parse({ category = "nope" })
   has(ferr, "unknown category")
 
   -- the dashboard knows the dimension: chips, `f` menu, stored filter, search text

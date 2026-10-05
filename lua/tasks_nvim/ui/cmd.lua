@@ -21,6 +21,7 @@ local harvest = require("lib.nvim.harvest")
 local notify = require("lib.nvim.notify").create("[tasks]")
 
 local check = require("tasks_nvim.check")
+local filter_opts = require("tasks_nvim.filter_opts")
 local fsio = require("tasks_nvim.fsio")
 local index = require("tasks_nvim.index")
 local model = require("tasks_nvim.model")
@@ -240,7 +241,7 @@ function M.list(ctx)
     notify.error(terr)
     return
   end
-  local filter, ferr = model.filter_from_options({
+  local filter, ferr = filter_opts.parse({
     status = flags.status,
     prio = flags.prio,
     effort = flags.effort,

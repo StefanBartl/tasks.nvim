@@ -56,6 +56,7 @@ end
 local SUBMODULES = {
   vault = true,
   model = true,
+  filter_opts = true,
   scan = true,
   index = true,
   mutate = true,

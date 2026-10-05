@@ -64,25 +64,25 @@ return function(H)
   local e_d = task("e-d", { { "effort", "0.75d" } })
   local efforts = { e_none, e_xs, e_s, e_m, e_l, e_d }
 
-  local f = assert(model.filter_from_options({ effort = "S, m" }))
+  local f = assert(require("tasks_nvim.filter_opts").parse({ effort = "S, m" }))
   eq(f.effort, { "S", "M" }, "size words are case-insensitive, the list is trimmed")
   eq(order(model.filter(efforts, f)), { "e-s", "e-m" })
 
-  f = assert(model.filter_from_options({ effort = "0.75d" }))
+  f = assert(require("tasks_nvim.filter_opts").parse({ effort = "0.75d" }))
   eq(order(model.filter(efforts, f)), { "e-d" }, "day values match exactly")
 
-  f = assert(model.filter_from_options({ effort = "<=M" }))
+  f = assert(require("tasks_nvim.filter_opts").parse({ effort = "<=M" }))
   eq(f.effort_max, "M")
   eq(
     order(model.filter(efforts, f)),
     { "e-xs", "e-s", "e-m", "e-d" },
     "<=M: this size or smaller, days on the same scale, no effort never matches"
   )
-  f = assert(model.filter_from_options({ effort = "<=0.5d" }))
+  f = assert(require("tasks_nvim.filter_opts").parse({ effort = "<=0.5d" }))
   eq(order(model.filter(efforts, f)), { "e-xs", "e-s" })
 
   for _, bad in ipairs({ "XXL", "<=big", "", "S,wat" }) do
-    local nf, err = model.filter_from_options({ effort = bad })
+    local nf, err = require("tasks_nvim.filter_opts").parse({ effort = bad })
     eq(nf, nil, "refused: '" .. bad .. "'")
     has(err, "--effort")
   end
@@ -221,14 +221,14 @@ return function(H)
     s("s-none", nil, 1),
     s("s-med", "medium", 2),
   }
-  f = assert(model.filter_from_options({ severity = "high,critical" }))
+  f = assert(require("tasks_nvim.filter_opts").parse({ severity = "high,critical" }))
   eq(f.severity, { "high", "critical" })
   eq(
     order(model.filter(sevs, f)),
     { "s-crit", "s-high-p1", "s-high-p2" },
     "a task without severity never matches"
   )
-  local sf, serr = model.filter_from_options({ severity = "urgent" })
+  local sf, serr = require("tasks_nvim.filter_opts").parse({ severity = "urgent" })
   eq(sf, nil)
   has(serr, "unknown severity in --severity: urgent")
 
@@ -423,7 +423,10 @@ return function(H)
   eq(dash.dim_choices("severity", {}), model.SEVERITIES)
   eq(dash.dim_choices("effort", {}), { "XS", "S", "M", "L", "XL", "<=S", "<=M" })
   for _, choice in ipairs(dash.dim_choices("effort", {})) do
-    ok(model.filter_from_options({ effort = choice }), "every menu entry is a valid filter")
+    ok(
+      require("tasks_nvim.filter_opts").parse({ effort = choice }),
+      "every menu entry is a valid filter"
+    )
   end
 
   local ef = dash.set_dim({}, "effort", "S")
@@ -515,7 +518,7 @@ return function(H)
   -- load: filter and sort together, against the vault of the CLI part
   local loaded = assert(dash.load({
     root = root,
-    filter = assert(model.filter_from_options({ category = "bug,security" })),
+    filter = assert(require("tasks_nvim.filter_opts").parse({ category = "bug,security" })),
     sort = "severity",
   }))
   eq(order(loaded.tasks), { "burn", "leak", "hole" }, "the dashboard sorts like the CLI")

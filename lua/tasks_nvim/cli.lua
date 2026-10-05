@@ -184,7 +184,8 @@ local function parse_args(argv, spec)
   return { pos = pos, opt = opt }, nil
 end
 
-local split_commas = model.split_commas
+local filter_opts = require("tasks_nvim.filter_opts")
+local split_commas = filter_opts.split_commas
 
 ---Make a line safe to print: terminal control characters (ESC and the other C0 controls, DEL,
 ---a lone CR, the 8-bit C1 controls such as the CSI `U+009B`) become `?`. A task title comes
@@ -211,12 +212,12 @@ local function to_int(value, what)
 end
 
 ---Turn the filter options into a `Tasks.Filter` (the parsing itself is shared
----with the editor commands: `model.filter_from_options`).
+---with the editor commands: `filter_opts.parse`).
 ---@param opt table<string, string|boolean>
 ---@return Tasks.Filter|nil filter
 ---@return string|nil err
 local function filter_from(opt)
-  return model.filter_from_options({
+  return filter_opts.parse({
     status = opt.status --[[@as string|nil]],
     prio = opt.prio --[[@as string|nil]],
     effort = opt.effort --[[@as string|nil]],

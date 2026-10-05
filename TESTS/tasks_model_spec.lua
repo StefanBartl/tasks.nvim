@@ -364,14 +364,18 @@ return function(H)
   eq(ids(model.filter(pool, { stale = 0, today = "2026-10-03" })), ids(pool), "stale=0 keeps all")
 
   -- ── filter_from_options: the words the CLI and the editor commands share ──
-  eq(model.split_commas(" a, b ,,c "), { "a", "b", "c" }, "split_commas trims and drops empties")
-  eq(model.split_commas(""), {}, "split_commas of nothing")
+  eq(
+    require("tasks_nvim.filter_opts").split_commas(" a, b ,,c "),
+    { "a", "b", "c" },
+    "split_commas trims and drops empties"
+  )
+  eq(require("tasks_nvim.filter_opts").split_commas(""), {}, "split_commas of nothing")
 
-  local f = assert(model.filter_from_options({}))
+  local f = assert(require("tasks_nvim.filter_opts").parse({}))
   eq(f.status, nil, "no option, no criterion")
   eq(f.blocked, nil)
 
-  f = assert(model.filter_from_options({
+  f = assert(require("tasks_nvim.filter_opts").parse({
     status = "doing, decision",
     prio = "1,2",
     kind = "bug",
@@ -388,17 +392,17 @@ return function(H)
   eq(f.blocked, true)
   eq(f.today, "2026-10-03")
 
-  f = assert(model.filter_from_options({ prio = "<=2", stale = 7 }))
+  f = assert(require("tasks_nvim.filter_opts").parse({ prio = "<=2", stale = 7 }))
   eq(f.prio_max, 2, "<=N is a ceiling")
   eq(f.prio, nil)
   eq(f.stale, 7, "a number is accepted as is")
-  f = assert(model.filter_from_options({ prio = 3 }))
+  f = assert(require("tasks_nvim.filter_opts").parse({ prio = 3 }))
   eq(f.prio, { 3 }, "a number prio is accepted")
 
   ---@param opt table
   ---@param needle string
   local function rejected(opt, needle)
-    local res, err = model.filter_from_options(opt)
+    local res, err = require("tasks_nvim.filter_opts").parse(opt)
     eq(res, nil, "rejected: " .. needle)
     has(err, needle)
   end
@@ -447,7 +451,11 @@ return function(H)
     eq(long.title, "a" .. run .. "b", "inner run kept, nothing around it")
     eq(long.summary, "word", "the body line is trimmed")
     eq(long.tags[2], "z", "a list item is trimmed")
-    eq(model.split_commas("a ,  b  , " .. run .. "c" .. run), { "a", "b", "c" }, "comma list")
+    eq(
+      require("tasks_nvim.filter_opts").split_commas("a ,  b  , " .. run .. "c" .. run),
+      { "a", "b", "c" },
+      "comma list"
+    )
     eq(require("tasks_nvim.fsio").trim("  \t x y \r\n"), "x y", "fsio.trim")
     eq(require("tasks_nvim.fsio").trim("x"), "x", "one character")
     eq(require("tasks_nvim.fsio").trim(run), "", "an all-whitespace string")

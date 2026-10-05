@@ -24,6 +24,7 @@
 --- Not its job: windows, keys, prompts, notifications (`tasks_dash`), the
 --- delivery itself (`tasks_view`), the rules (the engine).
 
+local filter_opts = require("tasks_nvim.filter_opts")
 local model = require("tasks_nvim.model")
 local mutate = require("tasks_nvim.mutate")
 local scan = require("tasks_nvim.scan")
@@ -471,7 +472,7 @@ function M.dim_choices(dim, tasks)
 end
 
 ---The textual options (`--status=` ... form) of a filter: what is stored
----between sessions, and what `model.filter_from_options` reads back.
+---between sessions, and what `filter_opts.parse` reads back.
 ---@param f Tasks.Filter|nil
 ---@return table<string, string|boolean|integer>
 function M.filter_to_options(f)
@@ -522,7 +523,7 @@ function M.filter_from_stored(opts)
   if type(opts) ~= "table" then
     return {}
   end
-  local f = model.filter_from_options({
+  local f = filter_opts.parse({
     status = type(opts.status) == "string" and opts.status or nil,
     prio = (type(opts.prio) == "string" or type(opts.prio) == "number") and opts.prio or nil,
     effort = type(opts.effort) == "string" and opts.effort or nil,
