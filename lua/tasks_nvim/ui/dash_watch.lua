@@ -47,6 +47,15 @@ local M = {}
 ---@field path string
 ---@field only? string   # Waiting for this entry (a folder that may not exist yet): events count once it exists.
 
+---Receives one raw event of a watched folder.
+---@alias Tasks.WatchOnChange fun(path: string, filename: string|nil, events: table)
+
+---Starts a handle on a folder: the handle, or `nil, err`.
+---@alias Tasks.WatchStart fun(path: string, on_change: Tasks.WatchOnChange, opts: table): table|nil, string|nil
+
+---Runs `fn` after `ms`; returns a function that cancels it.
+---@alias Tasks.WatchSchedule fun(ms: integer, fn: fun()): fun()
+
 ---@class Tasks.DashWatchOpts
 ---@field root string
 ---@field area? string|nil               # nil: every area of the vault.
@@ -56,8 +65,8 @@ local M = {}
 ---@field mute_ms? integer               # Quiet time after `hold` (default 300).
 ---@field raw_debounce_ms? integer       # Per-handle debounce of `lib.nvim.fs.watch` (default 20).
 ---@field backlog? boolean               # Watch `Backlog/FEATURES|TASKS` too (default true).
----@field start? fun(path: string, on_change: fun(path: string, filename: string|nil, events: table), opts: table): table|nil, string|nil
----@field schedule? fun(ms: integer, fn: fun()): fun()   # Returns a cancel function.
+---@field start? Tasks.WatchStart       # The handle factory.
+---@field schedule? Tasks.WatchSchedule # The debounce timer; returns a cancel function.
 ---@field now? fun(): number             # Milliseconds, monotonic.
 
 M.DEFAULTS = { debounce_ms = 250, mute_ms = 300, raw_debounce_ms = 20, backlog = true }
@@ -199,7 +208,7 @@ end
 
 ---The handle factory: `lib.nvim.fs.watch` when it is there.
 ---@param path string
----@param on_change fun(path: string, filename: string|nil, events: table)
+---@param on_change Tasks.WatchOnChange
 ---@param opts table
 ---@return table|nil handle
 ---@return string|nil err

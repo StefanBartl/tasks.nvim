@@ -149,8 +149,18 @@ function M.close(buf)
   pcall(vim.api.nvim_buf_delete, buf, { force = true })
 end
 
+---@class Tasks.FormOpenOpts
+---@field areas? string[]
+---@field area? string
+---@field title? string
+---@field tags? string
+---@field refs? string
+---@field ticks? table<string, string|string[]>
+---@field on_submit fun(values: Tasks.FormValues, buf: integer)
+---@field on_cancel? fun()
+
 ---Open the form.
----@param opts { areas?: string[], area?: string, title?: string, tags?: string, refs?: string, ticks?: table<string, string|string[]>, on_submit: fun(values: Tasks.FormValues, buf: integer), on_cancel?: fun() }
+---@param opts Tasks.FormOpenOpts
 ---@return integer buf
 function M.open(opts)
   vim.cmd("botright new")
