@@ -289,6 +289,7 @@ local function load_scope(ctx)
     root = root,
     area = area,
     for_id = flags["for"],
+    plan_id = flags.plan,
     filter = filter,
   })
   if not scope then
@@ -323,6 +324,13 @@ function M.plan(ctx)
     return
   end
   local plan_view = require("tasks_nvim.plan_view")
+  if flags.write then
+    return M.write_plan_block(ctx, scope)
+  end
+  if flags.check then
+    notify.error("--check goes with --write=<file>")
+    return
+  end
   local text
   if format == "md" then
     text = plan_view.markdown(scope.plan, {
@@ -331,6 +339,7 @@ function M.plan(ctx)
       done = scope.done,
       ready_only = flags.ready == true,
       with_steps = flags["with-steps"] == true,
+      plan_file = scope.plan_file,
     })
   elseif format == "tsv" then
     text = table.concat(plan_view.tsv(scope.plan, { ready_only = flags.ready == true }), "\n")
@@ -351,6 +360,84 @@ function M.plan(ctx)
   notify.info(
     ("plan of %s: %d task(s), %d ready"):format(scope.title, #scope.tasks, #scope.plan.ready)
   )
+end
+
+---`:Tasks plan --write=<file> [--scope=<name>] [--check]`: replace only the generated block of the scope in a
+---hand-written document; `--check` writes nothing and says whether it is out of date.
+---@param ctx table
+---@param scope Tasks.PlanScope
+function M.write_plan_block(ctx, scope)
+  local flags = ctx.flags
+  local plan_view = require("tasks_nvim.plan_view")
+  local path = vim.fn.expand(flags.write)
+  local area = ctx.args.area
+  if area == "all" then
+    area = nil
+  end
+  local key = flags.scope
+    or plan_view.default_scope({ area = area, for_id = flags["for"], plan_id = flags.plan })
+  local text, rerr = fsio.read(path)
+  if not text then
+    notify.error(("cannot read %s: %s"):format(path, tostring(rerr)))
+    return
+  end
+  local body = plan_view.markdown(scope.plan, {
+    title = scope.title,
+    done = scope.done,
+    ready_only = flags.ready == true,
+    with_steps = flags["with-steps"] == true,
+    plan_file = scope.plan_file,
+    block = true,
+  })
+  local fresh, err, changed = plan_view.replace_block(text, key, body)
+  if not fresh then
+    notify.error(tostring(err))
+    return
+  end
+  if flags.check then
+    if changed then
+      notify.warn(("the block `%s` in %s is out of date"):format(key, path))
+    else
+      notify.info(("the block `%s` in %s is current"):format(key, path))
+    end
+    return
+  end
+  if not changed then
+    notify.info(("block `%s` in %s: unchanged"):format(key, path))
+    return
+  end
+  local ok, werr = fsio.write_atomic(path, fresh)
+  if not ok then
+    notify.error(("cannot write %s: %s"):format(path, tostring(werr)))
+    return
+  end
+  refresh_buffers(path)
+  notify.info(("block `%s` in %s updated"):format(key, path))
+end
+
+---`:Tasks planfile <area> <title...> [--areas=] [--phases=] [--gate=hard] [--target=] [--status=]`
+---@param ctx table
+function M.planfile(ctx)
+  local flags = ctx.flags
+  local title = unquote(table.concat(ctx.rest, " "))
+  if title == "" then
+    notify.error("a plan needs a title: :Tasks planfile <area> <title...>")
+    return
+  end
+  local res, err = require("tasks_nvim.plans").new(ctx.args.area, {
+    title = title,
+    areas = flags.areas,
+    phases = flags.phases,
+    gate = flags.gate,
+    target = flags.target,
+    status = flags.status,
+  })
+  if not res then
+    notify.error(tostring(err))
+    return
+  end
+  notify.info(("created plan %s"):format(res.id))
+  open_file(res.path)
 end
 
 ---Walk the tasks that miss an effort or a value and ask for them one by one; everything given is written in ONE
@@ -996,6 +1083,8 @@ function M.task_new(ctx)
     "actor",
     "after",
     "order",
+    "plan",
+    "phase",
     "tags",
     "category",
     "severity",
@@ -1020,6 +1109,8 @@ function M.task_new(ctx)
       actor = values.actor,
       after = values.after,
       order = values.order,
+      plan = values.plan,
+      phase = values.phase,
       status = values.status,
       refs = source and source.ref or nil,
       folder = ctx.flags.folder == true,

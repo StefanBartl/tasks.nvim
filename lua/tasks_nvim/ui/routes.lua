@@ -39,7 +39,7 @@ local COMPLETE_TTL = 3
 
 ---What the completions read, kept for `COMPLETE_TTL` seconds per vault: the open tasks (parsing 466 files is
 ---96 ms, too slow for every `<Tab>`), their sorted ids and tags, and the ids of the finished ones.
----@type { at: integer, root: string|nil, open: Tasks.Task[]|nil, ids: string[]|nil, tags: string[]|nil }
+---@type { at: integer, root: string|nil, open: Tasks.Task[]|nil, ids: string[]|nil, tags: string[]|nil, plan_ids: string[]|nil, plans_root: string|nil, plans_at: integer|nil }
 local list_cache = { at = 0 }
 ---@type { at: integer, root: string|nil, ids: string[]|nil }
 local done_cache = { at = 0 }
@@ -117,6 +117,27 @@ local function open_tags()
     list_cache.tags = tags
   end
   return list_cache.tags or {}
+end
+
+---The ids of the open plan files (`plan=` and `--plan=` complete them), read at most every few seconds.
+---@return string[]
+local function open_plan_ids()
+  local root = vault.root()
+  if
+    list_cache.plan_ids
+    and list_cache.plans_root == root
+    and now_ms() - (list_cache.plans_at or 0) < COMPLETE_TTL * 1000
+  then
+    return list_cache.plan_ids
+  end
+  local ok, plans = pcall(require("tasks_nvim.plans").all, {})
+  local ids = {}
+  for _, plan in ipairs(ok and plans or {}) do
+    ids[#ids + 1] = plan.id
+  end
+  table.sort(ids)
+  list_cache.plan_ids, list_cache.plans_root, list_cache.plans_at = ids, root, now_ms()
+  return ids
 end
 
 ---The ids of the finished tasks (`open` and `preview` take one too).
@@ -255,6 +276,15 @@ function M.register_types()
     end,
   })
 
+  composer.register_type("TASK_PLAN", {
+    validate = function(raw)
+      return true, raw, nil
+    end,
+    complete = function(arg_lead)
+      return prefix_ci(open_plan_ids(), arg_lead)
+    end,
+  })
+
   composer.register_type("TASK_TAGS", {
     validate = function(raw)
       return true, raw, nil
@@ -379,6 +409,8 @@ local function nested_routes()
         { key = "actor", type = "STRING", values = model.ACTORS },
         { key = "after", type = "TASK_IDS" },
         { key = "order", type = "STRING" },
+        { key = "plan", type = "TASK_PLAN" },
+        { key = "phase", type = "STRING" },
         { key = "status", type = "STRING", values = model.OPEN_STATUSES },
       },
       flags = { { name = "folder", bool = true } },
@@ -453,8 +485,12 @@ local function nested_routes()
       args = { { name = "area", type = "TASK_AREA", allow_all = true, optional = true } },
       flags = filter_flags({
         { name = "for", type = "TASK_ID" },
+        { name = "plan", type = "TASK_PLAN" },
         { name = "ready", bool = true },
         { name = "with-steps", bool = true },
+        { name = "write", type = "STRING" },
+        { name = "scope", type = "STRING" },
+        { name = "check", bool = true },
         { name = "format", type = "STRING", enum = { "md", "tsv", "ids" } },
         {
           name = "to",
@@ -466,6 +502,22 @@ local function nested_routes()
       desc = "The plan of the open tasks of an area (default: all) or of one task and everything before it (--for=<id>): what is ready now, decisions by leverage, stages, critical path, an estimate line; filters like list; --ready shows only what can be started",
       run = function(ctx)
         cmd().plan(ctx)
+      end,
+    },
+
+    {
+      path = { "task", "planfile" },
+      args = { { name = "area", type = "TASK_AREA" } },
+      flags = {
+        { name = "areas", type = "STRING" },
+        { name = "target", type = "TASK_ID" },
+        { name = "phases", type = "STRING" },
+        { name = "gate", type = "STRING", enum = { "hard" } },
+        { name = "status", type = "STRING", enum = { "planning", "doing", "parked" } },
+      },
+      desc = "Create a plan file ROADMAP/plans/<slug>.md in an area (the words after the area are the title): the undertaking that tasks join with plan=<id> phase=<word>; --areas=a,b lists the areas whose tasks belong, --phases=a,b,c names the stages in order, --gate=hard forbids starting a stage before the earlier ones are finished, --target=<task> is the task that means done",
+      run = function(ctx)
+        cmd().planfile(ctx)
       end,
     },
 
@@ -487,6 +539,7 @@ local function nested_routes()
       args = { { name = "area", type = "TASK_AREA", allow_all = true, optional = true } },
       flags = filter_flags({
         { name = "for", type = "TASK_ID" },
+        { name = "plan", type = "TASK_PLAN" },
         { name = "walk", bool = true },
       }),
       desc = "Sums of effort and value of an area (default: all) or of one task and everything before it, with what is missing; --walk goes through the tasks without effort or value and asks for them one by one",

@@ -31,6 +31,7 @@ local M = {}
 
 ---@class Tasks.NextOpts
 ---@field tasks Tasks.Task[]                    # Every open task of the vault.
+---@field plans? Tasks.PlanFile[]               # The open plan files (their stage order and gates count).
 ---@field is_done? (fun(id: string): boolean)|table<string, boolean>  # Finished ids (default: none known).
 ---@field done? { id: string, area: string }    # The task that was just finished.
 ---@field area? string                          # Area that ranks first (default: the finished task's).
@@ -76,7 +77,7 @@ end
 ---@param opts Tasks.NextOpts
 ---@return Tasks.NextPick
 function M.pick(opts)
-  local index = plan.index(opts.tasks, opts.is_done)
+  local index = plan.index(opts.tasks, opts.is_done, opts.plans)
   local built = plan.build(opts.tasks, index)
   local done = opts.done
   local home = opts.area or (done and done.area) or nil
@@ -249,6 +250,7 @@ function M.pick_from_vault(opts)
       end
       return hit
     end,
+    plans = require("tasks_nvim.plans").all({ root = opts.root }) or {},
     done = opts.done,
     area = opts.area,
     actor = opts.actor,

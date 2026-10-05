@@ -24,6 +24,10 @@
 ---  - `blocked-by-cycle` (error): the hard edges form a circle, the members are named
 ---  - `doing-while-blocked`, `blocked-without-blocker`, `blocker-freed`, `blocked-by-parked` (warnings): the status
 ---    runs behind what the blockers say (`tasks_nvim.plan` is the one definition of "blocked")
+---  - `plan-unknown` (error): `plan:` names no plan file; `bad-plan`, `bad-phase` (errors): a malformed `plan:` /
+---    `phase:`; `plan-area`, `plan-phase`, `plan-target-unknown` (warnings): outside the plan's areas, a stage the
+---    plan does not list, a target that exists nowhere; a broken plan file is reported with its own codes
+---    (`plan-bad-status`, `plan-bad-area`, `plan-bad-target`, `plan-bad-gate`, ...)
 ---  - `bad-after`, `bad-order`, `after-self`, `after-dangling` (errors): the soft edge `after` and the sort hint `order`
 ---  - `bad-value`, `bad-actor`: `value` is not 1..5, `actor` is not cdx, me or pair
 ---  - `actor-cdx-waits-on-me` (warning): a task written `actor: cdx` waits on an open task that only the human
@@ -40,6 +44,7 @@
 local fsio = require("tasks_nvim.fsio")
 local model = require("tasks_nvim.model")
 local plan = require("tasks_nvim.plan")
+local plans = require("tasks_nvim.plans")
 local index = require("tasks_nvim.index")
 local scan = require("tasks_nvim.scan")
 local vault = require("tasks_nvim.vault")
@@ -156,7 +161,7 @@ local function plan_findings(findings, open_ids, names, scan_opts)
       finished[id] = known
     end
     return known
-  end)
+  end, plans.all(scan_opts) or {})
   local built = plan.build(all, blockers)
 
   for _, members in ipairs(built.cycles) do
@@ -213,6 +218,88 @@ local function plan_findings(findings, open_ids, names, scan_opts)
       for _, w in ipairs(built.warnings) do
         if w.code == "blocked-by-parked" and w.id == id then
           add(findings, "warn", "blocked-by-parked", t, w.msg)
+        end
+      end
+    end
+  end
+end
+
+---Plan files and the tasks that name them (`plan:`, `phase:`), reported for the checked areas. A task that names a
+---plan nobody wrote is an error (a typo); a task outside the plan's `areas`, a stage the plan does not list and a
+---target that exists nowhere are warnings.
+---@param findings Tasks.Finding[]
+---@param open_ids table<string, Tasks.Task>
+---@param names string[]
+---@param scan_opts { root: string }
+local function plan_file_findings(findings, open_ids, names, scan_opts)
+  local checked = {}
+  for _, n in ipairs(names) do
+    checked[n] = true
+  end
+  local files = plans.all(scan_opts) or {}
+  local by_id = {}
+  for _, file in ipairs(files) do
+    by_id[file.id] = file
+    if checked[file.area] then
+      for i, msg in ipairs(file.errors) do
+        add(findings, "error", file.error_codes[i] or "frontmatter-invalid", file, msg)
+      end
+      if
+        file.target
+        and not open_ids[file.target]
+        and not scan.find_done(file.target, scan_opts)
+      then
+        add(
+          findings,
+          "warn",
+          "plan-target-unknown",
+          file,
+          "target " .. file.target .. " does not exist"
+        )
+      end
+    end
+  end
+  local finished = {}
+  for _, t in pairs(open_ids) do
+    if checked[t.area] and t.plan then
+      local file = by_id[t.plan]
+      if not file then
+        local known = finished[t.plan]
+        if known == nil then
+          known = scan.find_done(t.plan, scan_opts) ~= nil
+          finished[t.plan] = known
+        end
+        if not known then
+          add(
+            findings,
+            "error",
+            "plan-unknown",
+            t,
+            "plan " .. t.plan .. " is no plan file (ROADMAP/plans/<slug>.md)"
+          )
+        end
+      else
+        if #file.areas > 0 and not vim.tbl_contains(file.areas, t.area) then
+          add(
+            findings,
+            "warn",
+            "plan-area",
+            t,
+            ("the plan %s does not list the area %s"):format(t.plan, t.area)
+          )
+        end
+        if
+          t.phase
+          and #file.phase_order > 0
+          and not vim.tbl_contains(file.phase_order, t.phase)
+        then
+          add(
+            findings,
+            "warn",
+            "plan-phase",
+            t,
+            ("phase '%s' is not in the phase_order of %s"):format(t.phase, t.plan)
+          )
         end
       end
     end
@@ -418,6 +505,7 @@ function M.run(opts)
   end
 
   plan_findings(findings, open_ids, names, scan_opts)
+  plan_file_findings(findings, open_ids, names, scan_opts)
 
   table.sort(findings, finding_less)
   local errors, warnings = 0, 0

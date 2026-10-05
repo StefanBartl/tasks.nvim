@@ -10,6 +10,7 @@
 
 local model = require("tasks_nvim.model")
 local plan = require("tasks_nvim.plan")
+local plans = require("tasks_nvim.plans")
 local scan = require("tasks_nvim.scan")
 
 local M = {}
@@ -18,6 +19,7 @@ local M = {}
 ---@field root? string
 ---@field area? string
 ---@field for_id? string
+---@field plan_id? string             # The plan file (`<area>/<slug>`): the tasks that name it with `plan:`.
 ---@field filter? Tasks.Filter
 
 ---@class Tasks.PlanScope
@@ -25,6 +27,7 @@ local M = {}
 ---@field tasks Tasks.Task[]          # The scope.
 ---@field index Tasks.PlanIndex
 ---@field done? Tasks.Task[]          # Finished tasks of the area (only for an area scope): the progress figure.
+---@field plan_file? Tasks.PlanFile   # The plan file of a `plan_id` scope.
 ---@field errors string[]             # Folders that could not be read: the plan may be incomplete.
 ---@field title string
 
@@ -40,6 +43,7 @@ function M.index(root)
     return nil, tostring(skipped), nil
   end
   local known = {}
+  local files = plans.all({ root = root })
   local index = plan.index(open, function(id)
     local hit = known[id]
     if hit == nil then
@@ -47,7 +51,7 @@ function M.index(root)
       known[id] = hit
     end
     return hit
-  end)
+  end, files or {})
   return index, open, errors
 end
 
@@ -84,8 +88,16 @@ function M.load(opts)
     return nil, tostring(open)
   end
   ---@cast open Tasks.Task[]
-  local tasks, title
-  if opts.for_id then
+  local tasks, title, plan_file
+  if opts.plan_id then
+    local found, perr = plans.find(opts.plan_id, { root = opts.root })
+    if not found then
+      return nil, tostring(perr)
+    end
+    plan_file = found
+    tasks = plans.members(found.id, open)
+    title = "plan " .. found.id
+  elseif opts.for_id then
     local closure = plan.scope_for(index, opts.for_id)
     if not closure then
       return nil, "no such open task: " .. opts.for_id
@@ -115,6 +127,7 @@ function M.load(opts)
     index = index,
     errors = errors or {},
     title = title or "",
+    plan_file = plan_file,
   }
   if opts.area and not opts.for_id then
     local finished = scan.backlog(opts.area, { root = opts.root })

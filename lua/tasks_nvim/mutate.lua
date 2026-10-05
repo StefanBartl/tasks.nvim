@@ -213,7 +213,7 @@ local function check_lang(lang)
 end
 
 ---Frontmatter keys in the order concept section 3 shows them.
----@param meta { title: string, status: string, kind?: string, prio?: integer|string, effort?: string, value?: integer|string, actor?: string, after?: string[], order?: number|string, tags?: string[], category?: string[], severity?: string, refs?: string[], created: string, updated: string }
+---@param meta { title: string, status: string, kind?: string, prio?: integer|string, effort?: string, value?: integer|string, actor?: string, after?: string[], order?: number|string, plan?: string, phase?: string, tags?: string[], category?: string[], severity?: string, refs?: string[], created: string, updated: string }
 ---@return table[] pairs
 local function meta_pairs(meta)
   local pairs_ = {
@@ -240,6 +240,12 @@ local function meta_pairs(meta)
   end
   if meta.order then
     pairs_[#pairs_ + 1] = { "order", tostring(meta.order) }
+  end
+  if meta.plan then
+    pairs_[#pairs_ + 1] = { "plan", meta.plan }
+  end
+  if meta.phase then
+    pairs_[#pairs_ + 1] = { "phase", meta.phase }
   end
   if meta.tags then
     pairs_[#pairs_ + 1] = { "tags", meta.tags }
@@ -402,6 +408,8 @@ local SETTABLE = {
   "blocked_by",
   "after",
   "order",
+  "plan",
+  "phase",
   "refs",
   "rules",
   "done_in",
@@ -552,6 +560,17 @@ local function normalize_patch(patch, opts)
       else
         result[#result + 1] = { key, ids }
       end
+    elseif key == "plan" then
+      local _, plan_slug, plan_err = vault.parse_id(tostring(value))
+      if plan_err or not plan_slug then
+        return nil, "plan: " .. (plan_err or ("expected <area>/<slug>, got " .. tostring(value)))
+      end
+      result[#result + 1] = { key, vim.trim(tostring(value)) }
+    elseif key == "phase" then
+      if not vault.valid_slug(vim.trim(tostring(value))) then
+        return nil, "phase must be a kebab-case word, got '" .. tostring(value) .. "'"
+      end
+      result[#result + 1] = { key, vim.trim(tostring(value)) }
     elseif key == "order" then
       local n = tonumber(value)
       if not n or n ~= n or n == math.huge or n == -math.huge then
@@ -650,6 +669,15 @@ function M.new(area, opts)
         "order must be a number (2.5 slots a task between 2 and 3), got " .. tostring(opts.order)
     end
   end
+  if opts.plan ~= nil then
+    local _, plan_slug, plan_err = vault.parse_id(tostring(opts.plan))
+    if plan_err or not plan_slug then
+      return nil, "plan: " .. (plan_err or ("expected <area>/<slug>, got " .. tostring(opts.plan)))
+    end
+  end
+  if opts.phase ~= nil and not vault.valid_slug(tostring(opts.phase)) then
+    return nil, "phase must be a kebab-case word, got '" .. tostring(opts.phase) .. "'"
+  end
   local tags
   if opts.tags ~= nil then
     local list, lerr = string_list(opts.tags, "tags", true)
@@ -718,6 +746,8 @@ function M.new(area, opts)
       actor = opts.actor,
       after = after,
       order = order,
+      plan = opts.plan,
+      phase = opts.phase,
       tags = tags,
       category = category,
       severity = opts.severity,
@@ -844,7 +874,7 @@ end
 ---for a folder task); the link text is always the file name.
 ---@param bucket Tasks.Bucket
 ---@param rel string
----@param task Tasks.Task
+---@param task { title: string, summary: string }  # A task, or a plan file.
 ---@param date string
 ---@return string
 local function readme_row(bucket, rel, task, date)
@@ -860,6 +890,9 @@ local function readme_row(bucket, rel, task, date)
   local filename = rel:match("([^/]*)$")
   return ("| [`%s`](./%s/%s) | %s (%s) |"):format(filename, bucket, rel, content, date)
 end
+
+---@see readme_row
+M.readme_row = readme_row
 
 ---Add `row` to the `## <bucket> (N)` section of a `Backlog/README.md` text.
 ---

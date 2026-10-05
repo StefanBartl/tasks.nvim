@@ -36,6 +36,8 @@ local M = {}
 ---@class Tasks.PlanIndex
 ---@field open table<string, Tasks.Task>   # Every open task of the vault by id, whatever the scope.
 ---@field is_done fun(id: string): boolean # Whether a task id is finished (in a Backlog).
+---@field gate_blockers table<string, string[]>  # Plan files with `gate: hard`: the tasks of the stage before, as blockers.
+---@field phase_edges table<string, string[]>    # Plan files without a gate: the stage before, as soft edges.
 
 ---What a task is waiting for, one word.
 ---@alias Tasks.PlanState
@@ -85,8 +87,9 @@ local NO_PRIO = 99
 
 ---@param all_open Tasks.Task[]
 ---@param is_done? (fun(id: string): boolean)|table<string, boolean>  # A predicate or a set of finished ids.
+---@param plans? Tasks.PlanFile[]  # The open plan files: their `phase_order` gives the stages an order.
 ---@return Tasks.PlanIndex
-function M.index(all_open, is_done)
+function M.index(all_open, is_done, plans)
   local open = {}
   for _, t in ipairs(all_open) do
     open[t.id] = t
@@ -101,7 +104,65 @@ function M.index(all_open, is_done)
       return is_done[id] == true
     end
   end
-  return { open = open, is_done = done }
+  local index = { open = open, is_done = done, gate_blockers = {}, phase_edges = {} }
+
+  -- A plan file with a `phase_order` puts its tasks in an order: a task of a stage follows the tasks of the nearest
+  -- earlier stage that has any. With `gate: hard` that is a real blocker (readiness, leverage, the critical path all
+  -- see it); without, it is a soft edge that only moves the task to a later stage.
+  for _, file in ipairs(plans or {}) do
+    if #file.phase_order > 0 and file.status ~= "done" then
+      local rank = {}
+      for i, name in ipairs(file.phase_order) do
+        rank[name] = i
+      end
+      ---@type table<integer, string[]>
+      local by_rank = {}
+      for _, t in ipairs(all_open) do
+        local r = t.plan == file.id and t.phase and rank[t.phase]
+        if r then
+          by_rank[r] = by_rank[r] or {}
+          table.insert(by_rank[r], t.id)
+        end
+      end
+      local earlier ---@type string[]|nil
+      for r = 1, #file.phase_order do
+        local members = by_rank[r]
+        if members then
+          if earlier then
+            for _, id in ipairs(members) do
+              local target = file.gate == "hard" and index.gate_blockers or index.phase_edges
+              target[id] = target[id] or {}
+              for _, e in ipairs(earlier) do
+                if not vim.tbl_contains(target[id], e) then
+                  table.insert(target[id], e)
+                end
+              end
+            end
+          end
+          earlier = members
+        end
+      end
+    end
+  end
+  return index
+end
+
+---The hard blockers of a task: its `blocked_by` and, under a plan with `gate: hard`, the tasks of the stage before.
+---@param task Tasks.Task
+---@param index Tasks.PlanIndex
+---@return string[]
+function M.hard_blockers(task, index)
+  local gates = index.gate_blockers[task.id]
+  if not gates then
+    return task.blocked_by or {}
+  end
+  local out = vim.list_slice(task.blocked_by or {}, 1, #(task.blocked_by or {}))
+  for _, g in ipairs(gates) do
+    if not vim.tbl_contains(out, g) then
+      out[#out + 1] = g
+    end
+  end
+  return out
 end
 
 ---Where each blocker of `task` stands.
@@ -112,7 +173,7 @@ end
 ---@return string[] unknown_blockers
 local function blockers_of(task, index)
   local open, parked, unknown = {}, {}, {}
-  for _, id in ipairs(task.blocked_by or {}) do
+  for _, id in ipairs(M.hard_blockers(task, index)) do
     local blocker = index.open[id]
     if blocker then
       open[#open + 1] = id
@@ -178,7 +239,7 @@ function M.scope_for(index, id)
   while head <= #queue do
     local t = queue[head]
     head = head + 1
-    for _, b in ipairs(t.blocked_by or {}) do
+    for _, b in ipairs(M.hard_blockers(t, index)) do
       local blocker = index.open[b]
       if blocker and not seen[b] then
         seen[b] = true
@@ -319,7 +380,7 @@ function M.build(tasks, index)
       behind_cycle = false,
     }
     local seen = {}
-    for _, b in ipairs(t.blocked_by or {}) do
+    for _, b in ipairs(M.hard_blockers(t, index)) do
       if in_scope[b] and not seen[b] then
         seen[b] = true
         blockers_in[id][#blockers_in[id] + 1] = b
@@ -454,7 +515,9 @@ function M.build(tasks, index)
   for _, id in ipairs(ids) do
     if not cyclic[id] and not behind[id] then
       local seen_after = {}
-      for _, b in ipairs(by_id[id].after or {}) do
+      local soft = vim.list_slice(by_id[id].after or {}, 1, #(by_id[id].after or {}))
+      vim.list_extend(soft, index.phase_edges[id] or {})
+      for _, b in ipairs(soft) do
         if b ~= id and in_scope[b] and not cyclic[b] and not behind[b] and not seen_after[b] then
           seen_after[b] = true
           if reaches(combined, id, b) then

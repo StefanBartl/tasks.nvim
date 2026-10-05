@@ -190,6 +190,23 @@ function M.tasks_dir(root, area)
   return root .. "/" .. area .. "/ROADMAP/tasks"
 end
 
+---`<area>/ROADMAP/plans`: the plan files of the area (optional).
+---@param root string
+---@param area string
+---@return string
+function M.plans_dir(root, area)
+  return root .. "/" .. area .. "/ROADMAP/plans"
+end
+
+---`<area>/ROADMAP/plans/<slug>.md`
+---@param root string
+---@param area string
+---@param slug string
+---@return string
+function M.plan_path(root, area, slug)
+  return M.plans_dir(root, area) .. "/" .. slug .. ".md"
+end
+
 ---`<area>/ROADMAP/TASKS.md`, the generated index.
 ---@param root string
 ---@param area string

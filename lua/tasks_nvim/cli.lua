@@ -24,6 +24,7 @@ local index = require("tasks_nvim.index")
 local model = require("tasks_nvim.model")
 local done_flow = require("tasks_nvim.done_flow")
 local estimate = require("tasks_nvim.estimate")
+local fsio = require("tasks_nvim.fsio")
 local mutate = require("tasks_nvim.mutate")
 local next_pick = require("tasks_nvim.next_pick")
 local plan_scope = require("tasks_nvim.plan_scope")
@@ -62,7 +63,10 @@ commands:
         --actor=me also finds status=decision and the tag needs-user; none = nobody classified it;
         --sort=frecency: what the dashboard opened or changed most, from the frecency file)
        (--ready: nothing open blocks it; --waiting: an open blocker; --unestimated: no effort or no value)
-  plan [<area>] [--for=<id>] [filters as for list] [--ready] [--with-steps] [--format=md|tsv|ids]
+  plan-new <area> <title> [--areas=a,b] [--target=<id>] [--phases=a,b,c] [--gate=hard] [--summary=text]
+                                          create ROADMAP/plans/<slug>.md; tasks join it with plan=<id> phase=<word>
+  plan [<area>] [--for=<id>|--plan=<id>] [filters as for list] [--ready] [--with-steps] [--format=md|tsv|ids]
+       [--write=<file> [--scope=<name>] [--check] ]   replace only the generated block of a document
                                           stages, ready tasks, decisions by leverage, critical path
                                           (--for: the task and everything that has to be finished before it)
   next [<area>] [--n=3] [--actor=cdx|me|pair|none]   the best ready tasks, with the reason
@@ -70,7 +74,7 @@ commands:
   index [<area>] [--check]                (re)write ROADMAP/TASKS.md; --check only reports
   migrate-actor [<area>] [--write]        propose actor=me for tasks that wait for you (status decision, tag
                                           needs-user) and leave every other task EMPTY; dry run unless --write
-  new <area> <title> [--kind=k] [--prio=1..3] [--effort=XS..XL|0.5d] [--value=1..5] [--actor=cdx|me|pair] [--after=id,id] [--order=2.5] [--tags=a,b]
+  new <area> <title> [--kind=k] [--prio=1..3] [--effort=XS..XL|0.5d] [--value=1..5] [--actor=cdx|me|pair] [--after=id,id] [--order=2.5] [--plan=id] [--phase=word] [--tags=a,b]
        [--category=c,d] [--severity=low|medium|high|critical] [--refs=path,repo@sha]
        [--summary=text] [--slug=slug] [--status=s]
        [--lang=de|en] [--folder]             create a task file (--lang: body headings;
@@ -121,6 +125,9 @@ local SPECS = {
   plan = {
     value = {
       "for",
+      "plan",
+      "write",
+      "scope",
       "status",
       "prio",
       "effort",
@@ -133,11 +140,12 @@ local SPECS = {
       "stale",
       "format",
     },
-    flag = { "blocked", "stale-refs", "ready", "unestimated", "with-steps" },
+    flag = { "blocked", "stale-refs", "ready", "unestimated", "with-steps", "check" },
   },
   estimate = {
     value = {
       "for",
+      "plan",
       "status",
       "prio",
       "effort",
@@ -152,6 +160,10 @@ local SPECS = {
     flag = { "blocked", "stale-refs", "unestimated" },
   },
   next = { value = { "n", "actor" }, flag = {} },
+  ["plan-new"] = {
+    value = { "areas", "target", "phases", "gate", "status", "summary", "slug", "title" },
+    flag = {},
+  },
   index = { value = {}, flag = { "check", "all" } },
   new = {
     value = {
@@ -165,6 +177,8 @@ local SPECS = {
       "actor",
       "after",
       "order",
+      "plan",
+      "phase",
       "refs",
       "lang",
       "summary",
@@ -477,6 +491,7 @@ local function load_scope(ctx, name)
     root = ctx.eo.root,
     area = area,
     for_id = ctx.args.opt["for"] --[[@as string|nil]],
+    plan_id = ctx.args.opt.plan --[[@as string|nil]],
     filter = filter,
   })
   if not scope then
@@ -487,6 +502,55 @@ local function load_scope(ctx, name)
     ctx.warn("warn: cannot read directory " .. e)
   end
   return scope, nil
+end
+
+---`plan --write=<file>`: replace only the marker block of the scope in a hand-written document (`--check`: report
+---whether it is out of date and write nothing).
+---@param ctx Tasks.CliCtx
+---@param scope Tasks.PlanScope
+---@param path string
+---@return integer code
+local function write_plan_block(ctx, scope, path)
+  local opt = ctx.args.opt
+  local key = opt.scope --[[@as string|nil]]
+    or plan_view.default_scope({
+      area = ctx.args.pos[1],
+      for_id = opt["for"] --[[@as string|nil]],
+      plan_id = opt.plan --[[@as string|nil]],
+    })
+  local text, rerr = fsio.read(path)
+  if not text then
+    ctx.warn("error: cannot read " .. path .. ": " .. tostring(rerr))
+    return 1
+  end
+  local body = plan_view.markdown(scope.plan, {
+    title = scope.title,
+    done = scope.done,
+    ready_only = opt.ready == true,
+    with_steps = opt["with-steps"] == true,
+    plan_file = scope.plan_file,
+    block = true,
+  })
+  local fresh, err, changed = plan_view.replace_block(text, key, body)
+  if not fresh then
+    ctx.warn("error: " .. tostring(err))
+    return 1
+  end
+  if opt.check then
+    ctx.say(("%s\t%s"):format(changed and "stale" or "current", path))
+    return changed and 1 or 0
+  end
+  if not changed then
+    ctx.say(("unchanged\t%s"):format(path))
+    return 0
+  end
+  local ok, werr = fsio.write_atomic(path, fresh)
+  if not ok then
+    ctx.warn("error: cannot write " .. path .. ": " .. tostring(werr))
+    return 1
+  end
+  ctx.say(("written\t%s"):format(path))
+  return 0
 end
 
 function commands.plan(ctx)
@@ -500,6 +564,14 @@ function commands.plan(ctx)
     return code or 1
   end
   local ready_only = ctx.args.opt.ready == true
+  local write_to = ctx.args.opt.write --[[@as string|nil]]
+  if write_to then
+    return write_plan_block(ctx, scope, write_to)
+  end
+  if ctx.args.opt.check then
+    ctx.warn("error: --check goes with --write=<file>")
+    return 2
+  end
   if format == "ids" then
     for _, id in ipairs(plan_view.ids(scope.plan, { ready_only = ready_only })) do
       ctx.say(id)
@@ -515,6 +587,7 @@ function commands.plan(ctx)
       done = scope.done,
       ready_only = ready_only,
       with_steps = ctx.args.opt["with-steps"] == true,
+      plan_file = scope.plan_file,
     }))
   end
   return #scope.errors > 0 and 1 or 0
@@ -534,6 +607,36 @@ function commands.estimate(ctx)
     ctx.say(("unestimated: %d (list them: list --unestimated)"):format(#sums.unestimated))
   end
   return #scope.errors > 0 and 1 or 0
+end
+
+commands["plan-new"] = function(ctx)
+  local args, eo = ctx.args, ctx.eo
+  local area = args.pos[1]
+  local title = args.pos[2] or args.opt.title
+  if not area or not title or #args.pos > 2 then
+    ctx.warn(
+      'error: usage: plan-new <area> "<title>" [--areas=a,b] [--target=id] [--phases=a,b,c] [--gate=hard]'
+    )
+    return 2
+  end
+  local res, err = require("tasks_nvim.plans").new(area, {
+    root = eo.root,
+    today = eo.today,
+    title = title,
+    areas = args.opt.areas --[[@as string|nil]],
+    target = args.opt.target --[[@as string|nil]],
+    phases = args.opt.phases --[[@as string|nil]],
+    gate = args.opt.gate --[[@as string|nil]],
+    status = args.opt.status --[[@as string|nil]],
+    summary = args.opt.summary --[[@as string|nil]],
+    slug = args.opt.slug --[[@as string|nil]],
+  })
+  if not res then
+    ctx.warn("error: " .. tostring(err))
+    return 1
+  end
+  ctx.say(("created\t%s\t%s"):format(res.id, res.path))
+  return 0
 end
 
 commands["next"] = function(ctx)
@@ -655,6 +758,8 @@ function commands.new(ctx)
     actor = opt.actor --[[@as string|nil]],
     after = opt.after --[[@as string|nil]],
     order = opt.order --[[@as string|nil]],
+    plan = opt.plan --[[@as string|nil]],
+    phase = opt.phase --[[@as string|nil]],
     refs = opt.refs --[[@as string|nil]],
     lang = opt.lang --[[@as "de"|"en"|nil]],
     summary = opt.summary --[[@as string|nil]],

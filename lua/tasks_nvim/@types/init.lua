@@ -33,6 +33,8 @@
 ---@field blocked_by string[]         # Task ids (hard edges: the task cannot begin before they are finished).
 ---@field after string[]              # Task ids (soft edges: "should come after", never an error).
 ---@field order? number               # Sort hint inside a stage (a fraction like 2.5 slots a task in between).
+---@field plan? string                # The plan file (`<area>/<slug>`) this task belongs to.
+---@field phase? string               # The stage of that plan (a kebab-case word).
 ---@field refs string[]
 ---@field plan_steps? Tasks.StepsSummary  # The optional `## Plan` section: steps, how many are ticked (nil without the section).
 ---@field done_in? string
@@ -99,6 +101,8 @@
 ---@field value? integer|string       # 1..5, the expected benefit.
 ---@field after? string[]|string     # Task ids that should come first (soft).
 ---@field order? number|string        # Sort hint inside a stage.
+---@field plan? string                # The plan (`<area>/<slug>`) the task belongs to.
+---@field phase? string               # The stage of that plan.
 ---@field actor? string               # `cdx`, `me` or `pair`.
 ---@field folder? boolean             # Create a folder task (`<slug>/<slug>.md`) so assets can be attached.
 ---@field refs? string[]|string       # Paths or `repo@commit`; a string is split at commas.

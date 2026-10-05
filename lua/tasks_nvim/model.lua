@@ -634,6 +634,24 @@ function M.parse_text(text, ctx)
       end
     end
 
+    local plan_ref = as_text(meta.plan, "plan", bad)
+    if plan_ref then
+      local _, plan_slug, plan_err = vault.parse_id(plan_ref)
+      if plan_err or not plan_slug then
+        bad("bad-plan", "plan: " .. (plan_err or ("expected <area>/<slug>, got " .. plan_ref)))
+      else
+        task.plan = plan_ref
+      end
+    end
+    local phase = as_text(meta.phase, "phase", bad)
+    if phase then
+      if vault.valid_slug(phase) then
+        task.phase = phase
+      else
+        bad("bad-phase", "phase must be a kebab-case word, got '" .. phase .. "'")
+      end
+    end
+
     if type(meta.done_in) == "table" then
       task.done_in = table.concat(as_list(meta.done_in, "done_in", bad), ", ")
     else
@@ -659,6 +677,26 @@ function M.parse_text(text, ctx)
 
   task.valid = #errors == 0
   return task
+end
+
+---Read a frontmatter value as one trimmed line of text (`nil` when absent or empty; a wrong type is reported
+---through `bad`). Shared with the plan files (`tasks_nvim.plans`).
+---@param value any
+---@param field string
+---@param bad fun(code: string, msg: string)
+---@return string|nil
+function M.field_text(value, field, bad)
+  return as_text(value, field, bad)
+end
+
+---Read a frontmatter value as a list of trimmed strings (a single string is a list of one). Shared with the plan
+---files.
+---@param value any
+---@param field string
+---@param bad fun(code: string, msg: string)
+---@return string[]
+function M.field_list(value, field, bad)
+  return as_list(value, field, bad)
 end
 
 ---Parsed files by path: `{ sec, nsec, size, ctx, task }`. A file is parsed again when its mtime, size or the way
