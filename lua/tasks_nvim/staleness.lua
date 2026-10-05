@@ -173,7 +173,12 @@ local function default_repo_bases(root)
   local repos = fsio.dirname(fsio.dirname(fsio.dirname(root)))
   add(repos)
   add(repos .. "/repos")
-  local env_dir = vim.env.REPOS_DIR
+  -- The repos folder the host publishes (`$REPOS_DIR` and friends), read through lib.nvim like every
+  -- environment-based default (LUA-04), not straight from `vim.env`.
+  local ok_env, env = pcall(function()
+    return require("lib.nvim.system.env").get()
+  end)
+  local env_dir = ok_env and env.repo_base or nil
   if env_dir and env_dir ~= "" then
     add(env_dir)
     add(env_dir .. "/repos")

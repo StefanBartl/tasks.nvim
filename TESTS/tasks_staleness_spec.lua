@@ -281,6 +281,8 @@ return function(H)
   if have_git then
     local old_repos, old_cfg = vim.env.REPOS_DIR, vim.env.NVIM_CONFIG_DIR
     vim.env.REPOS_DIR, vim.env.NVIM_CONFIG_DIR = repos, cfg
+    -- lib.nvim.system.env memoises its snapshot: recompute after changing $REPOS_DIR.
+    require("lib.nvim.system.env").get({ refresh = true })
     staleness.reset_cache()
     local cli = require("tasks_nvim.cli")
     local out, err = {}, {}
@@ -296,6 +298,8 @@ return function(H)
       }
     )
     vim.env.REPOS_DIR, vim.env.NVIM_CONFIG_DIR = old_repos, old_cfg
+    -- lib.nvim.system.env memoises its snapshot: recompute after changing $REPOS_DIR.
+    require("lib.nvim.system.env").get({ refresh = true })
     local text = table.concat(out)
     eq(code, 0)
     has(text, "lib.nvim/stale-git")
@@ -306,6 +310,8 @@ return function(H)
 
     -- the spelled-out flag does the same; ids format stays machine-readable
     vim.env.REPOS_DIR, vim.env.NVIM_CONFIG_DIR = repos, cfg
+    -- lib.nvim.system.env memoises its snapshot: recompute after changing $REPOS_DIR.
+    require("lib.nvim.system.env").get({ refresh = true })
     staleness.reset_cache()
     out = {}
     cli.run({ "list", "--stale-refs", "--format=ids", "--vault=" .. root }, {
@@ -315,6 +321,8 @@ return function(H)
       err = function() end,
     })
     vim.env.REPOS_DIR, vim.env.NVIM_CONFIG_DIR = old_repos, old_cfg
+    -- lib.nvim.system.env memoises its snapshot: recompute after changing $REPOS_DIR.
+    require("lib.nvim.system.env").get({ refresh = true })
     has(table.concat(out), "lib.nvim/stale-git\n")
     lacks(table.concat(out), "changed:")
 
