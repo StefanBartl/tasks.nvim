@@ -216,6 +216,8 @@ signature of `ui.form.open`) and `ui.cmd.explorer_open(dir)`.
 
 ### `:Tasks new <area> [title...] [kind= prio= effort= tags= status=]`
 
+Besides these keys `value=`, `actor=`, `after=`, `order=`, `plan=` and `phase=` are accepted.
+
 Creates `<area>/ROADMAP/tasks/<slug>.md` (slug from the title; a taken slug gets `-2`,
 `-3`; a slug used in `Backlog/` counts as taken), regenerates the index and opens the
 file. The words after the area are the title; one surrounding pair of `"` is dropped.
@@ -244,7 +246,7 @@ opens with the same title and ref filled in.
 
 Changes frontmatter of an *open* task and sets `updated` -- but only when something really
 changed (an identical value rewrites nothing). Settable: `title status kind prio effort tags
-category severity value actor summary blocked_by refs rules done_in created`. A value may contain spaces
+category severity value actor summary blocked_by after order plan phase refs rules done_in created`. A value may contain spaces
 (`title=Fix the thing status=doing`: a word that does not start with a known `key=`
 continues the value before it); an empty value removes the key (`kind=`). `status=done` is
 refused: finishing moves the file, see `task done`. A buffer showing the file is reloaded
@@ -264,7 +266,7 @@ leaves the task as it was (no half-made folder task). `folderize` converts a tas
 attaching anything. Windows showing
 the old task file follow it. `task new ... --folder` creates a folder task from the start.
 
-### `:Tasks plan [<area>|all] [--for=<id>] [filters] [--ready] [--format=md|tsv|ids] [--to=] [--force]`
+### `:Tasks plan [<area>|all] [--for=<id>|--plan=<id>] [filters] [--ready] [--with-steps] [--format=md|tsv|ids] [--to=] [--force]`
 
 The plan of the open tasks, computed from `blocked_by` alone (nothing new to write): what is **ready now**, the
 **decisions by leverage** (how many tasks depend on each, transitively: the one that unlocks most comes first),
@@ -274,6 +276,32 @@ everything that has to be finished before it, across areas. The filters are thos
 "ready now" part. A task that blocks a better one is ranked by that one's prio (`prio 3 -> 1 because of ...`); the
 written prio is never changed. A cycle over `blocked_by` is reported with its members and left out of the stages, the
 rest is still ordered. `--to=` is `buffer` (default), `clipboard`, `file:<path>`, `echo` or `mdview`.
+
+More than `blocked_by` shapes the plan, all of it optional:
+
+- **`after=[id, ...]`** is a soft edge ("should come after X"): it moves a task to a later stage, never makes it wait
+  (it is still ready), never counts as leverage, and one that would close a cycle is dropped with a warning.
+- **`order=2.5`** is a tie-breaker inside a stage, behind status and prio; a fraction slots a task in between without
+  renumbering.
+- Tasks of one stage that name the same file in `refs` are marked **`same-file`**: not parallel work, the order says
+  which comes first. The stage says so.
+- **`--plan=<id>`** draws the plan of a plan file (below): its tasks (`plan: <id>`), the stage order (`phase_order`),
+  the goal, the status and the target in the head. **`--with-steps`** shows each task's `## Plan` steps and progress.
+- **`--write=<file>`** replaces only the generated block of a hand-written document:
+  `<!-- GENERATED:plan scope=<name> start -->` ... `<!-- GENERATED:plan end -->`. The rest of the file and its line
+  endings stay byte for byte; headings inside the block sit one level below the document's own. The block name is the
+  plan's slug, the area, `for-<slug>` or `all` (`--scope=<name>` picks another); `--check` writes nothing and says
+  whether the block is out of date. Blocks are not part of `check` or CI.
+
+### `:Tasks planfile <area> <title...> [--areas=a,b] [--phases=a,b,c] [--gate=hard] [--target=<id>] [--status=]`
+
+Creates `<area>/ROADMAP/plans/<slug>.md`, the plan file of an undertaking: the goal, the boundaries, the definition of
+done and the names of the stages. It holds **no task list**: tasks join with `plan=<area>/<slug> phase=<word>` (so two
+tasks edited on two machines never collide on a list). `--areas` names the areas whose tasks belong (`check` warns
+about another), `--phases` the stages in order (a later stage follows the earlier one in the plan), `--gate=hard` makes
+that a real rule (a task of a stage waits until the earlier stage is finished, and `list --ready`, `next` and the plan
+all see it), `--target` the task that means "done". When the last member task is finished the plan is finished too (see
+`:Tasks done`). Headless: `plan-new`.
 
 ### `:Tasks next [<area>|all] [--n=3] [--actor=cdx|me|pair|none]`
 
@@ -302,14 +330,22 @@ Windows showing the open file follow it to the new path (an unchanged buffer is 
 one with unsaved changes is left alone and reported). Running it for an already finished
 task says so and changes nothing.
 
+Finishing sets a chain in motion, each step on its own (a failure after the finish never undoes it, it is a
+message): the open steps of the task's own `## Plan` are **ticked** (a step marked `(dropped)` or `(entfaellt)` stays
+open; the ticks are written with the finished copy, so the rollback covers them), a **plan file** whose last member this
+was is finished (moved to `Backlog/FEATURES/`, "Plan x is done: 12 tasks, estimate 9.5 d, finished in 14 days"), and
+the **generated blocks** of the documents named in `setup({ chain = { marker_docs = { ... } } })` are refreshed (only
+those files; the block of a finished plan becomes its closing line).
+
 After the finish a small dialog names the tasks it freed and the next task to start (see `:Tasks next`); with
 `setup({ next = { popup = false } })`, or without a UI, the same text is a plain message. A task that waited only on
 this one and still says `status: blocked` is offered to be set to open (a question, never silently). In the
 dashboard, `D` on several marked tasks shows ONE dialog after the whole stack.
 
-### `:Tasks template [--to=clipboard|buffer|file:<path>]`
+### `:Tasks template [--to=clipboard|buffer|file:<path>] [--with-plan]`
 
-The task file template (every field, visible placeholders) into the `+` register (default)
+The task file template (every field, visible placeholders; `--with-plan` adds the optional `## Plan` section with
+checkbox steps) into the `+` register (default)
 plus a notification. Without a working clipboard provider it opens in a buffer instead and
 says so.
 

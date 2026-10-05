@@ -277,14 +277,71 @@ nvim --headless -u NONE -l scripts/tasks.lua migrate-actor --write
 
 Every other task stays empty on purpose: the share of empty ones is the honest number.
 
+### 16. An undertaking with stages -- works today
+
+```vim
+:Tasks planfile my-area Ship the gateway --phases=clarify,build,ship --areas=my-area,other-area
+:Tasks set my-area/gateway-config plan=my-area/ship-the-gateway phase=clarify
+:Tasks plan --plan=my-area/ship-the-gateway
+```
+
+The plan file holds what only a human can justify: the goal, the boundaries, when it is done, the names of the stages.
+It holds **no task list**: every task carries `plan:` and `phase:`, and the plan is drawn from them (two tasks edited
+on two machines never collide). Stages follow `phase_order` as a soft hint; `--gate=hard` makes them a rule (a task of
+a stage waits until the earlier stage is finished -- `list --ready`, `next` and the plan all see it). `check` catches a
+task that names a plan nobody wrote (`plan-unknown`), another area than the plan lists, a stage the plan does not
+list.
+
+### 17. "This one should come after that one" -- works today
+
+```vim
+:Tasks set my-area/send-it after=[my-area/write-it]
+:Tasks set my-area/small-fix order=1.5
+```
+
+`after` is soft: the task stays startable, it only moves to a later stage; a soft edge that would close a cycle is
+dropped with a warning. `order` is a tie-breaker inside a stage (a fraction slots a task in without renumbering).
+Tasks of one stage that name the same file in `refs` are marked `same-file`: they are not parallel work, and the plan
+says which to do first.
+
+### 18. Steps inside one task -- works today
+
+```vim
+:Tasks template --with-plan
+:Tasks plan my-area --with-steps
+```
+
+A task may carry `## Plan` with checkbox steps (`- [ ] 2. validators -- Acceptance 2, 3`). The engine only reads the
+progress ("2/4") and shows the steps with `--with-steps`; a step marked `(dropped)` is struck from the count.
+Finishing the task ticks the open steps (written with the finish, so a failed finish leaves them open). With
+`steps = { ask_finish = true }` ticking the last step in the buffer asks whether to finish the task. `check` hints
+(never errors) at acceptance points no step refers to.
+
+### 19. A hand-written handover that stays true -- works today
+
+```markdown
+<!-- GENERATED:plan scope=ship-the-gateway start -->
+...
+<!-- GENERATED:plan end -->
+```
+
+```vim
+:Tasks plan --plan=my-area/ship-the-gateway --write=docs/HANDOVER.md
+```
+
+Only the block changes; the rest of the document and its line endings stay byte for byte. Name the document once in
+`setup({ chain = { marker_docs = { "docs/HANDOVER.md" } } })` and every `done` refreshes its blocks (a stack finished
+in the dashboard refreshes them once); when the plan's last task is done the plan is finished too, and its block
+becomes "Plan ... is done: 12 tasks, estimate 9.5 d, finished in 14 days". Blocks are not part of `check` or CI (a task
+change must not turn the pipeline red); `plan --write=... --check` says whether one is out of date.
+
 ## Planned scenarios
 
 These are designed and sized; until they exist, the "instead" column is what to do.
 
 | Scenario | What it will do | Instead, today |
 | --- | --- | --- |
-| **Plans close themselves** | A task's plan steps are ticked when it is done, a plan file closes when its last member is done, generated plan blocks in documents are refreshed | tick the steps by hand |
-| **Soft edges and plan files** | a soft `after` ("should come after X", never an error), an `order` hint, `same-file` marks for tasks that touch the same file, plan files (`plan: <id>`) and a `## Plan` section per task | 14a with `blocked_by` only |
+| **Stage view in the dashboard** | tasks grouped by stage ("Stage 2 · 5 tasks · not parallel"), a chip for `plan:` / `phase:`, a "waits on" column, keys to assign a plan and to reorder (`order` between the neighbours) | `:Tasks plan`, `set plan= order=` |
 | **Triage** | after a brain dump an AI proposes edges and groups, with one sentence of reasoning each; you accept one by one | 2 by hand |
 
 The design lives with the author's notes; the tasks for it are ordinary tasks in the author's vault.

@@ -15,6 +15,13 @@ the version is not tagged yet (the repository is not published).
 - `setup()` with a validated config (`vault`, `extra_areas`, `dashboard`, `staleness`, `ci`, `keys`); every key of
   the dashboard and the form is rebindable or can be switched off.
 - `:'<,'>Tasks new`: a task about the selected lines (a `refs:` entry for them, the first line as the title).
+- Undertakings: plan files under `ROADMAP/plans/` (`:Tasks planfile`, `plan-new`), the task fields `plan:` / `phase:`,
+  stage order with `gate: hard`, `--plan=<id>` scope, generated blocks in documents (`plan --write` / `--check`,
+  `chain.marker_docs`), a plan finishes with its last member. Soft edges `after`, the sort hint `order`, `same-file`
+  marks. The optional `## Plan` section of a task (progress, `--with-steps`, `template --with-plan`, an acceptance
+  hint), ticked by `done`; opt-in `steps.ask_finish`. `check`: `after-self`, `after-dangling`, `bad-after`,
+  `bad-order`, `bad-plan`, `bad-phase`, `plan-unknown`, `plan-area`, `plan-phase`, `plan-target-unknown`, plan file
+  codes.
 - `:Tasks plan`, `:Tasks next`, `:Tasks estimate [--walk]` and the headless `plan`, `next`, `estimate`: one definition of
   "ready" (`tasks_nvim.plan`), `list --ready|--waiting|--unestimated`, stages / leverage / critical path / effective
   prio / cycles from `blocked_by` alone, sums that name what is missing, the best next task with the reason and honest

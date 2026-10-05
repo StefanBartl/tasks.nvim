@@ -30,6 +30,8 @@ lua/tasks_nvim/
 ├── index.lua     render/write ROADMAP/TASKS.md, global export text
 ├── mutate.lua    template, new, set, done (plan / execute / rollback), folderize, attach
 ├── done_flow.lua the one entry for finishing a task (`mutate.done` + the follow-up chain, empty so far)
+├── steps.lua     the optional `## Plan` section of a task: progress, tick_all, acceptance hint (pure)
+├── plans.lua     plan files under ROADMAP/plans (parse, scan, new, close)
 ├── plan.lua      readiness, scopes, stages, leverage, effective prio, critical path, cycles (pure)
 ├── plan_scope.lua  reads the vault for the plan (open tasks, finished ids, the scope asked for)
 ├── plan_view.lua   a plan as Markdown / tsv / ids, the next-task texts
@@ -56,7 +58,9 @@ TESTS/              specs (run with TESTS/run.lua)
 | `tasks_nvim.vault` | Resolves the vault root (`opts.root`, `set_root`, `configure`/`setup`, then `$TASKS_VAULT`; no default path). An *area* is a folder holding `ROADMAP/` or `Backlog/`, plus the configured `extra_areas`; `_`-prefixed folders, `TEMPLATES` and `TOOLS` are skipped. Builds every path; whitelists area names (no trailing dot: Windows drops it), slugs and ids before they become path segments; `is_reserved_name` knows the Windows device names. An area must be spelled exactly like its folder (`has_area`, `dir_listed`; `scan.find` too): on Windows `LIB.NVIM` or `lib.nvim.` would otherwise reach the folder `lib.nvim` under a different id. | `root`, `areas`, `has_area`, `dir_listed`, `tasks_dir`, `index_path`, `backlog_dir`, `parse_id`, `valid_slug`, `is_reserved_name` |
 | `tasks_nvim.model` | `parse_text` / `from_file` turn a file into a `Tasks.Task`. `categories(task)` is the effective category set (below). A broken file is still returned, with `errors` / `error_codes` and `valid = false`: one bad file never hides the rest. `summary` is the frontmatter `summary`, else the first body paragraph. Sorting is status rank (`doing`, `decision`, `blocked`, `open`, `parked`), then prio, then area, then slug; `sort(tasks, order)` also knows `prio-effort` and `severity` (below). | `parse_text`, `from_file`, `sort`, `compare`, `parse_sort`, `effort_days`, `filter`, `is_date`, `days_between`, `reset_parse_cache` |
 | `tasks_nvim.filter_opts` | Turns the textual options of a front end (`status=a,b`, `prio=<=2`, `effort=S,M`, `stale=refs`, ...) into a `Tasks.Filter`. Unknown words and empty values are errors, never silently ignored. | `parse`, `split_commas` |
-| `tasks_nvim.plan` | The plan of a set of open tasks from `blocked_by` alone, pure. `classify` / `ready` are THE definition of "can be started" (open / doing / decision with no open blocker; a finished blocker is met; an unknown blocker is not; a parked blocker or a cycle is `stuck`): `list --ready`, the dashboard, `next` and the plan all ask it. `scope_for` is a task plus everything before it across areas. `build` returns stages (earliest possible, Kahn), the order inside a stage (status, effective prio, leverage, effort, id), leverage, the effective prio with the inversion, the critical path (unknown effort counts as one day and is counted), cycles (iterative Tarjan: a long chain cannot overflow the stack; members named, left out of the stages) and warnings. | `index`, `classify`, `ready`, `scope_for`, `build` |
+| `tasks_nvim.plan` | The plan of a set of open tasks, pure: `blocked_by` (hard), `after` (soft), the stage order of plan files. `classify` / `ready` are THE definition of "can be started" (open / doing / decision with no open blocker; a finished blocker is met; an unknown blocker is not; a parked blocker or a cycle is `stuck`): `list --ready`, the dashboard, `next` and the plan all ask it. `scope_for` is a task plus everything before it across areas. `build` returns stages (earliest possible, Kahn; soft edges and plan stages move a task later, never make it wait; a soft edge that would close a cycle is dropped with a warning), the order inside a stage (status, effective prio, `order`, leverage, effort, id), `same-file` marks (tasks of one stage naming the same file in `refs`), leverage, the effective prio with the inversion, the critical path (unknown effort counts as one day and is counted), cycles (iterative Tarjan: a long chain cannot overflow the stack; members named, left out of the stages) and warnings. | `index`, `classify`, `ready`, `scope_for`, `build` |
+| `tasks_nvim.steps` | The optional `## Plan` section of a task (`- [ ] 1. step -- Acceptance 1`): `parse` reads progress ("2/4") and the step texts, `tick_all` ticks the open steps byte-exactly (line endings kept; a step marked `(dropped)` / `(entfaellt)` is struck from the count and never ticked; code fences and other sections are not the plan), `uncovered_acceptance` names acceptance points no step refers to (a hint in `check`, never an error). A task without the section is complete: nothing is said about it. | `parse`, `tick_all`, `uncovered_acceptance`, `template_section` |
+| `tasks_nvim.plans` | Plan files, `<area>/ROADMAP/plans/<slug>.md`: frontmatter `title`, `status` (planning / doing / parked / done), `areas`, `target`, `phase_order`, `gate` (`hard`), dates; no task list. `parse` / `from_file` always return a plan (a broken one carries errors), `area` / `all` / `find` read them, `members` picks the tasks that name one, `new` creates one (never overwrites), `close` finishes one like a task (moved to `Backlog/FEATURES/`, a README row, snapshot and rollback), `summary` says what a finished plan amounted to. | `parse`, `area`, `all`, `find`, `members`, `new`, `close`, `summary` |
 | `tasks_nvim.plan_scope` | The impure edge of the plan: one scan of the open tasks, finished ids looked up in the Backlogs when a blocker is not open, the scope cut like the commands do (area, `--for`, filters); `filter_readiness` serves `list --ready|--waiting`. | `load`, `index`, `filter_readiness` |
 | `tasks_nvim.plan_view` | A plan as Markdown (ready now, decisions by leverage, stages, critical path, warnings, the estimate line), `tsv` or `ids`; the `next` lines and the dialog text. | `markdown`, `tsv`, `ids`, `next_lines`, `next_message`, `empty_text` |
 | `tasks_nvim.estimate` | Sums over tasks: effort days with how many tasks they are made of, a range (every size at its low and its high end), value, roi over the tasks with both numbers, quick wins, the split by actor, progress from finished tasks. A task without an estimate is missing, never 0. | `rollup`, `describe`, `fmt_days` |
@@ -131,6 +135,20 @@ task id. A corrupt file (also one over `MAX_FILE_BYTES`, 1 MiB; a real one is ~1
 that cannot be read is never overwritten. Why not `lib.nvim.frecency`: its fixed recency
 buckets use `os.time()` directly (nothing to inject), and it has neither a half-life nor
 an entry cap.
+
+### Soft edges, order, plans and the `## Plan` section
+
+`after: [id]` ("should come after X") is a soft edge: it never blocks, never counts as leverage or critical path, never
+is an error; a soft edge that would close a cycle is dropped with a warning. `order: 2.5` is a tie-breaker inside a
+stage (behind status and effective prio). `plan: <area>/<slug>` and `phase: <word>` attach a task to a plan file (above,
+`tasks_nvim.plans`); a plan with a `phase_order` puts its tasks in stages -- soft by default, real blockers with
+`gate: hard` (then `ready`, `next`, `list --ready` and the plan all see them: one definition). None of these fields
+appears in the generated index. `check`: `bad-after`, `bad-order`, `bad-plan`, `bad-phase` (errors), `after-self`,
+`after-dangling` (errors), `plan-unknown` (error), `plan-area`, `plan-phase`, `plan-target-unknown` (warnings),
+`plan-acceptance-uncovered` (a hint for a task with steps), and a broken plan file reports its own codes.
+
+The chain of `done` (`done_flow`): own steps ticked with the finish, the plan closed with its last member, generated
+blocks refreshed (`chain.marker_docs`), freed tasks, next task. See COMMANDS.md.
 
 ### Value, return on effort and actor
 
@@ -320,6 +338,7 @@ nvim --headless -u NONE -l scripts/tasks.lua check
 | `plan [area] [--for=id] [filters] [--ready] [--format=md\|tsv\|ids]` | the plan: ready now, decisions by leverage, stages, critical path |
 | `next [area] [--n=3] [--actor=cdx\|me\|pair\|none]` | `next: <id> <title> <reason>`, `then: ...`, `freed:`, `cdx:` and `empty:` lines |
 | `estimate [area] [--for=id] [filters]` | the estimate line, `quick wins:`, `unestimated:` |
+| `plan-new <area> <title> [--areas --target --phases --gate --summary]` | create a plan file under `ROADMAP/plans/` |
 | `migrate-actor [area] [--write]` | propose `actor=me` for tasks that wait for you (status decision, tag needs-user), leave the rest empty; dry run unless `--write` |
 | `attach <area>/<slug> <file> [--name=n] [--no-index]` | copy a file to `<slug>/assets/` (a plain task becomes a folder task), print the Markdown link |
 | `folderize <area>/<slug> [--no-index]` | turn a plain task file into a folder task |
