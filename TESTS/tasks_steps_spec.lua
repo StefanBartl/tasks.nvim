@@ -98,6 +98,13 @@ return function(H)
   )
   eq(steps.uncovered_acceptance("## Akzeptanz\n\n- [ ] a\n"), {}, "no plan: nothing to say")
   eq(
+    steps.uncovered_acceptance(
+      "## Akzeptanz\n\n- [ ] a\n- [ ] b\n\n## Plan\n\n- [ ] 1. x\n- [ ] 2. y\n"
+    ),
+    {},
+    "a plan that never uses the reference convention is not asked to"
+  )
+  eq(
     steps.uncovered_acceptance("## Plan\n\n- [ ] 1. x\n"),
     {},
     "no acceptance list: nothing to say"

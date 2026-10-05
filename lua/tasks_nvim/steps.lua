@@ -186,7 +186,8 @@ local function acceptance_count(lines)
 end
 
 ---Acceptance points that no step refers to (`-- Akzeptanz 2, 3` / `-- Acceptance 2`): a hint, not a rule. Only
----meaningful for a task that has steps; without steps (or without an acceptance list) there is nothing to say.
+---meaningful for a task that has steps, and only for a plan that uses the reference convention at all (one step with a
+---reference): without steps, without an acceptance list or without any reference there is nothing to say.
 ---@param text string
 ---@return integer[] uncovered
 function M.uncovered_acceptance(text)
@@ -200,6 +201,7 @@ function M.uncovered_acceptance(text)
     return {}
   end
   local covered = {}
+  local uses_references = false
   for _, item in ipairs(summary.items) do
     -- "Akzeptanz 2, 3", "Akzeptanz 2 und 3", "Acceptance 1 + 2": the words and / und read as a comma
     local phrase = (item.text:gsub("%f[%a]und%f[%A]", ","):gsub("%f[%a]and%f[%A]", ","))
@@ -207,9 +209,14 @@ function M.uncovered_acceptance(text)
       for list in phrase:gmatch(word .. "%s+(%d[%d,%s+]*)") do
         for n in list:gmatch("%d+") do
           covered[tonumber(n)] = true
+          uses_references = true
         end
       end
     end
+  end
+  -- The `-- Acceptance n` reference is a convention: a plan that does not use it at all is not asked to.
+  if not uses_references then
+    return {}
   end
   local out = {}
   for n = 1, count do
