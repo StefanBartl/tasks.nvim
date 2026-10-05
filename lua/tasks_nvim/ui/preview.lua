@@ -237,13 +237,11 @@ local function ensure_group()
   if group then
     return
   end
-  group = vim.api.nvim_create_augroup("TasksPreviewTemp", { clear = true })
-  vim.api.nvim_create_autocmd("VimLeavePre", {
-    group = group,
-    callback = function()
-      M.cleanup_all()
-    end,
-  })
+  local autocmd = require("lib.nvim.bindings.autocmd")
+  group = autocmd.group("TasksPreviewTemp", true)
+  autocmd.create("VimLeavePre", function()
+    M.cleanup_all()
+  end, { group = group, desc = "tasks.nvim: delete the temporary preview files on exit" })
 end
 
 ---Create `<root>/tasks-<slug>[-n].md` holding `text`; never overwrites a file.
@@ -309,27 +307,35 @@ function M.open_text(text, label)
     -- would not do: it never fires for an unlisted buffer, so a plain `:bdelete` (or closing the
     -- window of a buffer that is not hidden) left the file until Neovim quit.
     vim.bo[buf].buflisted = false
-    vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
+    local autocmd = require("lib.nvim.bindings.autocmd")
+    -- Per-buffer hooks of a file that lives for a moment: not recorded (the record would outlive the buffer).
+    autocmd.create({ "BufDelete", "BufWipeout" }, function()
+      M.forget(path)
+    end, {
       group = group,
       buffer = buf,
       once = true,
-      callback = function()
-        M.forget(path)
-      end,
+      record = false,
+      desc = "tasks.nvim: delete the preview file with its buffer",
     })
     -- `BufUnload` is where every other way of dropping the buffer's text ends up -- but `:edit!`
     -- (a reload) fires it too, so look again once the command is over: gone, the file goes.
-    vim.api.nvim_create_autocmd("BufUnload", {
-      group = group,
-      buffer = buf,
-      callback = function()
+    autocmd.create(
+      "BufUnload",
+      function()
         vim.schedule(function()
           if not vim.api.nvim_buf_is_loaded(buf) then
             M.forget(path)
           end
         end)
       end,
-    })
+      {
+        group = group,
+        buffer = buf,
+        record = false,
+        desc = "tasks.nvim: delete the preview file when its text is dropped",
+      }
+    )
   end
   return true, nil, path
 end
