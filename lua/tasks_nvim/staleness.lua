@@ -65,6 +65,8 @@ end
 ---@field capped integer      # Distinct files beyond `MAX_REFS`, not looked at.
 ---@field notes string[]      # Human remarks (a base that is no git repo, the cap, a failed git call).
 
+---@alias Tasks.GitDater fun(base: string, rels: string[], gopts?: Tasks.GitDatesOpts): table<string, { date: string, file: string }>|nil, string|nil
+
 ---@class Tasks.StalenessOpts
 ---@field root? string                # Vault root (default: `vault.root()`).
 ---@field repo_bases? string[]        # Folders that hold the repos by name (`<base>/<area>`); default: derived from the vault and `$REPOS_DIR`.
@@ -72,7 +74,7 @@ end
 ---@field extra_bases? string[]       # More bases tried after the standard ones.
 ---@field max_refs? integer
 ---@field budget_ms? integer          # Time all git calls may take together (default `staleness.budget_ms` of `setup()`).
----@field git_dates? fun(base: string, rels: string[], gopts?: Tasks.GitDatesOpts): table<string, { date: string, file: string }>|nil, string|nil  # Replaces the git lookup (specs).
+---@field git_dates? Tasks.GitDater   # Replaces the git lookup (specs).
 
 ---How a ref is read.
 ---@param ref any
@@ -413,7 +415,183 @@ end
 ---The date a task without `updated` and `created` is compared from: before every real day.
 local UNDATED = "0000-00-00"
 
----Check the refs of `tasks` against the file system and git.
+---What pass 1 found: the files to date, grouped by the folder they are looked up in, and the refs that point at them.
+---@class Tasks.RefHits
+---@field by_base table<string, { rels: string[], seen: table<string, boolean> }>
+---@field base_order string[]
+---@field hits { task: Tasks.Task, ref: string, base: string, rel: string, full: string }[]
+---@field tasks integer       # Tasks with at least one checkable ref.
+---@field files integer       # Distinct files.
+
+---Where `rel` lives for a task of `area`: the base it was found in, the full path and the path relative to that base.
+---`..` segments are resolved against the folder the file really lives in (git refuses a pathspec outside its work tree,
+---for the whole call).
+---@param rel string
+---@param bases string[]
+---@return string|nil base
+---@return string|nil full
+---@return string|nil rel
+local function locate(rel, bases)
+  if is_absolute(rel) then
+    if uv.fs_stat(rel) then
+      return fsio.dirname(rel), rel, rel:match("([^/]+)$") or rel
+    end
+    return nil, nil, nil
+  end
+  for _, base in ipairs(bases) do
+    local full = base .. "/" .. rel
+    if uv.fs_stat(full) then
+      if not has_dotdot(rel) then
+        return base, full, rel
+      end
+      -- `../lib.nvim/lua/x.lua` leaves the repo it was found in: date the file from the folder it really lives in.
+      full = collapse_dots(full)
+      if full:sub(1, #base + 1) == base .. "/" then
+        return base, full, full:sub(#base + 2)
+      end
+      return fsio.dirname(full), full, full:match("([^/]+)$") or full
+    end
+  end
+  return nil, nil, nil
+end
+
+---Pass 1: resolve every checkable ref to (base, rel); group the distinct files by base. Counts into `report`
+---(`skipped`, `unresolved`, `capped`, `tasks`, `files`).
+---@param tasks Tasks.Task[]
+---@param ctx { repo_bases: string[], config_dir: string|nil, root: string, extra: string[] }
+---@param cap integer
+---@param report Tasks.StalenessReport
+---@return Tasks.RefHits
+local function resolve_refs(tasks, ctx, cap, report)
+  -- The places to look in depend only on the area; every ref of its tasks reuses them.
+  ---@type table<string, string[]>
+  local bases_of_area = {}
+  ---@param area string
+  ---@return string[]
+  local function bases_of(area)
+    local list = bases_of_area[area]
+    if not list then
+      list = bases_for(area, ctx)
+      bases_of_area[area] = list
+    end
+    return list
+  end
+
+  ---@type Tasks.RefHits
+  local found = { by_base = {}, base_order = {}, hits = {}, tasks = 0, files = 0 }
+  local distinct, over_cap, with_refs = {}, {}, {}
+  for _, t in ipairs(tasks) do
+    for _, ref in ipairs(t.refs or {}) do
+      local kind, rel = M.classify(ref)
+      if kind ~= "path" or not rel then
+        report.skipped = report.skipped + 1
+      else
+        local base, full, base_rel = locate(rel, bases_of(t.area))
+        if not base or not full or not base_rel then
+          report.unresolved = report.unresolved + 1
+        else
+          local key = base .. "\0" .. base_rel
+          local counted_here = true
+          if not distinct[key] then
+            if found.files >= cap then
+              if not over_cap[key] then
+                over_cap[key] = true
+                report.capped = report.capped + 1
+              end
+              counted_here = false
+            else
+              distinct[key] = true
+              found.files = found.files + 1
+              local group = found.by_base[base]
+              if not group then
+                group = { rels = {}, seen = {} }
+                found.by_base[base] = group
+                found.base_order[#found.base_order + 1] = base
+              end
+              group.rels[#group.rels + 1] = base_rel
+              group.seen[base_rel] = true
+            end
+          end
+          if counted_here then
+            found.hits[#found.hits + 1] =
+              { task = t, ref = ref, base = base, rel = base_rel, full = full }
+            if not with_refs[t.id] then
+              with_refs[t.id] = true
+              found.tasks = found.tasks + 1
+            end
+          end
+        end
+      end
+    end
+  end
+  return found
+end
+
+---@alias Tasks.FileDate { date: string, file: string, source: "git"|"mtime" }
+
+---Pass 2: date the files, one git lookup per base. Every git call blocks the editor, so the whole run has a time
+---budget: a slow disk or a hung repo costs file times for the rest, not minutes of freeze.
+---@param found Tasks.RefHits
+---@param dater Tasks.GitDater
+---@param budget_ms integer
+---@param note fun(text: string)
+---@return table<string, table<string, Tasks.FileDate|false>> dated  # base -> rel -> date (`false`: not even an mtime)
+local function date_files(found, dater, budget_ms, note)
+  ---@type table<string, table<string, Tasks.FileDate|false>>
+  local dated = {}
+  local deadline = uv.hrtime() + budget_ms * 1e6
+  local out_of_time = false
+  for _, base in ipairs(found.base_order) do
+    local group = found.by_base[base]
+    local git, err
+    if uv.hrtime() > deadline then
+      if not out_of_time then
+        out_of_time = true
+        note(("git time budget of %d ms used up; file times used for the rest"):format(budget_ms))
+      end
+    else
+      git, err = dater(base, group.rels, { deadline = deadline })
+      if err then
+        note(("%s: %s%s"):format(base, err, git and "" or " (file times used)"))
+      end
+    end
+    local map = {}
+    for _, rel in ipairs(group.rels) do
+      local g = git and git[rel]
+      if g then
+        map[rel] = { date = g.date, file = base .. "/" .. g.file, source = "git" }
+      else
+        local d = mtime_day(base .. "/" .. rel)
+        map[rel] = d and { date = d, file = base .. "/" .. rel, source = "mtime" } or false
+      end
+    end
+    dated[base] = map
+  end
+  return dated
+end
+
+---Pass 3: compare each ref's file date with its task's own date; the changes go to `report.stale`.
+---@param hits { task: Tasks.Task, ref: string, base: string, rel: string }[]  # `Tasks.RefHits.hits`
+---@param dated table<string, table<string, Tasks.FileDate|false>>
+---@param report Tasks.StalenessReport
+local function compare(hits, dated, report)
+  for _, h in ipairs(hits) do
+    local d = dated[h.base] and dated[h.base][h.rel]
+    -- A task with neither `updated` nor `created` has no date to compare with: every dated change counts, the same
+    -- way `--stale=<days>` counts a task without a date as stale (an unknowable answer is not "fresh").
+    local since = h.task.updated or h.task.created or UNDATED
+    if d and d.date > since then
+      local list = report.stale[h.task.id]
+      if not list then
+        list = {}
+        report.stale[h.task.id] = list
+      end
+      list[#list + 1] = { ref = h.ref, file = d.file, date = d.date, source = d.source }
+    end
+  end
+end
+
+---Check the refs of `tasks` against the file system and git: resolve (pass 1), date (pass 2), compare (pass 3).
 ---@param tasks Tasks.Task[]
 ---@param opts? Tasks.StalenessOpts
 ---@return Tasks.StalenessReport report
@@ -441,159 +619,17 @@ function M.compute(tasks, opts)
     extra = opts.extra_bases or {},
   }
   local cap = opts.max_refs or M.MAX_REFS
-  local dater = opts.git_dates or M.git_dates
-  local budget_ms = opts.budget_ms or settings().budget_ms
   ---@param text string
   local function note(text)
     report.notes[#report.notes + 1] = text
   end
 
-  -- The places to look in depend only on the area; every ref of its tasks reuses them.
-  ---@type table<string, string[]>
-  local bases_of_area = {}
-  ---@param area string
-  ---@return string[]
-  local function bases_of(area)
-    local list = bases_of_area[area]
-    if not list then
-      list = bases_for(area, ctx)
-      bases_of_area[area] = list
-    end
-    return list
-  end
-
-  -- Pass 1: resolve every checkable ref to (base, rel); group by base.
-  ---@type table<string, { rels: string[], seen: table<string, boolean> }>
-  local by_base = {}
-  local base_order = {}
-  ---@type { task: Tasks.Task, ref: string, base: string, rel: string, full: string }[]
-  local hits = {}
-  local counted = {}
-  local distinct = {}
-  local distinct_n = 0
-  local over_cap = {}
-  local with_refs = {}
-  for _, t in ipairs(tasks) do
-    for _, ref in ipairs(t.refs or {}) do
-      local kind, rel = M.classify(ref)
-      if kind ~= "path" or not rel then
-        report.skipped = report.skipped + 1
-      else
-        local found_base, found_full
-        if is_absolute(rel) then
-          if uv.fs_stat(rel) then
-            found_base, found_full = fsio.dirname(rel), rel
-            rel = rel:match("([^/]+)$") or rel
-          end
-        else
-          for _, base in ipairs(bases_of(t.area)) do
-            local full = base .. "/" .. rel
-            if uv.fs_stat(full) then
-              found_base, found_full = base, full
-              break
-            end
-          end
-          if found_base and has_dotdot(rel) then
-            -- `../lib.nvim/lua/x.lua` leaves the repo it was found in, and
-            -- git refuses a pathspec outside its work tree (for the whole call).
-            -- Date the file from the folder it really lives in.
-            found_full = collapse_dots(found_full)
-            if found_full:sub(1, #found_base + 1) == found_base .. "/" then
-              rel = found_full:sub(#found_base + 2)
-            else
-              found_base, rel = fsio.dirname(found_full), found_full:match("([^/]+)$") or found_full
-            end
-          end
-        end
-        if not found_base then
-          report.unresolved = report.unresolved + 1
-        else
-          local key = found_base .. "\0" .. rel
-          local counted_here = true
-          if not distinct[key] then
-            if distinct_n >= cap then
-              if not over_cap[key] then
-                over_cap[key] = true
-                report.capped = report.capped + 1
-              end
-              counted_here = false
-            else
-              distinct[key] = true
-              distinct_n = distinct_n + 1
-              local group = by_base[found_base]
-              if not group then
-                group = { rels = {}, seen = {} }
-                by_base[found_base] = group
-                base_order[#base_order + 1] = found_base
-              end
-              group.rels[#group.rels + 1] = rel
-              group.seen[rel] = true
-            end
-          end
-          if counted_here then
-            hits[#hits + 1] =
-              { task = t, ref = ref, base = found_base, rel = rel, full = found_full }
-            if not with_refs[t.id] then
-              with_refs[t.id] = true
-              counted[#counted + 1] = t.id
-            end
-          end
-        end
-      end
-    end
-  end
-  report.tasks = #counted
-  report.files = distinct_n
-
-  -- Pass 2: date the files, one git lookup per base.
-  ---@type table<string, table<string, { date: string, file: string, source: "git"|"mtime" }|false>>
-  local dated = {}
-  -- Every git call blocks the editor, so the whole run has a time budget: a
-  -- slow disk or a hung repo costs file times for the rest, not minutes of freeze.
-  local deadline = uv.hrtime() + budget_ms * 1e6
-  local out_of_time = false
-  for _, base in ipairs(base_order) do
-    local group = by_base[base]
-    local git, err
-    if uv.hrtime() > deadline then
-      if not out_of_time then
-        out_of_time = true
-        note(("git time budget of %d ms used up; file times used for the rest"):format(budget_ms))
-      end
-    else
-      git, err = dater(base, group.rels, { deadline = deadline })
-      if err then
-        note(("%s: %s%s"):format(base, err, git and "" or " (file times used)"))
-      end
-    end
-    local map = {}
-    for _, rel in ipairs(group.rels) do
-      local g = git and git[rel]
-      if g then
-        map[rel] = { date = g.date, file = base .. "/" .. g.file, source = "git" }
-      else
-        local d = mtime_day(base .. "/" .. rel)
-        map[rel] = d and { date = d, file = base .. "/" .. rel, source = "mtime" } or false
-      end
-    end
-    dated[base] = map
-  end
-
-  -- Pass 3: compare with each task's own date.
-  for _, h in ipairs(hits) do
-    local d = dated[h.base] and dated[h.base][h.rel]
-    -- A task with neither `updated` nor `created` has no date to compare with: every dated change counts, the same
-    -- way `--stale=<days>` counts a task without a date as stale (an unknowable answer is not "fresh").
-    local since = h.task.updated or h.task.created or UNDATED
-    if d and d.date > since then
-      local list = report.stale[h.task.id]
-      if not list then
-        list = {}
-        report.stale[h.task.id] = list
-      end
-      list[#list + 1] = { ref = h.ref, file = d.file, date = d.date, source = d.source }
-    end
-  end
+  local found = resolve_refs(tasks, ctx, cap, report)
+  report.tasks = found.tasks
+  report.files = found.files
+  local dated =
+    date_files(found, opts.git_dates or M.git_dates, opts.budget_ms or settings().budget_ms, note)
+  compare(found.hits, dated, report)
 
   if report.capped > 0 then
     report.notes[#report.notes + 1] = ("%d distinct file(s) beyond the limit of %d were not checked"):format(
