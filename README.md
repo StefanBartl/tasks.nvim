@@ -44,6 +44,8 @@ nvim --headless -u NONE -l scripts/tasks-ci.lua          # check + index --check
 ```
 
 Format, Regeln, Verben und Prüfungen: [docs/ENGINE.md](docs/ENGINE.md).
+Wie man damit arbeitet, an Szenarien (was heute geht, was geplant ist): [docs/WORKFLOWS.md](docs/WORKFLOWS.md).
+Befehle: [docs/COMMANDS.md](docs/COMMANDS.md), Tasten: [docs/BINDINGS.md](docs/BINDINGS.md).
 
 ## Tests
 
