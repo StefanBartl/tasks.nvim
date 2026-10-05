@@ -1,6 +1,6 @@
--- TESTS/tasks_routes_spec.lua -- the :MyPlugins tasks/task/open layer: composer parsing, dispatch,
+-- TESTS/tasks_routes_spec.lua -- the :Tasks command layer: composer parsing, dispatch,
 -- delivery targets, completion, prompts. Engine rules are covered by the other specs; this one drives the
--- real composer command (registered here as :TaskT with the very routes `:MyPlugins` gets) against a
+-- real composer command (registered here as :TaskT with the very routes the host verb gets) against a
 -- fixture vault.
 
 return function(H)

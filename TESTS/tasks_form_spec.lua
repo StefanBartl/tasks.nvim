@@ -1,5 +1,5 @@
 -- TESTS/tasks/tasks_form_spec.lua -- tasks.form: template, parsing, validation and the tick rules of the
--- `:MyPlugins task new` form, all on plain strings (no buffer, no vault).
+-- `:Tasks new` form, all on plain strings (no buffer, no vault).
 
 return function(H)
   local eq, ok, has = H.eq, H.ok, H.has

@@ -1003,7 +1003,7 @@ end
 ---
 ---Opens a pickers.nvim picker whose search root is exactly that one folder of
 ---the area (`pickers.command.dispatch` with an explicit `roots` source, so
----`:PickersRepeat` replays it). Without pickers.nvim it falls back to a
+---the picker can be repeated). Without pickers.nvim it falls back to a
 ---`vim.ui.select` over the folder's `*.md` files -- no content search.
 ---`--list` (or `--to=`) delivers the file list instead of opening a picker.
 ---@param ctx table

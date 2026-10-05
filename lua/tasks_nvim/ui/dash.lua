@@ -808,7 +808,7 @@ local function open_snacks(Snacks, state)
   end
 
   local picker = Snacks.picker({
-    source = "wkdbook_tasks",
+    source = "tasks_nvim",
     title = title_of(state),
     finder = function(_, ctx)
       local items = {}

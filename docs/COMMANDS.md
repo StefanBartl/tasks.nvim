@@ -1,26 +1,15 @@
-> Moved here from the author's Neovim config (where the same routes are mounted under `:MyPlugins tasks | task | open`;
-> `routes.routes()` in `tasks_nvim.ui.routes` builds both grammars). In this plugin the verbs are flat:
-> `:Tasks list`, `index`, `new`, `set`, `done`, `attach`, `folderize`, `template`, `open <id>`, `preview <id>`,
-> `folder <area> ...`. Paths that name the author's vault layout (`$REPOS_DIR/WKDBooks/...`) are examples only:
-> the vault is whatever `setup({ vault = ... })` or `$TASKS_VAULT` says.
-
 # Editor commands (`:Tasks`)
 
-The commands for the open work of the wkdbook vault
-(`$REPOS_DIR/WKDBooks/Development/wkdbook-myplugins`): one Markdown file per task
-in `<area>/ROADMAP/tasks/`, a generated overview `<area>/ROADMAP/TASKS.md`, finished
-tasks in `<area>/Backlog/`. Format, rules R1-R12 and reasoning:
-`wkdbook-myplugins/ALL/Task-System-Konzept.md`. All rules live in the engine, the plugin `tasks.nvim`
-(`docs/ENGINE.md` in its repo); this layer only parses the command line,
-asks, notifies and opens windows. The same engine runs without an editor as
-`nvim --headless -u NONE -l scripts/tasks.lua <command>` (rule R12).
+The commands for the open work of a task vault: one Markdown file per task in `<area>/ROADMAP/tasks/`, a
+generated overview `<area>/ROADMAP/TASKS.md`, finished tasks in `<area>/Backlog/`. Format and rules:
+[ENGINE.md](ENGINE.md); scenarios: [WORKFLOWS.md](WORKFLOWS.md). All rules live in the engine; this layer only
+parses the command line, asks, notifies and opens windows. The same engine runs without an editor as
+`nvim --headless -u NONE -l scripts/tasks.lua <command>`.
 
-The grammar is **verb-first** (`:Tasks list cascade.nvim`, not
-`:MyPlugins cascade.nvim tasks`): the composer routes over literal path segments and
-has no dynamic first segment. An *area* is a folder of the vault holding `ROADMAP/` or
-`Backlog/`, plus `ALL`, `nvim-config`, `docmap-desktop`, `migrate.nvim` -- which is
-why areas are read from the vault (argument type `TASK_AREA`) and not taken from the
-plugin list. `<Tab>` completes areas, task ids (`<area>/<slug>` of the *open* tasks,
+The grammar is **verb-first** (`:Tasks list my-area`): the composer routes over literal path segments and
+has no dynamic first segment. An *area* is a folder of the vault holding `ROADMAP/` or `Backlog/` (plus the
+`extra_areas` of `setup()`), which is why areas are read from the vault (argument type `TASK_AREA`).
+`<Tab>` completes areas, task ids (`<area>/<slug>` of the *open* tasks,
 type `TASK_ID`), the filter and `--to=` values and, for `task set`, every settable `key=`.
 
 All mutating commands (`task new`, `task set`, `task done`, `tasks index`) regenerate
@@ -44,7 +33,7 @@ lowercase word `all` is the keyword; `ALL` with capitals is the area of that nam
 | `--severity=a,b` | any of `low medium high critical` (the optional `severity` of a bug / security task; a task without one never matches) |
 | `--tag=a,b` | any of these tags |
 | `--stale=<days>` | not updated for at least that many days (no date counts as stale) |
-| `--stale=refs` | a file named in the task's `refs:` changed on a later day than `updated` (git commit date, mtime as fallback); the heading names the changed files. Details in [`lua/tasks/README.md`](../../../tasks/README.md) (section `--stale=refs`) |
+| `--stale=refs` | a file named in the task's `refs:` changed on a later day than `updated` (git commit date, mtime as fallback); the heading names the changed files. Details in [ENGINE.md](ENGINE.md#--stalerefs----tasks-whose-referenced-files-changed) (section `--stale=refs`) |
 | `--blocked` | status `blocked`, or a non-empty `blocked_by` |
 | `--sort=default` / `prio-effort` / `severity` / `frecency` | the order: `default` is status, prio, area, slug; `prio-effort` is status, prio, then effort ascending (important and small first, no effort last of its prio); `severity` is `critical` first, then `high`, `medium`, `low`, no severity last, each group in the default order; `frecency` is what the dashboard opened or changed most first (see below), the rest in the default order |
 | `--to=` | where the list goes: `buffer` (default), `clipboard`, `qf`, `file:<path>`, `echo`, `mdview` (Markdown written to a temp file and shown in the browser by [mdview.nvim](https://github.com/StefanBartl/mdview.nvim); see [Browser preview](#browser-preview-mdview)) |
@@ -57,7 +46,7 @@ lowercase word `all` is the keyword; `ALL` with capitals is the area of that nam
 :Tasks list --stale=60 --to=clipboard
 :Tasks list --status=open --effort=<=M --sort=prio-effort   " important and small first
 :Tasks list --category=bug,security --sort=severity         " worst first
-:Tasks list all --to=file:$REPOS_DIR/WKDBooks/Development/wkdbook-myplugins/ALL/TASKS.md
+:Tasks list all --to=file:~/vault/ALL-TASKS.md
 ```
 
 The command line splits at spaces, so a `--to=file:` path with a space needs a backslash before
@@ -73,7 +62,7 @@ says so instead.
 
 ### The dashboard (`:Tasks list [<area>|all]` without `--to=` / `--format=`)
 
-An interactive `Snacks.picker` (source `wkdbook_tasks`, the engine `picker.lua` uses):
+An interactive `Snacks.picker` (source `tasks_nvim`):
 one line per open task -- prio, status, effort, area, title, the `[severity]` of a bug /
 security task and a `<- blocker` hint -- the task file as the preview, and a title with the
 counts, the active filter chips and, when it is not the default, the sort order:
@@ -141,7 +130,7 @@ folder can be watched (handle limit, no `lib.nvim.fs.watch`) the dashboard says 
 `r` stays the way to rescan. The plain `vim.ui.select` fallback has no live list.
 
 **Frecency.** Opening a task (`<CR>`, or "open the file" in the fallback menu) or changing it
-(`s` / `p`) counts as a visit: `tasks/frecency.lua` keeps a decayed counter per task id --
+(`s` / `p`) counts as a visit: `tasks_nvim.frecency` keeps a decayed counter per task id --
 each visit adds 1, the old count halves every 14 days (a task opened three times today
 outranks one opened five times last month, one left alone fades out after a couple of
 months). The file is `stdpath("state")/tasks/frecency.json` (`$TASKS_FRECENCY_FILE`
@@ -167,8 +156,8 @@ there are more than ten). Errors are `ERROR` level, warnings `WARN`.
 
 ### `:Tasks new` -- the form (no arguments)
 
-`:Tasks new` without an area opens a Markdown form in a split, in the manner of
-`:Case new` of casedesk.nvim:
+`:Tasks new` without an area opens a Markdown form in a split, as a Markdown
+template:
 
 ```markdown
 # New task
@@ -184,7 +173,7 @@ Title: Notify: unify the output channels
 - [x] docs
 ...
 Tags: ui, notify
-Refs: lua/lib/nvim/notify.lua
+Refs: lua/foo/init.lua
 ```
 
 The choice fields `kind`, `prio`, `effort`, `category`, `severity` and `status` are bullet
@@ -291,7 +280,7 @@ see [Browser preview](#browser-preview-mdview).
 
 `task preview <id>`, `tasks ... --to=mdview` and the dashboard keys (`gp`, and "Preview in
 browser" in the `e` menu) put the rendered Markdown in the browser through
-[mdview.nvim](https://github.com/StefanBartl/mdview.nvim). The wire is `tasks_preview.lua`:
+[mdview.nvim](https://github.com/StefanBartl/mdview.nvim). The wire is `ui/preview.lua`:
 
 - **A task file** is opened as it is (`:edit`, then `:MDView start <file>`, the path handed over as
   one argument, so a space, `#`, `%` or `'` in it survives), so edits show up in the preview live.
@@ -311,9 +300,9 @@ browser" in the `e` menu) put the rendered Markdown in the browser through
   metadata lines -- that needs the renderer of mdview.nvim from 2026-10-04 on, i.e. a rebuilt
   or newly released WASM bundle). The generated `ROADMAP/TASKS.md` has no frontmatter and needs
   nothing.
-- **Seams** (for specs and replacement): `tasks_preview.probe` (is mdview there?),
-  `tasks_preview.opener` (open + start the preview, returns `ok, err`),
-  `tasks_preview.temp_root` (temp directory).
+- **Seams** (for specs and replacement): `ui.preview.probe` (is mdview there?),
+  `ui.preview.opener` (open + start the preview, returns `ok, err`),
+  `ui.preview.temp_root` (temp directory).
 
 ### `:Tasks folder <area> [folder] [--action=files|grep|smart] [--list] [--to=]`
 
@@ -322,16 +311,13 @@ A picker over the files of **one folder of one area**. `folder` is `tasks`
 `notes` (`NOTES`) or `all` (the whole area, the default). A folder the area does not have is
 reported and no picker opens.
 
-It calls `pickers.command.dispatch(action, { roots = { <folder> }, prompt = ... }, engine)`
-of [pickers.nvim](https://github.com/StefanBartl/pickers.nvim) -- the entry every `:Pickers`
-action goes through, so `:PickersRepeat` replays it and the configured engine (snacks here)
-is used; `--action=grep|smart` searches file contents. `--list` (or `--to=`) delivers the
-list of files, relative to the folder, instead of opening a picker.
+It calls `pickers.command.dispatch(action, { roots = { <folder> }, prompt = ... }, engine)` of
+[pickers.nvim](https://github.com/StefanBartl/pickers.nvim) when that plugin is installed, so the configured
+picker engine is used; `--action=grep|smart` searches file contents. `--list` (or `--to=`) delivers the list of
+files, relative to the folder, instead of opening a picker.
 
 **Limitation and fallback.** A pickers.nvim *collection* cannot express "one area, one
 subfolder" (a collection offers "pick one subfolder of this directory"), so `open` does not
 use one. Without pickers.nvim it falls back to a plain `vim.ui.select` over the folder's
 `*.md` files: no content search, and `--action=grep|smart` is answered with that hint.
-Ad-hoc full-text search over the whole vault is the `plugins_book` collection in
-`lua/plugins/personal/specs/navigate.lua` (`:Pickers plugins_book files|grep|smart`, `<leader>pbs/pbg`);
-a second collection `vault` was removed as a duplicate (it also could not reach `ALL`).
+Full-text search over the whole vault is a job for your picker's own grep on the vault folder.

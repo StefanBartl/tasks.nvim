@@ -39,7 +39,9 @@ end
 
 local lib = find_lib()
 if not lib then
-  io.stderr:write("error: lib.nvim not found (set LIB_NVIM_DIR or REPOS_DIR)\n")
+  io.stderr:write(
+    "error: lib.nvim not found (set LIB_NVIM_DIR, or LIB_NVIM_PATH, or REPOS_DIR with a lib.nvim checkout; also looked in .deps/lib.nvim, next to this repo and in lazy.nvim data)\n"
+  )
   os.exit(2)
 end
 

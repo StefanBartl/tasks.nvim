@@ -274,7 +274,11 @@ return function(H)
   -- ── locate snacks ───────────────────────────────────────────────────────
   local function find_snacks()
     -- No ipairs: the first candidate is nil when $SNACKS_DIR is unset.
-    local candidates = { vim.env.SNACKS_DIR or "", vim.fn.stdpath("data") .. "/lazy/snacks.nvim" }
+    local candidates = {
+      vim.env.SNACKS_DIR or "",
+      vim.fn.stdpath("data") .. "/lazy/snacks.nvim",
+      vim.fs.dirname(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2))) .. "/.deps/snacks.nvim",
+    }
     for _, dir in ipairs(candidates) do
       if dir ~= "" and vim.fn.isdirectory(dir .. "/lua/snacks/picker") == 1 then
         return dir
@@ -291,7 +295,7 @@ return function(H)
     dash.config.watch = watch_was
     local loaded, S = pcall(require, "snacks")
     if loaded and type(S) == "table" and S.picker then
-      for _, picker in ipairs(S.picker.get({ source = "wkdbook_tasks" })) do
+      for _, picker in ipairs(S.picker.get({ source = "tasks_nvim" })) do
         pcall(picker.close, picker)
       end
     end
@@ -303,6 +307,11 @@ return function(H)
     fallback_checks()
     reset_fixture()
     if not snacks_dir then
+      -- A silent skip made this spec pass with no picker assertion at all. CI sets TASKS_REQUIRE_SNACKS and
+      -- checks snacks.nvim out into .deps/, so there a missing snacks is a failure; locally it is a visible skip.
+      if vim.env.TASKS_REQUIRE_SNACKS == "1" then
+        error("snacks.nvim is required here (TASKS_REQUIRE_SNACKS=1) but was not found")
+      end
       io.stdout:write("      (snacks.nvim not found: the picker part of this spec is skipped)\n")
       return
     end
@@ -312,7 +321,7 @@ return function(H)
 
     ---@return table|nil
     local function current_picker()
-      for _, p in ipairs(Snacks.picker.get({ source = "wkdbook_tasks" })) do
+      for _, p in ipairs(Snacks.picker.get({ source = "tasks_nvim" })) do
         if not p.closed then
           return p
         end
@@ -350,7 +359,7 @@ return function(H)
     end
 
     local function close_all()
-      for _, p in ipairs(Snacks.picker.get({ source = "wkdbook_tasks" })) do
+      for _, p in ipairs(Snacks.picker.get({ source = "tasks_nvim" })) do
         p:close()
       end
       flush()
@@ -827,9 +836,9 @@ return function(H)
     end)
     sink.select = orig_sink_select
     ok(gb_ok, tostring(gb_err))
-    -- pickers.nvim is not on this runtime path, so :MyPlugins open falls back to a
+    -- pickers.nvim is not on this runtime path, so :Tasks folder falls back to a
     -- chooser over the Markdown files of Backlog/ (at least the README).
-    eq(#chooser_calls, 1, "gb goes through :MyPlugins open <area> backlog")
+    eq(#chooser_calls, 1, "gb goes through :Tasks folder <area> backlog")
     eq(chooser_calls[1].opts.prompt, area_now .. "/backlog")
     ok(vim.tbl_contains(vim.tbl_map(vim.fs.basename, chooser_calls[1].items), "README.md"))
     ok(

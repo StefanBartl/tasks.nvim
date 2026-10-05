@@ -50,8 +50,15 @@ jobs:
           repository: StefanBartl/lib.nvim
           path: .deps/lib.nvim
           ref: ci-verified
+      # The dashboard specs drive the real Snacks picker; without it they would pass with no assertion.
+      - uses: actions/checkout@v5
+        with:
+          repository: folke/snacks.nvim
+          path: .deps/snacks.nvim
       - uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
           version: stable
       - run: nvim -n -i NONE --headless -u NONE -l TESTS/run.lua
+        env:
+          TASKS_REQUIRE_SNACKS: "1"

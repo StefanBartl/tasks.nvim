@@ -21,7 +21,7 @@ quote_style = "AutoPreferDouble"  # AutoPreferDouble, AutoPreferSingle, ForceDou
 #collapse_simple_statement = "Always" # Never, FunctionOnly, ConditionalOnly, Always
 
 # # Do not insert spaces between function names and opening parens.
-#äspace_after_function_names = "Never"
+#space_after_function_names = "Never"
 
 # # Do not preserve leading/trailing blank lines around blocks by default.
 # block_newline_gaps = "Never"

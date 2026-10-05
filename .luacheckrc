@@ -1,4 +1,4 @@
--- luacheck configuration for tasks.nvim (same rules as the nvim config it was extracted from).
+-- luacheck configuration for tasks.nvim.
 --
 -- Scope: lua/, init.lua, after/ — the configuration's own code. The imported
 -- third-party patch snippets under docs/ are notes, not code, and several do

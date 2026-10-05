@@ -115,7 +115,7 @@ return function(H)
     frecency.set_path(nil)
     local loaded, S = pcall(require, "snacks")
     if loaded and type(S) == "table" and S.picker then
-      for _, picker in ipairs(S.picker.get({ source = "wkdbook_tasks" })) do
+      for _, picker in ipairs(S.picker.get({ source = "tasks_nvim" })) do
         pcall(picker.close, picker)
       end
     end
@@ -123,7 +123,11 @@ return function(H)
   end
 
   local function find_snacks()
-    local candidates = { vim.env.SNACKS_DIR or "", vim.fn.stdpath("data") .. "/lazy/snacks.nvim" }
+    local candidates = {
+      vim.env.SNACKS_DIR or "",
+      vim.fn.stdpath("data") .. "/lazy/snacks.nvim",
+      vim.fs.dirname(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2))) .. "/.deps/snacks.nvim",
+    }
     for _, dir in ipairs(candidates) do
       if dir ~= "" and vim.fn.isdirectory(dir .. "/lua/snacks/picker") == 1 then
         return dir
@@ -135,6 +139,11 @@ return function(H)
   local snacks_dir = find_snacks()
   local ok_run, err = pcall(function()
     if not snacks_dir then
+      -- A silent skip made this spec pass with no picker assertion at all. CI sets TASKS_REQUIRE_SNACKS and
+      -- checks snacks.nvim out into .deps/, so there a missing snacks is a failure; locally it is a visible skip.
+      if vim.env.TASKS_REQUIRE_SNACKS == "1" then
+        error("snacks.nvim is required here (TASKS_REQUIRE_SNACKS=1) but was not found")
+      end
       io.stdout:write("      (snacks.nvim not found: the picker part of this spec is skipped)\n")
       return
     end
@@ -146,7 +155,7 @@ return function(H)
     dash.config.watch_debounce_ms = 80
 
     local function current_picker()
-      for _, p in ipairs(Snacks.picker.get({ source = "wkdbook_tasks" })) do
+      for _, p in ipairs(Snacks.picker.get({ source = "tasks_nvim" })) do
         if not p.closed then
           return p
         end
@@ -183,7 +192,7 @@ return function(H)
       flush()
     end
     local function close_all()
-      for _, p in ipairs(Snacks.picker.get({ source = "wkdbook_tasks" })) do
+      for _, p in ipairs(Snacks.picker.get({ source = "tasks_nvim" })) do
         p:close()
       end
       flush()

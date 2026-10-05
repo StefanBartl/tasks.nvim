@@ -11,7 +11,7 @@
 --- Layout (the value sets come from `tasks.model`, nothing is repeated here):
 ---
 ---     # New task
----     Area: nvim-config
+---     Area: my-area
 ---     Title: Fix the thing
 ---
 ---     ## kind (one)

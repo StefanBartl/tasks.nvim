@@ -204,7 +204,7 @@ return function(H)
       return t.id
     end, all.tasks),
     { "lib.nvim/beta", "cascade.nvim/delta", "lib.nvim/alpha", "lib.nvim/gamma" },
-    "open tasks, sorted like :MyPlugins tasks"
+    "open tasks, sorted like :Tasks list"
   )
   eq(all.open, 4)
   eq(all.skipped, 2, "unknown and done are counted as skipped")

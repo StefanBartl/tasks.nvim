@@ -1,5 +1,5 @@
 ---@module 'tasks_nvim.ui.routes'
----@brief The composer routes and argument types of `:Tasks` (and, nested, of the author's `:MyPlugins tasks | task | open`).
+---@brief The composer routes and argument types of `:Tasks` (and, nested as `tasks` / `task <verb>` / `open`, for a host that mounts them under its own verb).
 ---@description
 --- Declares the grammar of the task commands for
 --- `lib.nvim.bindings.usercmd.composer` -- one route tree, from which
@@ -17,8 +17,7 @@
 --- Argument types registered here (both read the vault on every call, so a
 --- new area or task shows up at once, and both fail soft: no vault means no
 --- candidates, never an error in the middle of typing):
----  - `TASK_AREA`: an area of the vault (`ALL`, `nvim-config`, `docmap-desktop`
----    included, which `plugins.personal.core.list` does not know); with
+---  - `TASK_AREA`: an area of the vault (the `extra_areas` of `setup()` included); with
 ---    `allow_all = true` the keyword `all` (every area) too
 ---  - `TASK_ID`: `<area>/<slug>` of an open task; `allow_done = true` also
 ---    accepts a finished one
@@ -177,7 +176,7 @@ local function set_kv()
   return out
 end
 
----The routes in the grammar of the author's `:MyPlugins` verb (`tasks`, `tasks index`, `task <verb>`, `open`).
+---The routes in the nested grammar (a host config can mount them under its own verb) (`tasks`, `tasks index`, `task <verb>`, `open`).
 ---@return table[] routes
 local function nested_routes()
   return {
@@ -337,7 +336,7 @@ local function flat_path(path)
 end
 
 ---The route list of a verb.
----  - default (nested): `tasks`, `tasks index`, `task new|set|done|...`, `open` -- the grammar of `:MyPlugins`
+---  - default (nested): `tasks`, `tasks index`, `task new|set|done|...`, `open` -- the nested grammar for a host verb
 ---  - `opts.flat = true`: the grammar of `:Tasks`: `list`, `index`, `new`, `set`, `done`, `attach`, `folderize`,
 ---    `template`, `open <id>`, `preview <id>`, and `folder <area> ...` (the old `open <area>`)
 ---@param opts? { flat?: boolean }

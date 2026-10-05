@@ -169,7 +169,7 @@ local function default_repo_bases(root)
       end
     end
   end
-  -- <repos>/WKDBooks/Development/wkdbook-myplugins -> <repos>
+  -- the vault usually sits three levels below the folder that holds the repos (<repos>/a/b/<vault> -> <repos>)
   local repos = fsio.dirname(fsio.dirname(fsio.dirname(root)))
   add(repos)
   add(repos .. "/repos")
