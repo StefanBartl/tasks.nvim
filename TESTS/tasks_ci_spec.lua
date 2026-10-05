@@ -186,7 +186,16 @@ return function(H)
       local r = vim.system(cmd, { text = true, env = { LIB_NVIM_DIR = lib } }):wait(60000)
       return r.code, (r.stdout or "") .. (r.stderr or "")
     end
-    local ccode, cout = child("--vault=" .. root)
+    -- The vault's own script is code from the vault: it does not run unless the user says so.
+    local rcode, rout = child("--vault=" .. root)
+    eq(rcode, 1, "the vault's md_lint.lua is refused without --trust-vault-lint")
+    has(rout, "refusing to run")
+    has(rout, "--trust-vault-lint")
+    local own = H.tmpdir() .. "/own_lint.lua"
+    H.write(own, "os.exit(0)" .. string.char(10))
+    local ocode, oout = child("--vault=" .. root, "--md-lint=" .. own)
+    eq(ocode, 0, "a script you name yourself is trusted by being named: " .. oout)
+    local ccode, cout = child("--vault=" .. root, "--trust-vault-lint")
     eq(ccode, 0, cout)
     has(cout, "tasks-ci: OK")
     has(cout, "md_lint: 2 index file(s) clean")

@@ -128,8 +128,8 @@ nvim --headless -u NONE -l scripts/tasks.lua done my-project/fix-the-thing
 nvim --headless -u NONE -l scripts/tasks-ci.lua    # check + index --check + md_lint, exit 0/1
 ```
 
-The CI gate *runs* `<vault>/TOOLS/scripts/md_lint.lua`: use it only on a vault whose script you trust
-([docs/ENGINE.md](docs/ENGINE.md)). A finished task needs `<area>/Backlog/README.md` to get its row; without
+The CI gate can *run* `<vault>/TOOLS/scripts/md_lint.lua`, code that lives in the vault, so it refuses to until
+you pass `--trust-vault-lint` (or `--md-lint=<your own copy>`, or `--no-lint`; [docs/ENGINE.md](docs/ENGINE.md)). A finished task needs `<area>/Backlog/README.md` to get its row; without
 the file `done` says so and moves the task anyway.
 
 ## Documentation

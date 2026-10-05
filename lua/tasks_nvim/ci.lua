@@ -36,7 +36,8 @@ M.LINT_CHUNK = 40
 ---@field root? string                # Vault root (default: `vault.root()`).
 ---@field strict? boolean             # Warnings fail the run too.
 ---@field lint? boolean               # Run `md_lint` (default true).
----@field md_lint? string             # Path of `md_lint.lua` (default: `<vault>/TOOLS/scripts/md_lint.lua`).
+---@field md_lint? string             # Path of `md_lint.lua`; an explicit path is trusted (you named it).
+---@field trust_vault_lint? boolean    # Allow running `<vault>/TOOLS/scripts/md_lint.lua` (default: `ci.trust_vault_lint` of `setup()`, `$TASKS_TRUST_VAULT_LINT=1`).
 ---@field nvim? string                # Neovim executable for md_lint (default: the running one).
 ---@field timeout_ms? integer          # Per md_lint call before it is killed (default `ci.lint_timeout_ms` of `setup()`).
 ---@field run_lint? fun(files: string[], md_lint: string): integer, string  # Replaces the child process (specs): exit code, output.
@@ -177,7 +178,23 @@ function M.run(opts, say)
     out("tasks-ci: md_lint: no generated index to lint -- ok")
   else
     local md_lint = opts.md_lint or (root .. "/TOOLS/scripts/md_lint.lua")
-    if not fsio.is_file(md_lint) then
+    -- The default script is code that lives INSIDE the vault and is run with the rights of whoever runs the gate.
+    -- A pipeline that checks out a vault from a pull request would run the contributor's Lua. It runs only when
+    -- the user said so (`--trust-vault-lint`, `ci.trust_vault_lint`, `$TASKS_TRUST_VAULT_LINT=1`) or named a
+    -- script of their own (`--md-lint=<file>`, which is trusted by being named).
+    local trusted = opts.md_lint ~= nil
+      or opts.run_lint ~= nil
+      or opts.trust_vault_lint == true
+      or require("tasks_nvim.config").get().ci.trust_vault_lint == true
+      or vim.env.TASKS_TRUST_VAULT_LINT == "1"
+    if not trusted then
+      fail(
+        "md_lint",
+        ("refusing to run %s from the vault: pass --trust-vault-lint (or set TASKS_TRUST_VAULT_LINT=1 / ci.trust_vault_lint) if you trust it, --md-lint=<your own copy> otherwise, or --no-lint"):format(
+          md_lint
+        )
+      )
+    elseif not fsio.is_file(md_lint) then
       fail("md_lint", "script not found: " .. md_lint)
     else
       local runner = opts.run_lint

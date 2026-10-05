@@ -66,10 +66,10 @@ commands:
   folderize <area>/<slug>                 turn a plain task file into a folder task
   check [<area>]                          rule check; exit 1 on any error
   template [--title=t] [--kind=k] [--prio=n] [--effort=e] [--tags=a,b] [--lang=de|en]
-  ci [--strict] [--no-lint] [--md-lint=<file>]   CI gate: check + index --check + md_lint of the
+  ci [--strict] [--no-lint] [--md-lint=<file>] [--trust-vault-lint]   CI gate: check + index --check + md_lint of the
                                           generated indexes; exit 0/1 (--strict: warnings fail too).
-                                          md_lint is a script RUN from the vault (TOOLS/scripts/md_lint.lua): only on a vault you trust,
-                                          else --md-lint=<own copy> or --no-lint
+                                          md_lint is a script RUN from the vault (TOOLS/scripts/md_lint.lua): it runs only with
+                                          --trust-vault-lint (or TASKS_TRUST_VAULT_LINT=1); else --md-lint=<own copy> or --no-lint
   areas                                  list the vault's areas
   export [--top=N] [--no-links]           all-areas overview as Markdown on stdout (never written)
 
@@ -121,7 +121,7 @@ local SPECS = {
   attach = { value = { "name" }, flag = { "no-index" } },
   folderize = { value = {}, flag = { "no-index" } },
   check = { value = {}, flag = { "all" } },
-  ci = { value = { "md-lint" }, flag = { "strict", "no-lint" } },
+  ci = { value = { "md-lint" }, flag = { "strict", "no-lint", "trust-vault-lint" } },
   template = { value = { "title", "kind", "prio", "effort", "tags", "lang" }, flag = {} },
   areas = { value = {}, flag = {} },
   export = { value = { "top", "link-prefix" }, flag = { "no-links" } },
@@ -589,6 +589,7 @@ function commands.ci(ctx)
     root = ctx.eo.root,
     strict = opt.strict == true,
     lint = opt["no-lint"] ~= true,
+    trust_vault_lint = opt["trust-vault-lint"] == true,
     md_lint = opt["md-lint"] --[[@as string|nil]],
   }, ctx.say)
   return res.code

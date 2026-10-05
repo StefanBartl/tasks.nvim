@@ -58,6 +58,7 @@ blockers, plan or estimate is valid and stays visible everywhere.
   staleness.budget_ms      All git calls of one `--stale=refs` run together.
   staleness.repo_bases     Folders holding the repos by name (`<base>/<area>`).
   ci.lint_timeout_ms       The vault's `md_lint.lua` is killed after this long.
+  ci.trust_vault_lint      Allow `ci` to run the vault's own `md_lint.lua`.
   keys.dashboard           Dashboard list keys: action = key, or false.
   keys.dashboard_input     Dashboard input-window keys (normal and insert).
   keys.form                Keys of the `:Tasks new` form.
@@ -148,8 +149,8 @@ rewritten. Full reference: docs/ENGINE.md.
 
 The vault is `--vault=<dir>` or `$TASKS_VAULT`. Exit codes: 0 success, 1 a
 finding or failed operation, 2 a usage error. `scripts/tasks-ci.lua` runs
-`check`, `index --check` and the vault's `md_lint.lua` (a script that is RUN:
-only on a vault you trust).
+`check`, `index --check` and the vault's `md_lint.lua`. That script is RUN, so
+it is refused unless you pass `--trust-vault-lint` (or `--md-lint=<own copy>`).
 
 ==============================================================================
 8. HEALTH                                                     *tasks_nvim-health*

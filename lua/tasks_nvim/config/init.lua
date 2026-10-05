@@ -21,7 +21,7 @@ local SCHEMA = {
   extra_areas = "string_list",
   dashboard = { watch = "boolean", debounce_ms = "posint" },
   staleness = { git_timeout_ms = "posint", budget_ms = "posint", repo_bases = "string_list" },
-  ci = { lint_timeout_ms = "posint" },
+  ci = { lint_timeout_ms = "posint", trust_vault_lint = "boolean" },
   keys = { dashboard = "keymap", dashboard_input = "keymap", form = "keymap" },
 }
 

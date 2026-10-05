@@ -15,6 +15,7 @@
 
 ---@class Tasks.CiConfig
 ---@field lint_timeout_ms integer  The vault's `md_lint.lua` is killed after this long (`ci`).
+---@field trust_vault_lint boolean  Allow `ci` to run `<vault>/TOOLS/scripts/md_lint.lua` (code from the vault itself).
 
 ---Key maps: an action name to a key, or `false` to switch that action's key off. An action that is not named
 ---keeps its default key.
@@ -39,7 +40,7 @@ return {
   extra_areas = {},
   dashboard = { watch = true, debounce_ms = 250 },
   staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },
-  ci = { lint_timeout_ms = 120000 },
+  ci = { lint_timeout_ms = 120000, trust_vault_lint = false },
   keys = {
     dashboard = {
       status = "s",

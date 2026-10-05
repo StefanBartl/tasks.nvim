@@ -184,12 +184,13 @@ open.
 ### 12. A pipeline guards the vault — works today
 
 ```sh
-nvim --headless -u NONE -l scripts/tasks-ci.lua
+nvim --headless -u NONE -l scripts/tasks-ci.lua --trust-vault-lint
 ```
 
 Three steps: `check` (errors fail), `index --check` (no outdated or missing overview), and the vault's own
 `TOOLS/scripts/md_lint.lua` over the generated overviews. Exit `0` only when all pass. Read the trust note in
-[ENGINE.md](ENGINE.md): the lint script is *run*, so use the gate only on a vault whose script you trust.
+[ENGINE.md](ENGINE.md): the lint script is *run*, so the gate refuses it until you pass `--trust-vault-lint`
+(your own vault, your own script) or name a script of your own with `--md-lint=<file>`.
 
 ### 13. Many areas, one view — works today
 

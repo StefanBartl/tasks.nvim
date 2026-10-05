@@ -247,9 +247,10 @@ A pipeline for a vault repo runs `scripts/tasks-ci.lua` with `TASKS_VAULT` set (
 
 **Trust.** Step 3 *runs* `md_lint.lua` as Lua (`nvim --headless -u NONE -l <script> <files>`) with the rights of
 whoever runs the pipeline. With the default path that script comes out of the vault itself, so a pipeline that
-checks out a vault from a pull request or a fork runs the contributor's code. Run `ci` only on a vault whose
-`TOOLS/scripts/md_lint.lua` you trust, or point `--md-lint=<file>` at a copy outside the vault (and use
-`--no-lint` where neither holds).
+checks out a vault from a pull request or a fork would run the contributor's code. That is why `ci` **refuses**
+to run the vault's script until you say you trust it: `--trust-vault-lint` (or `$TASKS_TRUST_VAULT_LINT=1`, or
+`ci = { trust_vault_lint = true }` in `setup()`). A script you name yourself with `--md-lint=<file>` is trusted by
+being named (keep it outside the vault); `--no-lint` skips the step.
 
 ## Headless CLI -- `scripts/tasks.lua`
 

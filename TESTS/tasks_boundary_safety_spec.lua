@@ -117,7 +117,7 @@ return function(H)
   assert(index.write_all({ root = root }))
   H.write(root .. "/TOOLS/scripts/md_lint.lua", "vim.wait(60000)\nos.exit(0)\n")
   local t0 = vim.uv.hrtime()
-  local res = ci.run({ root = root, timeout_ms = 1500 })
+  local res = ci.run({ root = root, timeout_ms = 1500, trust_vault_lint = true })
   local elapsed = (vim.uv.hrtime() - t0) / 1e9
   ok(
     elapsed < 30,
