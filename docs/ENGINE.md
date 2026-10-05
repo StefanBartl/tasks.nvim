@@ -24,10 +24,13 @@ lua/tasks_nvim/
 ├── init.lua      lazy aggregator (tasks_nvim.vault, ...) and `setup`
 ├── fsio.lua      byte-exact file primitives (atomic write, O_EXCL create, CRLF helpers)
 ├── vault.lua     vault root, areas, paths, id/slug validation
-├── model.lua     task record, enums, ranking, filters
+├── model.lua     task record, enums, ranking, filters (parsed files cached by mtime + size)
+├── filter_opts.lua  `--status=a,b` style options -> `Tasks.Filter` (shared by CLI, commands, dashboard)
 ├── scan.lua      collect task files (open and Backlog)
 ├── index.lua     render/write ROADMAP/TASKS.md, global export text
-├── mutate.lua    template, new, set, done
+├── mutate.lua    template, new, set, done (plan / execute / rollback), folderize, attach
+├── batch.lua     several `set` / `done` steps with one index write per area
+├── soft.lua      the one probe for soft dependencies (mdview, snacks, cascade, ...)
 ├── form.lua      the Markdown form of `task new` (template, parse, validate, tick rules)
 ├── check.lua     rule checker
 ├── frecency.lua  visit score behind `--sort=frecency` (pure scoring + a small state file)
@@ -45,7 +48,9 @@ TESTS/              specs (run with TESTS/run.lua)
 | Module | What it does | Key functions |
 |---|---|---|
 | `tasks_nvim.vault` | Resolves the vault root (`opts.root`, `set_root`, `configure`/`setup`, then `$TASKS_VAULT`; no default path). An *area* is a folder holding `ROADMAP/` or `Backlog/`, plus the configured `extra_areas`; `_`-prefixed folders, `TEMPLATES` and `TOOLS` are skipped. Builds every path; whitelists area names (no trailing dot: Windows drops it), slugs and ids before they become path segments; `is_reserved_name` knows the Windows device names. An area must be spelled exactly like its folder (`has_area`, `dir_listed`; `scan.find` too): on Windows `LIB.NVIM` or `lib.nvim.` would otherwise reach the folder `lib.nvim` under a different id. | `root`, `areas`, `has_area`, `dir_listed`, `tasks_dir`, `index_path`, `backlog_dir`, `parse_id`, `valid_slug`, `is_reserved_name` |
-| `tasks_nvim.model` | `parse_text` / `from_file` turn a file into a `Tasks.Task`. `categories(task)` is the effective category set (below). A broken file is still returned, with `errors` / `error_codes` and `valid = false`: one bad file never hides the rest. `summary` is the frontmatter `summary`, else the first body paragraph. Sorting is status rank (`doing`, `decision`, `blocked`, `open`, `parked`), then prio, then area, then slug; `sort(tasks, order)` also knows `prio-effort` and `severity` (below). | `parse_text`, `from_file`, `sort`, `compare`, `parse_sort`, `effort_days`, `filter`, `filter_from_options`, `split_commas`, `is_date`, `days_between` |
+| `tasks_nvim.model` | `parse_text` / `from_file` turn a file into a `Tasks.Task`. `categories(task)` is the effective category set (below). A broken file is still returned, with `errors` / `error_codes` and `valid = false`: one bad file never hides the rest. `summary` is the frontmatter `summary`, else the first body paragraph. Sorting is status rank (`doing`, `decision`, `blocked`, `open`, `parked`), then prio, then area, then slug; `sort(tasks, order)` also knows `prio-effort` and `severity` (below). | `parse_text`, `from_file`, `sort`, `compare`, `parse_sort`, `effort_days`, `filter`, `is_date`, `days_between`, `reset_parse_cache` |
+| `tasks_nvim.filter_opts` | Turns the textual options of a front end (`status=a,b`, `prio=<=2`, `effort=S,M`, `stale=refs`, ...) into a `Tasks.Filter`. Unknown words and empty values are errors, never silently ignored. | `parse`, `split_commas` |
+| `tasks_nvim.batch` | `set_many` applies steps `{ id, patch, expect = { key, value } }` (a step whose task changed since it was read is refused) and `done_many` finishes several tasks; both write each area index once. | `set_many`, `done_many` |
 | `tasks_nvim.scan` | `lib.nvim.fs.collect_recursive` (or the TTL cache `scan_cached` with `ttl_seconds`) over `ROADMAP/tasks/` and `Backlog/`. A folder task's `<slug>/<slug>.md` is a task (`task.folder`), the other files in its folder are assets and ignored; any other nested file is returned, flagged. Backlog files count as tasks only with frontmatter and a `status`. | `area`, `all`, `backlog`, `find`, `find_done`, `backlog_slugs` |
 | `tasks_nvim.index` | `render` is pure and deterministic: the same tasks give the same bytes, whatever order they are found in. `write_area` writes only when the content differs (a CRLF checkout counts as equal and keeps its line endings), removes the file when no task is open, and with `check = true` only reports `stale` (`missing` / `outdated` / `orphan`). `render_global` returns the all-areas overview as text; nothing writes `ALL/TASKS.md` (decision E2: it is never committed). | `render`, `write_area`, `write_all`, `render_global` |
 | `tasks_nvim.mutate` | `new` creates the file with `O_CREAT\|O_EXCL` (a taken slug gets `-2`, `-3`, ...; a slug used in `Backlog/` or as a folder counts as taken; `folder = true` makes a folder task). `set` validates the patch, changes only the named keys through `lib.nvim.markdown.frontmatter` and bumps `updated` only when something changed. `done` is rule R6 (below). `folderize` and `attach` turn a task into a folder task and copy assets into it. All regenerate the area index. | `template`, `new`, `set`, `done`, `folderize`, `attach`, `slugify`, `readme_add_row`, `SETTABLE` |
@@ -220,7 +225,10 @@ Cost: one `git log` per repo and 100 paths, never one per task; a file is looked
 many tasks name it; at most `staleness.MAX_REFS` (1000) distinct files are checked per run (the
 rest is reported). All git calls of a run share a time budget (`staleness.budget_ms` of `setup()`, 30 s):
 once it is used up the remaining files are dated by their mtime. A missing repo, file or git only
-produces a note on stderr / a notification, never an error; a path git refuses costs only its own
+produces a note on stderr / a notification, never an error. Two semantics worth knowing: a task with neither
+`updated` nor `created` has no date to compare with, so any dated change counts (the same way `--stale=<days>`
+counts an undated task as stale); and when the check itself fails, `model.filter` keeps the tasks that carry refs
+and marks them `unverified` (fail-open: an unreadable signal never hides work); a path git refuses costs only its own
 date (the call is halved until that path stands alone). A ref with `..` that leaves its repo
 (`../lib.nvim/lua/x.lua`) is dated from the folder the file really lives in. `model.filter` looks
 up only the tasks the other criteria kept, so `--status=doing --stale=refs` checks far fewer refs
@@ -305,6 +313,9 @@ A vault is data that other people and tools write, so the engine is strict about
   backslashes; table cells are escaped in one linear pass (`fsio.md_cell`).
 - Filter options with no value (`--status=`) and a `--today` that is no date are usage errors, not filters
   that match nothing.
+- The text the engine generates (the `TASKS.md` table headings, the headings of the task template) is German,
+  the language of the vault it was written for; it is a data format (the committed indexes are compared
+  byte for byte), so it is not translated per session. Messages, commands and docs are English.
 - `done` never removes a finished copy it did not create, and re-reads the task right before removing the
   original; the dashboard re-reads a task before advancing `s` / `p`.
 
