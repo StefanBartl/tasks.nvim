@@ -902,26 +902,40 @@ end
 ---@field index? boolean             # Regenerate the area index (default true).
 ---@field checkpoint_dir? string     # Where the safety snapshot goes.
 
----Finish an open task (rule R6): set `status: done` and `done_in`, move the
----file to `Backlog/FEATURES` (feature, idea, research) or `Backlog/TASKS` (task,
----bug) as `YYYY-MM-DD_<slug>.md`, add its row to that `Backlog/README.md`, and
----regenerate the area index. A folder task moves as a whole, to
----`YYYY-MM-DD_<slug>/YYYY-MM-DD_<slug>.md`; a failure puts the folder back.
----
----The finished copy, the README and the index are snapshotted first; if any step
----fails they are restored byte-exact. The task file is not part of the snapshot (a
----restore would overwrite what was written to it meanwhile): when it changed since
----it was read, `done` stops before removing it; when it was already removed it is
----written back from the text read at the start. What cannot be undone is named in
----the error as `rollback incomplete: <path>`. A task that is already finished answers
----`already = true` and changes nothing; if an earlier run died between creating
----the Backlog file and deleting the old one, this run completes it.
+---Everything `done` decides before it touches a file (so the part that writes has nothing left to validate).
+---@class Tasks.DonePlan
+---@field id string
+---@field root string
+---@field area string
+---@field slug string
+---@field task Tasks.Task
+---@field bucket Tasks.Bucket
+---@field rel string                 # Path below `Backlog/<bucket>/`.
+---@field target string              # The finished file.
+---@field src_dir? string            # Folder task: where the folder is now.
+---@field target_dir? string         # Folder task: where it goes.
+---@field resume boolean             # An earlier run died after creating `target`: this run completes it.
+---@field old_text string            # The task file as read.
+---@field new_text string            # What the finished file holds.
+---@field readme_path string
+---@field readme_old? string
+---@field readme_new? string
+---@field readme_state "missing"|"updated"|"unchanged"
+---@field index boolean              # Regenerate the area index afterwards.
+
+---What `done` did so far, for the rollback.
+---@class Tasks.DoneProgress
+---@field moved boolean              # The folder was renamed.
+---@field removed_original boolean   # The plain task file was removed.
+---@field created_target boolean     # This run created `target` (as opposed to finding another process's).
+
+---Validate and compute: no file is written. `nil, err` when the task cannot be finished;
+---`{ already = true }` (a finished task) as the first result when there is nothing to do.
 ---@param id string
----@param opts? Tasks.DoneOpts
----@return table|nil result
+---@param opts Tasks.DoneOpts
+---@return Tasks.DonePlan|table|nil plan
 ---@return string|nil err
-function M.done(id, opts)
-  opts = opts or {}
+local function plan_done(id, opts)
   local root, rerr = vault.root(opts)
   if not root then
     return nil, rerr
@@ -1016,92 +1030,135 @@ function M.done(id, opts)
     readme_state = changed and "updated" or "unchanged"
   end
 
-  -- The task file itself is not snapshotted: restoring it from a snapshot would overwrite whatever
-  -- was written to it since. It is only ever put back by hand, and only after `done` removed it.
-  local tracked = { vault.index_path(root, area) }
-  if not task.folder then
-    tracked = { target, vault.index_path(root, area) }
-  end
-  if readme_old then
-    tracked[#tracked + 1] = readme_path
-  end
-  local cp, cerr = checkpoint.create(tracked, { dir = opts.checkpoint_dir })
-  if not cp then
-    return nil, "cannot snapshot before moving: " .. tostring(cerr)
-  end
+  ---@type Tasks.DonePlan
+  return {
+    id = id,
+    root = root,
+    area = area,
+    slug = slug,
+    task = task,
+    bucket = bucket,
+    rel = rel,
+    target = target,
+    src_dir = src_dir,
+    target_dir = target_dir,
+    resume = resume,
+    old_text = old_text,
+    new_text = new_text,
+    readme_path = readme_path,
+    readme_old = readme_old,
+    readme_new = readme_new,
+    readme_state = readme_state,
+    index = opts.index ~= false,
+  },
+    nil
+end
 
-  local moved, removed_original, created_target = false, false, false
-  -- Someone (the editor, another `tasks` run) may have written the task file since it was read
-  -- above; finishing would then drop that change. Looked at right before the original goes.
+---The files the snapshot has to hold: the finished copy (plain task), the index and the README. The task file
+---itself is not part of it: restoring it from a snapshot would overwrite whatever was written to it since; it is only
+---ever put back by hand, and only after `done` removed it.
+---@param plan Tasks.DonePlan
+---@return string[]
+local function snapshot_paths(plan)
+  local tracked = { vault.index_path(plan.root, plan.area) }
+  if not plan.task.folder then
+    tracked = { plan.target, vault.index_path(plan.root, plan.area) }
+  end
+  if plan.readme_old then
+    tracked[#tracked + 1] = plan.readme_path
+  end
+  return tracked
+end
+
+---The writing part: move or create, remove the original, README, index. Every failure is `nil, err`; what was done
+---so far is recorded in `progress` for `rollback_done`.
+---@param plan Tasks.DonePlan
+---@param progress Tasks.DoneProgress
+---@return table|true|nil result
+---@return string|nil err
+local function execute_done(plan, progress)
+  local task = plan.task
+  -- Someone (the editor, another `tasks` run) may have written the task file since it was read; finishing would then
+  -- drop that change. Looked at right before the original goes.
   local function changed_meanwhile()
-    return fsio.read(task.path) ~= old_text
+    return fsio.read(task.path) ~= plan.old_text
   end
   local changed_msg = ("%s changed while it was being finished; nothing was changed, run done again"):format(
     task.path
   )
-  local function run()
-    if task.folder then
-      ---@cast src_dir string
-      ---@cast target_dir string
-      if changed_meanwhile() then
-        return nil, changed_msg
-      end
-      local made, merr = fsio.mkdirp(fsio.dirname(target_dir))
-      if not made then
-        return nil, "cannot create " .. fsio.dirname(target_dir) .. ": " .. tostring(merr)
-      end
-      local renamed, rerr2 = fsio.rename(src_dir, target_dir)
-      if not renamed then
-        return nil, "cannot move " .. src_dir .. ": " .. tostring(rerr2)
-      end
-      moved = true
-      local wrote, werr = fsio.write_atomic(target, new_text)
-      if not wrote then
-        return nil, "cannot write " .. target .. ": " .. tostring(werr)
-      end
-      local old_name = target_dir .. "/" .. slug .. ".md"
-      -- Looked at once more right before the original goes: an edit since the check above (the folder was
-      -- renamed in between) would otherwise be dropped with it. The rollback below puts the folder back.
-      if fsio.read(old_name) ~= old_text then
-        return nil, changed_msg
-      end
-      local removed, rm_err = fsio.remove(old_name)
-      if not removed then
-        return nil, "cannot remove " .. old_name .. ": " .. tostring(rm_err)
-      end
-    else
-      if not resume then
-        local ok, err = fsio.create_exclusive(target, new_text)
-        if not ok then
-          return nil, "cannot create " .. target .. ": " .. tostring(err)
-        end
-        created_target = true
-      end
-      if changed_meanwhile() then
-        return nil, changed_msg
-      end
-      local removed, rm_err = fsio.remove(task.path)
-      if not removed then
-        return nil, "cannot remove " .. task.path .. ": " .. tostring(rm_err)
-      end
-      removed_original = true
+  if task.folder then
+    local src_dir, target_dir = plan.src_dir, plan.target_dir
+    ---@cast src_dir string
+    ---@cast target_dir string
+    if changed_meanwhile() then
+      return nil, changed_msg
     end
-    if readme_old and readme_new ~= readme_old then
-      local ok, err = fsio.write_atomic(readme_path, readme_new)
+    local made, merr = fsio.mkdirp(fsio.dirname(target_dir))
+    if not made then
+      return nil, "cannot create " .. fsio.dirname(target_dir) .. ": " .. tostring(merr)
+    end
+    local renamed, rerr2 = fsio.rename(src_dir, target_dir)
+    if not renamed then
+      return nil, "cannot move " .. src_dir .. ": " .. tostring(rerr2)
+    end
+    progress.moved = true
+    local wrote, werr = fsio.write_atomic(plan.target, plan.new_text)
+    if not wrote then
+      return nil, "cannot write " .. plan.target .. ": " .. tostring(werr)
+    end
+    local old_name = target_dir .. "/" .. plan.slug .. ".md"
+    -- Looked at once more right before the original goes: an edit since the check above (the folder was renamed in
+    -- between) would otherwise be dropped with it. The rollback puts the folder back.
+    if fsio.read(old_name) ~= plan.old_text then
+      return nil, changed_msg
+    end
+    local removed, rm_err = fsio.remove(old_name)
+    if not removed then
+      return nil, "cannot remove " .. old_name .. ": " .. tostring(rm_err)
+    end
+  else
+    if not plan.resume then
+      local ok, err = fsio.create_exclusive(plan.target, plan.new_text)
       if not ok then
-        return nil, "cannot write " .. readme_path .. ": " .. tostring(err)
+        return nil, "cannot create " .. plan.target .. ": " .. tostring(err)
       end
+      progress.created_target = true
     end
-    if opts.index ~= false then
-      local res, ierr = index.write_area(area, { root = root })
-      if not res then
-        return nil, "cannot regenerate the index: " .. tostring(ierr)
-      end
-      return res, nil
+    if changed_meanwhile() then
+      return nil, changed_msg
     end
-    return true, nil
+    local removed, rm_err = fsio.remove(task.path)
+    if not removed then
+      return nil, "cannot remove " .. task.path .. ": " .. tostring(rm_err)
+    end
+    progress.removed_original = true
   end
+  if plan.readme_old and plan.readme_new ~= plan.readme_old then
+    local ok, err = fsio.write_atomic(plan.readme_path, plan.readme_new)
+    if not ok then
+      return nil, "cannot write " .. plan.readme_path .. ": " .. tostring(err)
+    end
+  end
+  if plan.index then
+    local res, ierr = index.write_area(plan.area, { root = plan.root })
+    if not res then
+      return nil, "cannot regenerate the index: " .. tostring(ierr)
+    end
+    return res, nil
+  end
+  return true, nil
+end
 
+---Put everything back after a failed `execute_done`. What could not be undone is named in the message
+---(`rollback incomplete: <path>`): a silent half state is the worst answer.
+---@param plan Tasks.DonePlan
+---@param cp table                 # The checkpoint of `snapshot_paths`.
+---@param progress Tasks.DoneProgress
+---@param err any
+---@return nil
+---@return string msg
+local function rollback_done(plan, cp, progress, err)
+  local task = plan.task
   ---Drop `path` from the snapshot, so the restore neither deletes nor overwrites it.
   ---@param path string
   local function forget(path)
@@ -1116,89 +1173,130 @@ function M.done(id, opts)
     end
   end
 
-  local ok, res, err = pcall(run)
+  -- The snapshot noted `target` as "did not exist". When this run never created it (`create_exclusive` answered
+  -- `exists`: another process finished the same task first), the restore would delete THEIR finished copy and the
+  -- task would be gone from the working tree.
+  if not task.folder and not plan.resume and not progress.created_target then
+    forget(plan.target)
+  end
+  local stuck = {}
+  if progress.moved then
+    local src_dir, target_dir = plan.src_dir, plan.target_dir
+    ---@cast src_dir string
+    ---@cast target_dir string
+    -- Put the folder back exactly as it was: old file name, old text. The finished copy goes only after the original
+    -- is back: until then it may be the only holder of the text.
+    local old_name = target_dir .. "/" .. plan.slug .. ".md"
+    -- Still there (the failure came before it was removed): it holds the original, maybe newer than `old_text` --
+    -- never overwrite it. Only a removed one is written back.
+    local wrote, w_err = true, nil
+    if not fsio.is_file(old_name) then
+      wrote, w_err = attempt(fsio.write_atomic, old_name, plan.old_text)
+    end
+    if wrote then
+      local dropped, d_err = attempt(fsio.remove, plan.target)
+      if not dropped and fsio.is_file(plan.target) then
+        stuck[#stuck + 1] = ("%s (cannot remove the finished copy: %s)"):format(
+          plan.target,
+          tostring(d_err)
+        )
+      end
+      local back, b_err = attempt(fsio.rename, target_dir, src_dir)
+      if not back then
+        stuck[#stuck + 1] = ("%s (cannot move it back to %s: %s)"):format(
+          target_dir,
+          src_dir,
+          tostring(b_err)
+        )
+      end
+    else
+      stuck[#stuck + 1] = ("%s (cannot restore %s: %s)"):format(
+        target_dir,
+        old_name,
+        tostring(w_err)
+      )
+    end
+  end
+  if progress.removed_original then
+    -- Back before the finished copy is dropped (the snapshot restore below deletes it). A file that exists again was
+    -- written by someone since: theirs stays.
+    local back, b_err = attempt(fsio.create_exclusive, task.path, plan.old_text)
+    if not back and not fsio.is_file(task.path) then
+      stuck[#stuck + 1] = ("%s (cannot restore it: %s; the finished copy %s holds the text)"):format(
+        task.path,
+        tostring(b_err),
+        plan.target
+      )
+      -- `target` is now the only holder of the text: the restore must not delete it.
+      forget(plan.target)
+    end
+  end
+  local _, restore_errors = checkpoint.restore(cp)
+  checkpoint.discard(cp)
+  for _, e in ipairs(restore_errors) do
+    stuck[#stuck + 1] = e.path
+  end
+  local msg = tostring(err)
+  if #stuck > 0 then
+    msg = msg .. " (rollback incomplete: " .. table.concat(stuck, ", ") .. ")"
+  end
+  return nil, msg
+end
+
+---Finish an open task (rule R6): set `status: done` and `done_in`, move the
+---file to `Backlog/FEATURES` (feature, idea, research) or `Backlog/TASKS` (task,
+---bug) as `YYYY-MM-DD_<slug>.md`, add its row to that `Backlog/README.md`, and
+---regenerate the area index. A folder task moves as a whole, to
+---`YYYY-MM-DD_<slug>/YYYY-MM-DD_<slug>.md`; a failure puts the folder back.
+---
+---Three steps, each its own function: `plan_done` validates and computes (nothing is written),
+---`execute_done` writes, `rollback_done` undoes what a failed write did. The finished copy, the README and the index
+---are snapshotted first; if any step fails they are restored byte-exact. The task file is not part of the snapshot (a
+---restore would overwrite what was written to it meanwhile): when it changed since it was read, `done` stops before
+---removing it; when it was already removed it is written back from the text read at the start. What cannot be undone
+---is named in the error as `rollback incomplete: <path>`. A task that is already finished answers `already = true` and
+---changes nothing; if an earlier run died between creating the Backlog file and deleting the old one, this run
+---completes it.
+---@param id string
+---@param opts? Tasks.DoneOpts
+---@return table|nil result
+---@return string|nil err
+function M.done(id, opts)
+  opts = opts or {}
+  local plan, perr = plan_done(id, opts)
+  if not plan then
+    return nil, perr
+  end
+  if plan.already then
+    return plan, nil
+  end
+  ---@cast plan Tasks.DonePlan
+
+  local cp, cerr = checkpoint.create(snapshot_paths(plan), { dir = opts.checkpoint_dir })
+  if not cp then
+    return nil, "cannot snapshot before moving: " .. tostring(cerr)
+  end
+
+  ---@type Tasks.DoneProgress
+  local progress = { moved = false, removed_original = false, created_target = false }
+  local ok, res, err = pcall(execute_done, plan, progress)
   if not ok then
     err = tostring(res)
     res = nil
   end
   if not res then
-    -- The snapshot noted `target` as "did not exist". When this run never created it (`create_exclusive`
-    -- answered `exists`: another process finished the same task first), the restore would delete THEIR finished
-    -- copy and the task would be gone from the working tree.
-    if not task.folder and not resume and not created_target then
-      forget(target)
-    end
-    -- What could not be undone, named in the message (a silent half state is the worst answer).
-    local stuck = {}
-    if moved then
-      -- Put the folder back exactly as it was: old file name, old text. The finished copy
-      -- goes only after the original is back: until then it may be the only holder of the text.
-      local old_name = target_dir .. "/" .. slug .. ".md"
-      -- Still there (the failure came before it was removed): it holds the original, maybe newer
-      -- than `old_text` -- never overwrite it. Only a removed one is written back.
-      local wrote, w_err = true, nil
-      if not fsio.is_file(old_name) then
-        wrote, w_err = attempt(fsio.write_atomic, old_name, old_text)
-      end
-      if wrote then
-        local dropped, d_err = attempt(fsio.remove, target)
-        if not dropped and fsio.is_file(target) then
-          stuck[#stuck + 1] = ("%s (cannot remove the finished copy: %s)"):format(
-            target,
-            tostring(d_err)
-          )
-        end
-        local back, b_err = attempt(fsio.rename, target_dir, src_dir)
-        if not back then
-          stuck[#stuck + 1] = ("%s (cannot move it back to %s: %s)"):format(
-            target_dir,
-            src_dir,
-            tostring(b_err)
-          )
-        end
-      else
-        stuck[#stuck + 1] = ("%s (cannot restore %s: %s)"):format(
-          target_dir,
-          old_name,
-          tostring(w_err)
-        )
-      end
-    end
-    if removed_original then
-      -- Back before the finished copy is dropped (the snapshot restore below deletes it). A file
-      -- that exists again was written by someone since: theirs stays.
-      local back, b_err = attempt(fsio.create_exclusive, task.path, old_text)
-      if not back and not fsio.is_file(task.path) then
-        stuck[#stuck + 1] = ("%s (cannot restore it: %s; the finished copy %s holds the text)"):format(
-          task.path,
-          tostring(b_err),
-          target
-        )
-        -- `target` is now the only holder of the text: the restore must not delete it.
-        forget(target)
-      end
-    end
-    local _, restore_errors = checkpoint.restore(cp)
-    checkpoint.discard(cp)
-    for _, e in ipairs(restore_errors) do
-      stuck[#stuck + 1] = e.path
-    end
-    local msg = tostring(err)
-    if #stuck > 0 then
-      msg = msg .. " (rollback incomplete: " .. table.concat(stuck, ", ") .. ")"
-    end
-    return nil, msg
+    return rollback_done(plan, cp, progress, err)
   end
   checkpoint.discard(cp)
 
   return {
     id = id,
-    area = area,
-    from = task.path,
-    to = target,
-    bucket = bucket,
-    resumed = resume,
-    readme = readme_state,
+    area = plan.area,
+    from = plan.task.path,
+    to = plan.target,
+    bucket = plan.bucket,
+    resumed = plan.resume,
+    readme = plan.readme_state,
     index = type(res) == "table" and res or nil,
   },
     nil
