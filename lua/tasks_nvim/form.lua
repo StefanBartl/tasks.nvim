@@ -61,6 +61,8 @@ function M.fields()
     { name = "kind", multi = false, values = strings(model.KINDS), default = "task" },
     { name = "prio", multi = false, values = strings(model.PRIOS) },
     { name = "effort", multi = false, values = strings(model.EFFORTS) },
+    { name = "value", multi = false, values = strings(model.VALUES) },
+    { name = "actor", multi = false, values = strings(model.ACTORS) },
     { name = "category", multi = true, values = strings(model.CATEGORIES) },
     { name = "severity", multi = false, values = strings(model.SEVERITIES) },
     { name = "status", multi = false, values = strings(model.OPEN_STATUSES), default = "open" },

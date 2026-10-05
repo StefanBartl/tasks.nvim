@@ -72,14 +72,20 @@ function M.plan_cycle(tasks, field, count)
   local plan = {}
   local presses = math.max(1, count or 1)
   for _, t in ipairs(tasks) do
-    local from = field == "status" and t.status or t.prio
-    local to = from
-    for _ = 1, presses do
-      if field == "status" then
-        to = model.cycle_status(to)
-      else
-        to = model.cycle_prio(to)
+    ---@type string|integer|nil
+    local from, to
+    if field == "status" then
+      local cur = t.status
+      for _ = 1, presses do
+        cur = model.cycle_status(cur)
       end
+      from, to = t.status, cur
+    else
+      local cur = t.prio
+      for _ = 1, presses do
+        cur = model.cycle_prio(cur)
+      end
+      from, to = t.prio, cur
     end
     plan[#plan + 1] = {
       id = t.id,
@@ -91,6 +97,50 @@ function M.plan_cycle(tasks, field, count)
     }
   end
   return plan
+end
+
+---A proposed `actor` for a task that has none.
+---@class Tasks.ActorProposal
+---@field id string
+---@field actor string
+---@field reason string
+
+---Which tasks without an `actor` can get one without guessing: those `model.actor` derives (`status: decision`,
+---the tag `needs-user`) become `me`; everything else is left EMPTY on purpose, because the share of tasks nobody can
+---classify is the honest number. Pure; nothing is written.
+---@param tasks Tasks.Task[]
+---@return Tasks.ActorProposal[] proposals
+---@return integer left_empty   # Open tasks without an actor that stay unclassified.
+function M.plan_actor_migration(tasks)
+  local model = require("tasks_nvim.model")
+  local proposals, left = {}, 0
+  for _, t in ipairs(tasks) do
+    if t.actor == nil then
+      local derived = model.actor(t)
+      if derived then
+        proposals[#proposals + 1] = {
+          id = t.id,
+          actor = derived,
+          reason = t.status == "decision" and "status: decision" or "tag needs-user",
+        }
+      else
+        left = left + 1
+      end
+    end
+  end
+  return proposals, left
+end
+
+---The batch steps that write a migration plan (`expect` guards against a task that got an actor meanwhile).
+---@param proposals Tasks.ActorProposal[]
+---@return Tasks.BatchSetStep[]
+function M.actor_steps(proposals)
+  local steps = {}
+  for _, p in ipairs(proposals) do
+    steps[#steps + 1] =
+      { id = p.id, patch = { actor = p.actor }, expect = { key = "actor", value = nil } }
+  end
+  return steps
 end
 
 ---@class Tasks.BatchSetResult

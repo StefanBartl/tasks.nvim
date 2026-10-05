@@ -43,7 +43,7 @@ sessions that run without an editor. Nothing is stored anywhere but in the files
 - **Capture in one call**: `:Tasks new my-area "Title"`, or a Markdown form. No required field, no question.
 - **A vault of areas**: `<area>/ROADMAP/tasks/<slug>.md` for open tasks, `<area>/Backlog/` for finished ones,
   `<area>/ROADMAP/TASKS.md` generated (never edited, never overwritten when it is your own file).
-- **Rank and filter**: status, priority, effort, kind, category, severity, tags, blockers, staleness
+- **Rank and filter**: status, priority, effort, value (and a derived return on effort), who can do it (`cdx` / `me` / `pair`), kind, category, severity, tags, blockers, staleness
   (`--stale=60`, or `--stale=refs`: files a task names that changed since it was last updated).
 - **Finish safely**: `:Tasks done` moves the file to `Backlog/`, adds a row to its README, regenerates the index,
   and restores everything byte for byte if a step fails.

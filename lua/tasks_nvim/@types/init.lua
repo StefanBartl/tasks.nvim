@@ -22,6 +22,8 @@
 ---@field status? string              # As written; may be an unknown word (see `errors`).
 ---@field kind? string
 ---@field prio? integer               # 1..3; nil when absent or invalid.
+---@field value? integer              # 1..5, the expected benefit; nil when absent or invalid (`bad-value`).
+---@field actor? string               # `cdx|me|pair` as written (may be an unknown word, see `errors`); `model.actor` adds the derived value.
 ---@field effort? string
 ---@field tags string[]
 ---@field category string[]           # The `category` list as written (see `model.categories` for the effective set).
@@ -50,6 +52,9 @@
 ---@field effort? string|string[]      # Matches the written effort exactly (`XS`..`XL`, `0.5d`).
 ---@field effort_max? string           # Matches an effort of at most this (sizes and days on one scale; no effort never matches).
 ---@field severity? string|string[]    # Matches the written severity (a task without severity never matches).
+---@field value? integer|integer[]     # Matches the written value (a task without value never matches).
+---@field value_min? integer           # Matches value >= value_min (a task without value never matches).
+---@field actor? string|string[]       # `cdx`, `me`, `pair` or `none`; matches `model.actor` (the written value, else derived).
 ---@field area? string|string[]
 ---@field blocked? boolean            # status `blocked` or a non-empty `blocked_by`.
 ---@field stale? integer              # Not updated for at least this many days (undated counts as stale).
@@ -87,6 +92,8 @@
 ---@field tags? string[]|string       # A string is split at commas.
 ---@field category? string[]|string   # Concerns (`model.CATEGORIES`); a string is split at commas.
 ---@field severity? string            # `model.SEVERITIES`; meant for bug/security tasks (a warning from `check` otherwise).
+---@field value? integer|string       # 1..5, the expected benefit.
+---@field actor? string               # `cdx`, `me` or `pair`.
 ---@field folder? boolean             # Create a folder task (`<slug>/<slug>.md`) so assets can be attached.
 ---@field refs? string[]|string       # Paths or `repo@commit`; a string is split at commas.
 ---@field lang? "de"|"en"             # Language of the body headings (default "de").

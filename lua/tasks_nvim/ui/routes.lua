@@ -282,6 +282,8 @@ local LIST_FLAGS = {
   { name = "kind", type = "STRING", values = model.KINDS },
   { name = "category", type = "STRING", values = model.CATEGORIES },
   { name = "severity", type = "STRING", values = model.SEVERITIES },
+  { name = "value", type = "STRING", values = { "1", "2", "3", "4", "5", ">=4" } },
+  { name = "actor", type = "STRING", values = { "cdx", "me", "pair", "none" } },
   { name = "tag", type = "TASK_TAGS" },
   { name = "stale", type = "STRING", values = { "7", "30", "90", "refs" } },
   { name = "blocked", bool = true },
@@ -305,6 +307,8 @@ local function set_kv()
     severity = model.SEVERITIES,
     prio = { "1", "2", "3" },
     effort = model.EFFORTS,
+    value = { "1", "2", "3", "4", "5" },
+    actor = model.ACTORS,
   }
   local out = {}
   for _, key in ipairs(mutate.SETTABLE) do
@@ -353,6 +357,8 @@ local function nested_routes()
         { key = "tags", type = "TASK_TAGS" },
         { key = "category", type = "STRING", values = model.CATEGORIES },
         { key = "severity", type = "STRING", values = model.SEVERITIES },
+        { key = "value", type = "STRING", values = { "1", "2", "3", "4", "5" } },
+        { key = "actor", type = "STRING", values = model.ACTORS },
         { key = "status", type = "STRING", values = model.OPEN_STATUSES },
       },
       flags = { { name = "folder", bool = true } },

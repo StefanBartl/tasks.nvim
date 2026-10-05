@@ -49,13 +49,18 @@ usage: nvim --headless -u NONE -l scripts/tasks.lua <command> [args]
 
 commands:
   list [<area>] [--status=a,b] [--prio=1,2|<=2] [--effort=S,M|<=M] [--kind=k] [--tag=t]
-       [--category=c,d] [--severity=high,critical] [--stale=<days>|refs] [--stale-refs] [--blocked]
-       [--sort=default|prio-effort|severity|frecency] [--format=tsv|ids]   open tasks, sorted; one line each
+       [--category=c,d] [--severity=high,critical] [--value=4,5|>=4] [--actor=cdx,me,pair,none]
+       [--stale=<days>|refs] [--stale-refs] [--blocked]
+       [--sort=default|prio-effort|severity|frecency|roi] [--format=tsv|ids]   open tasks, sorted; one line each
        (categories: bug security performance docs ruleset; --category=bug also finds kind=bug;
         --sort=prio-effort: small first within a prio; --sort=severity: critical first;
+        --sort=roi: most value per effort first, tasks without value or effort last;
+        --actor=me also finds status=decision and the tag needs-user; none = nobody classified it;
         --sort=frecency: what the dashboard opened or changed most, from the frecency file)
   index [<area>] [--check]                (re)write ROADMAP/TASKS.md; --check only reports
-  new <area> <title> [--kind=k] [--prio=1..3] [--effort=XS..XL|0.5d] [--tags=a,b]
+  migrate-actor [<area>] [--write]        propose actor=me for tasks that wait for you (status decision, tag
+                                          needs-user) and leave every other task EMPTY; dry run unless --write
+  new <area> <title> [--kind=k] [--prio=1..3] [--effort=XS..XL|0.5d] [--value=1..5] [--actor=cdx|me|pair] [--tags=a,b]
        [--category=c,d] [--severity=low|medium|high|critical] [--refs=path,repo@sha]
        [--summary=text] [--slug=slug] [--status=s]
        [--lang=de|en] [--folder]             create a task file (--lang: body headings;
@@ -93,6 +98,8 @@ local SPECS = {
       "tag",
       "category",
       "severity",
+      "value",
+      "actor",
       "stale",
       "sort",
       "format",
@@ -108,6 +115,8 @@ local SPECS = {
       "tags",
       "category",
       "severity",
+      "value",
+      "actor",
       "refs",
       "lang",
       "summary",
@@ -118,6 +127,7 @@ local SPECS = {
     flag = { "no-index", "folder" },
   },
   set = { value = {}, flag = { "no-index" } },
+  ["migrate-actor"] = { value = {}, flag = { "write", "no-index" } },
   done = { value = { "done-in", "date" }, flag = { "no-index" } },
   attach = { value = { "name" }, flag = { "no-index" } },
   folderize = { value = {}, flag = { "no-index" } },
@@ -226,6 +236,8 @@ local function filter_from(opt)
     tag = opt.tag --[[@as string|nil]],
     category = opt.category --[[@as string|nil]],
     severity = opt.severity --[[@as string|nil]],
+    value = opt.value --[[@as string|nil]],
+    actor = opt.actor --[[@as string|nil]],
     stale = opt.stale --[[@as string|nil]],
     stale_refs = opt["stale-refs"] == true,
     blocked = opt.blocked == true,
@@ -431,6 +443,8 @@ function commands.new(ctx)
     tags = opt.tags --[[@as string|nil]],
     category = opt.category --[[@as string|nil]],
     severity = opt.severity --[[@as string|nil]],
+    value = opt.value --[[@as string|nil]],
+    actor = opt.actor --[[@as string|nil]],
     refs = opt.refs --[[@as string|nil]],
     lang = opt.lang --[[@as "de"|"en"|nil]],
     summary = opt.summary --[[@as string|nil]],
@@ -464,6 +478,16 @@ function commands.set(ctx)
     end
     patch[key] = value == "" and mutate.REMOVE or value
   end
+  if patch.status == "doing" then
+    -- A guard rail, not a lock (nothing is refused because of plan or meta fields): a headless session that
+    -- starts a task marked for the human gets told.
+    local current = scan.find(id, { root = eo.root })
+    if current and model.actor(current) == "me" then
+      ctx.warn(
+        ("warn: %s is for you (actor: me); a headless session should not start it"):format(id)
+      )
+    end
+  end
   local res, err = mutate.set(id, patch, {
     root = eo.root,
     today = eo.today,
@@ -477,6 +501,47 @@ function commands.set(ctx)
   report_index(ctx, res)
   return 0
 end
+
+function commands.migrate_actor(ctx)
+  local args, eo = ctx.args, ctx.eo
+  if #args.pos > 1 then
+    ctx.warn("error: migrate-actor takes at most one area")
+    return 2
+  end
+  local open, skipped, errors = scan.open_tasks({ root = eo.root, area = args.pos[1] })
+  if not open then
+    ctx.warn("error: " .. tostring(skipped))
+    return 1
+  end
+  local batch = require("tasks_nvim.batch")
+  local proposals, left = batch.plan_actor_migration(open)
+  for _, p in ipairs(proposals) do
+    ctx.say(("%s	%s	%s	%s"):format(args.opt.write and "set" or "propose", p.id, p.actor, p.reason))
+  end
+  ctx.warn(
+    ("%d proposed, %d left empty (of %d open)%s"):format(
+      #proposals,
+      left,
+      #open,
+      args.opt.write and "" or "; dry run, pass --write to apply"
+    )
+  )
+  if errors and #errors > 0 then
+    ctx.warn("warn: the result is incomplete, could not read: " .. table.concat(errors, ", "))
+  end
+  if args.opt.write and #proposals > 0 then
+    local res = batch.set_many(batch.actor_steps(proposals), { root = eo.root, today = eo.today })
+    for _, f in ipairs(res.failed) do
+      ctx.warn(("error: %s: %s"):format(f.id, f.err))
+    end
+    for _, e in ipairs(res.index_errors) do
+      ctx.warn("warn: index " .. e)
+    end
+    return #res.failed > 0 and 1 or 0
+  end
+  return 0
+end
+commands["migrate-actor"] = commands.migrate_actor
 
 function commands.done(ctx)
   local args, eo = ctx.args, ctx.eo

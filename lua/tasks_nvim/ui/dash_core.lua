@@ -53,6 +53,8 @@ M.FILTER_DIMS = {
   "kind",
   "category",
   "severity",
+  "value",
+  "actor",
   "tag",
   "blocked",
   "stale-refs",
@@ -66,6 +68,10 @@ M.SEVERITY_HL = {
   high = "DiagnosticWarn",
   critical = "DiagnosticError",
 }
+
+---Highlight group per actor.
+---@type table<string, string>
+M.ACTOR_HL = { cdx = "DiagnosticInfo", me = "DiagnosticWarn", pair = "DiagnosticHint" }
 
 ---What the `effort` entry of the `f` menu offers: the sizes, then "this or smaller".
 ---@type string[]
@@ -218,6 +224,13 @@ function M.parts(t, w)
   if t.severity then
     parts[#parts + 1] = { "  [" .. t.severity .. "]", M.SEVERITY_HL[t.severity] or "Comment" }
   end
+  if t.value then
+    parts[#parts + 1] = { "  v" .. t.value, "Comment" }
+  end
+  local actor = model.actor(t)
+  if actor then
+    parts[#parts + 1] = { "  [" .. actor .. "]", M.ACTOR_HL[actor] or "Comment" }
+  end
   local hint = M.blocked_hint(t)
   if hint then
     parts[#parts + 1] = { "  " .. hint, "Comment" }
@@ -248,6 +261,8 @@ function M.search_text(t)
     t.effort or "",
     t.kind or "",
     t.severity or "",
+    t.value and ("v%d"):format(t.value) or "",
+    model.actor(t) or "",
     table.concat(model.categories(t), " "),
     table.concat(t.tags, " "),
     t.title,
@@ -343,6 +358,14 @@ function M.chips(f)
   if f.severity and #f.severity > 0 then
     chips[#chips + 1] = "severity: " .. joined(f.severity)
   end
+  if f.value_min then
+    chips[#chips + 1] = "value: >=" .. f.value_min
+  elseif f.value and #f.value > 0 then
+    chips[#chips + 1] = "value: " .. joined(f.value)
+  end
+  if f.actor and #f.actor > 0 then
+    chips[#chips + 1] = "actor: " .. joined(f.actor)
+  end
   if f.tag and #f.tag > 0 then
     chips[#chips + 1] = "tag: " .. joined(f.tag)
   end
@@ -422,6 +445,16 @@ function M.set_dim(f, dim, value)
         out.effort = { tostring(value) }
       end
     end
+  elseif dim == "value" then
+    out.value, out.value_min = nil, nil
+    if value ~= nil then
+      local min = tostring(value):match("^>=(%d)$")
+      if min then
+        out.value_min = tonumber(min)
+      else
+        out.value = { model.to_value(value) }
+      end
+    end
   elseif dim == "blocked" then
     out.blocked = value and true or nil
   elseif dim == "stale-refs" then
@@ -431,6 +464,7 @@ function M.set_dim(f, dim, value)
     or dim == "kind"
     or dim == "category"
     or dim == "severity"
+    or dim == "actor"
     or dim == "tag"
   then
     out[dim] = value ~= nil and { tostring(value) } or nil
@@ -455,6 +489,10 @@ function M.dim_choices(dim, tasks)
     return vim.deepcopy(M.EFFORT_CHOICES)
   elseif dim == "severity" then
     return vim.deepcopy(model.SEVERITIES)
+  elseif dim == "value" then
+    return { "1", "2", "3", "4", "5", ">=4" }
+  elseif dim == "actor" then
+    return { "cdx", "me", "pair", "none" }
   elseif dim == "tag" then
     local seen, out = {}, {}
     for _, t in ipairs(tasks) do
@@ -500,6 +538,14 @@ function M.filter_to_options(f)
   if f.severity and #f.severity > 0 then
     o.severity = joined(f.severity)
   end
+  if f.value_min then
+    o.value = ">=" .. f.value_min
+  elseif f.value and #f.value > 0 then
+    o.value = joined(f.value)
+  end
+  if f.actor and #f.actor > 0 then
+    o.actor = joined(f.actor)
+  end
   if f.tag and #f.tag > 0 then
     o.tag = joined(f.tag)
   end
@@ -531,6 +577,8 @@ function M.filter_from_stored(opts)
     tag = type(opts.tag) == "string" and opts.tag or nil,
     category = type(opts.category) == "string" and opts.category or nil,
     severity = type(opts.severity) == "string" and opts.severity or nil,
+    value = (type(opts.value) == "string" or type(opts.value) == "number") and opts.value or nil,
+    actor = type(opts.actor) == "string" and opts.actor or nil,
     stale = (type(opts.stale) == "string" or type(opts.stale) == "number") and opts.stale or nil,
     stale_refs = opts.stale_refs == true,
     blocked = opts.blocked == true,

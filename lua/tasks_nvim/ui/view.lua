@@ -20,6 +20,7 @@
 local harvest = require("lib.nvim.harvest")
 local render = require("lib.nvim.harvest.render")
 local fsio = require("tasks_nvim.fsio")
+local model = require("tasks_nvim.model")
 
 local M = {}
 
@@ -124,6 +125,29 @@ local COLUMNS = {
     csv_only = true,
     get = function(t)
       return t.severity
+    end,
+  },
+  {
+    -- Appended after Severity, never inserted: the columns before keep their position.
+    header = "Value",
+    csv_only = true,
+    get = function(t)
+      return t.value and tostring(t.value) or ""
+    end,
+  },
+  {
+    header = "ROI",
+    csv_only = true,
+    get = function(t)
+      local roi = model.roi(t)
+      return roi and ("%.2f"):format(roi) or ""
+    end,
+  },
+  {
+    header = "Actor",
+    csv_only = true,
+    get = function(t)
+      return model.actor(t) or ""
     end,
   },
 }

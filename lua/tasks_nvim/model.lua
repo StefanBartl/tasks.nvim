@@ -45,10 +45,20 @@ M.SEVERITIES = { "low", "medium", "high", "critical" }
 
 ---The listing orders `sort` knows. `default` is what the index uses.
 ---@type string[]
-M.SORTS = { "default", "prio-effort", "severity", "frecency" }
+M.SORTS = { "default", "prio-effort", "severity", "frecency", "roi" }
 
 ---@type integer[]
 M.PRIOS = { 1, 2, 3 }
+
+---Expected benefit of a task, 5 = the most. Not `prio` (the order decision, set by the human): the benefit does not
+---depend on the time, so a high value may sit in a low prio for now.
+---@type integer[]
+M.VALUES = { 1, 2, 3, 4, 5 }
+
+---Who can do a task: `cdx` an AI session alone, `me` only the human, `pair` the AI drafts and the human decides the
+---rest. A task without the field is "unclear" (see `model.actor` for what is derived).
+---@type string[]
+M.ACTORS = { "cdx", "me", "pair" }
 
 ---@type string[]
 M.EFFORTS = { "XS", "S", "M", "L", "XL" }
@@ -180,6 +190,64 @@ function M.to_prio(s)
     return tonumber(s)
   end
   return nil
+end
+
+---@param s any
+---@return integer|nil value  1..5, or nil when `s` is no valid value
+function M.to_value(s)
+  if type(s) == "number" then
+    s = tostring(s)
+  end
+  if type(s) == "string" and s:match("^[1-5]$") then
+    return tonumber(s)
+  end
+  return nil
+end
+
+---@param s any
+---@return boolean
+function M.is_actor(s)
+  for _, a in ipairs(M.ACTORS) do
+    if a == s then
+      return true
+    end
+  end
+  return false
+end
+
+---Who does the task: the written `actor`; else `me` for a task that waits for a decision (`status: decision`) or
+---carries the tag `needs-user`; else `nil` ("unclear"). Like `categories`, this makes the existing vault filterable
+---without touching a file.
+---@param task Tasks.Task
+---@return string|nil actor
+function M.actor(task)
+  if task.actor and M.is_actor(task.actor) then
+    return task.actor
+  end
+  if task.status == "decision" then
+    return "me"
+  end
+  for _, tag in ipairs(task.tags or {}) do
+    if tag == "needs-user" then
+      return "me"
+    end
+  end
+  return nil
+end
+
+---Smallest effort a return-on-effort figure divides by (a task is never "free").
+local ROI_MIN_DAYS = 0.25
+
+---`value / max(effort_days, 0.25)`; `nil` when the task has no value or no (valid) effort. Derived, never stored; a
+---task without an estimate has NO figure (not 0), so it cannot look worse or better than it is.
+---@param task Tasks.Task
+---@return number|nil roi
+function M.roi(task)
+  local days = M.effort_days(task.effort)
+  if not task.value or not days then
+    return nil
+  end
+  return task.value / math.max(days, ROI_MIN_DAYS)
 end
 
 ---@param y integer
@@ -464,6 +532,26 @@ function M.parse_text(text, ctx)
       end
     end
 
+    if meta.value ~= nil then
+      local value = M.to_value(meta.value)
+      if value then
+        task.value = value
+      else
+        bad("bad-value", "value must be 1, 2, 3, 4 or 5, got " .. vim.inspect(meta.value))
+      end
+    end
+
+    local actor = as_text(meta.actor, "actor", bad)
+    if actor then
+      task.actor = actor
+      if not M.is_actor(actor) then
+        bad(
+          "bad-actor",
+          ("unknown actor '%s' (expected %s)"):format(actor, table.concat(M.ACTORS, ", "))
+        )
+      end
+    end
+
     local effort = as_text(meta.effort, "effort", bad)
     if effort then
       task.effort = effort
@@ -689,6 +777,23 @@ function M.compare_severity(a, b)
   return M.compare(a, b)
 end
 
+---Return on effort first (highest `value / effort`), tasks without a figure after the ones with one, then the
+---default order.
+---@param a Tasks.Task
+---@param b Tasks.Task
+---@return boolean
+function M.compare_roi(a, b)
+  local ra, rb = M.roi(a), M.roi(b)
+  if ra and rb then
+    if ra ~= rb then
+      return ra > rb
+    end
+  elseif ra or rb then
+    return ra ~= nil
+  end
+  return M.compare(a, b)
+end
+
 ---`frecency` here is only the fallback (no scores known: the default order);
 ---`M.sort` builds the real comparator from the scores it is given.
 ---@type table<string, fun(a: Tasks.Task, b: Tasks.Task): boolean>
@@ -696,6 +801,7 @@ local COMPARATORS = {
   default = M.compare,
   ["prio-effort"] = M.compare_prio_effort,
   severity = M.compare_severity,
+  roi = M.compare_roi,
   frecency = M.compare,
 }
 
@@ -823,6 +929,7 @@ function M.filter(tasks, f)
   local prio, tag = to_set(f.prio), to_set(f.tag)
   local category = to_set(f.category)
   local effort, severity = to_set(f.effort), to_set(f.severity)
+  local value, actor = to_set(f.value), to_set(f.actor)
   local effort_max = f.effort_max and M.effort_days(f.effort_max) or nil
   local today = f.today or M.today()
   -- `--stale=refs`: the caller may hand in a ready map (`f.ref_stale`); else the
@@ -870,6 +977,17 @@ function M.filter(tasks, f)
     end
     if keep and severity and not (t.severity and severity[t.severity]) then
       keep = false
+    end
+    if keep and value and not (t.value and value[t.value]) then
+      keep = false
+    end
+    if keep and f.value_min and not (t.value and t.value >= f.value_min) then
+      keep = false
+    end
+    if keep and actor then
+      -- `none` matches the tasks nobody classified (not even by derivation).
+      local who = M.actor(t) or "none"
+      keep = actor[who] == true
     end
     if keep and f.blocked and not (t.status == "blocked" or #t.blocked_by > 0) then
       keep = false

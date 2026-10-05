@@ -31,13 +31,15 @@ lowercase word `all` is the keyword; `ALL` with capitals is the area of that nam
 | `--category=a,b` | any of `bug security performance docs ruleset` (`bug` also finds every `kind: bug`; a tag spelled like a category counts) |
 | `--effort=S,M` / `--effort=<=M` | the written effort (`XS S M L XL`, or days like `0.5d`; sizes are case-insensitive), or "this or smaller" (`<=S`, `<=M`, `<=1d`; sizes and days share one scale, a task without effort never matches) |
 | `--severity=a,b` | any of `low medium high critical` (the optional `severity` of a bug / security task; a task without one never matches) |
+| `--value=4,5` / `--value=>=4` | the written `value` (1-5, the expected benefit), or "this or more"; a task without a value never matches |
+| `--actor=a,b` | any of `cdx me pair none`: who can do it. `me` also finds `status: decision` and the tag `needs-user` (derived, nothing to migrate); `none` finds the tasks nobody classified |
 | `--tag=a,b` | any of these tags |
 | `--stale=<days>` | not updated for at least that many days (no date counts as stale) |
 | `--stale=refs` | a file named in the task's `refs:` changed on a later day than `updated` (git commit date, mtime as fallback); the heading names the changed files. Details in [ENGINE.md](ENGINE.md#--stalerefs----tasks-whose-referenced-files-changed) (section `--stale=refs`) |
 | `--blocked` | status `blocked`, or a non-empty `blocked_by` |
-| `--sort=default` / `prio-effort` / `severity` / `frecency` | the order: `default` is status, prio, area, slug; `prio-effort` is status, prio, then effort ascending (important and small first, no effort last of its prio); `severity` is `critical` first, then `high`, `medium`, `low`, no severity last, each group in the default order; `frecency` is what the dashboard opened or changed most first (see below), the rest in the default order |
+| `--sort=default` / `prio-effort` / `severity` / `frecency` / `roi` | the order (`roi`: highest `value / effort` first, tasks without both numbers after the ones with a figure, each group in the default order): `default` is status, prio, area, slug; `prio-effort` is status, prio, then effort ascending (important and small first, no effort last of its prio); `severity` is `critical` first, then `high`, `medium`, `low`, no severity last, each group in the default order; `frecency` is what the dashboard opened or changed most first (see below), the rest in the default order |
 | `--to=` | where the list goes: `buffer` (default), `clipboard`, `qf`, `file:<path>`, `echo`, `mdview` (Markdown written to a temp file and shown in the browser by [mdview.nvim](https://github.com/StefanBartl/mdview.nvim); see [Browser preview](#browser-preview-mdview)) |
-| `--format=md` / `--format=csv` | table (default) or CSV with the extra columns tags, blocked by, summary, path, severity; a `file:` target ending in `.csv` implies `csv`. A CSV cell that starts with `=`, `+`, `-`, `@` or a tab gets a leading `'`, so a title like `=HYPERLINK(...)` is text, not a formula, when the file is opened in a spreadsheet |
+| `--format=md` / `--format=csv` | table (default) or CSV with the extra columns tags, blocked by, summary, path, severity, value, roi, actor; a `file:` target ending in `.csv` implies `csv`. A CSV cell that starts with `=`, `+`, `-`, `@` or a tab gets a leading `'`, so a title like `=HYPERLINK(...)` is text, not a formula, when the file is opened in a spreadsheet |
 
 ```vim
 :Tasks list                                    " everything open, in a scratch buffer
@@ -176,7 +178,7 @@ Tags: ui, notify
 Refs: lua/foo/init.lua
 ```
 
-The choice fields `kind`, `prio`, `effort`, `category`, `severity` and `status` are bullet
+The choice fields `kind`, `prio`, `effort`, `value`, `actor`, `category`, `severity` and `status` are bullet
 lists whose values come from the engine (`tasks.model`); `category` takes several ticks, the
 others one (ticking a bullet clears its siblings; leaving a list empty means "not set", and
 `kind` / `status` then get the engine defaults `task` / `open`). `Area:` and `Title:` are
@@ -240,7 +242,7 @@ opens with the same title and ref filled in.
 
 Changes frontmatter of an *open* task and sets `updated` -- but only when something really
 changed (an identical value rewrites nothing). Settable: `title status kind prio effort tags
-category severity summary blocked_by refs rules done_in created`. A value may contain spaces
+category severity value actor summary blocked_by refs rules done_in created`. A value may contain spaces
 (`title=Fix the thing status=doing`: a word that does not start with a known `key=`
 continues the value before it); an empty value removes the key (`kind=`). `status=done` is
 refused: finishing moves the file, see `task done`. A buffer showing the file is reloaded

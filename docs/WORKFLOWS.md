@@ -198,6 +198,42 @@ Three steps: `check` (errors fail), `index --check` (no outdated or missing over
 worst open thing, anywhere", `--effort=<=S --prio=<=2` answers "what is small and important". An area is any folder
 that holds `ROADMAP/` or `Backlog/`; names listed in `extra_areas` count even when empty.
 
+### 14. What is worth the effort — works today
+
+```vim
+:Tasks set my-area/some-slug effort=S value=4
+:Tasks list my-area --sort=roi
+:Tasks list --value=>=4 --effort=<=S --sort=roi
+```
+
+`value` (1-5) is the expected benefit, independent of time; `prio` stays your order decision. `--sort=roi` puts the
+most value per effort first (`value / effort in days`, never below a quarter day). A task without a value or without
+an effort has **no** figure and sorts after the ones that do: it is not "worth 0", it is unestimated. The dashboard
+shows `v4` on the row; the CSV export gets `Value` and `ROI` columns. Sums per plan and area, and a helper that walks
+the unestimated tasks, are planned (below).
+
+### 15. Who can do this — works today
+
+```vim
+:Tasks set my-area/some-slug actor=cdx
+:Tasks list --actor=me
+:Tasks list --actor=cdx --status=open --sort=prio-effort
+```
+
+`cdx` can be done by an AI session alone, `me` only by you (decisions, live tests, accounts, publishing), `pair` is a
+draft by the AI and an answer by you. `--actor=me` also finds every `status: decision` task and every task tagged
+`needs-user` without anything written, so the existing vault is filterable on day one; `--actor=none` lists what
+nobody classified. `check` warns when a task written `cdx` waits on something only you can do
+(`actor-cdx-waits-on-me`). A headless session that sets `status=doing` on a task that is for you gets a warning.
+To write the derivable answers into the files once:
+
+```sh
+nvim --headless -u NONE -l scripts/tasks.lua migrate-actor            # dry run, writes nothing
+nvim --headless -u NONE -l scripts/tasks.lua migrate-actor --write
+```
+
+Every other task stays empty on purpose: the share of empty ones is the honest number.
+
 ## Planned scenarios
 
 These are designed and sized; until they exist, the "instead" column is what to do.
@@ -206,8 +242,8 @@ These are designed and sized; until they exist, the "instead" column is what to 
 | --- | --- | --- |
 | **Next task after `done`** | Finishing a task opens a small non-blocking popup: the best ready task (freed by this one first, then same plan, same area, whole vault) with a key to jump to it; when nothing is startable it says what waits for you instead of "all done" | `:Tasks list --status=doing,decision`, then 3 |
 | **Plans close themselves** | A task's plan steps are ticked when it is done, a plan file closes when its last member is done, generated plan blocks in documents are refreshed | tick the steps by hand |
-| **Effort and value** | `value: 1-5` next to `effort`; sums, a return-on-effort order and quick wins per area or plan, always saying how many tasks have no estimate | `effort=` only, `--sort=prio-effort` |
-| **Who does it** | `actor: cdx / me / pair`: filter and queue "what an AI session may do alone" vs "what only I can do", derived from existing tags without migrating | tags such as `needs-user` |
+| **Sums and quick wins** | sums of effort and value per area or plan, quick wins, always saying how many tasks have no estimate, and a helper that walks the unestimated tasks | `--sort=roi`, 14 |
+| **The AI queue** | `next --actor=cdx`: what an AI session may start now (not blocked, not waiting on you), ranked | `list --actor=cdx --sort=roi`, 15 |
 | **Plans** | `blocked_by` and a soft `after` become waves, a critical path, "what is ready", "which decision unlocks most" (`tasks plan`, `tasks next`) | 3 and 4 by hand |
 | **Triage** | after a brain dump an AI proposes edges and groups, with one sentence of reasoning each; you accept one by one | 2 by hand |
 

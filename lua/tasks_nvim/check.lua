@@ -21,6 +21,9 @@
 ---  - `bad-blocked-by`, `blocked-by-self`, `blocked-by-dangling`: the blocker is
 ---    malformed, the task itself, or exists nowhere; `blocked-by-done` (warning):
 ---    the blocker is already finished
+---  - `bad-value`, `bad-actor`: `value` is not 1..5, `actor` is not cdx, me or pair
+---  - `actor-cdx-waits-on-me` (warning): a task written `actor: cdx` waits on an open task that only the human
+---    can do (`model.actor` = `me`): the AI queue holds work that cannot start
 ---  - `done-in-roadmap`: `status: done` in `ROADMAP/tasks/`
 ---  - `open-in-backlog`: a task file in `Backlog/` whose status is not `done`
 ---  - `duplicate-id`: an open task and a finished one share an id
@@ -31,6 +34,7 @@
 --- Not its job: fixing anything (`index.write_area` regenerates an index).
 
 local fsio = require("tasks_nvim.fsio")
+local model = require("tasks_nvim.model")
 local index = require("tasks_nvim.index")
 local scan = require("tasks_nvim.scan")
 local vault = require("tasks_nvim.vault")
@@ -150,6 +154,7 @@ function M.run(opts)
   -- Blockers are resolved against every open task, whichever area is checked. Every area is scanned ONCE here
   -- and the result is reused below (the per-area checks and the index check); scanning it again for each of
   -- those parsed every open task three times (466 tasks: 410 ms instead of ~170 ms).
+  ---@type table<string, Tasks.Task>
   local open_ids = {}
   ---@type table<string, { tasks: Tasks.Task[], errors: string[]|string|nil }>
   local by_area = {}
@@ -157,7 +162,7 @@ function M.run(opts)
     local tasks, errs = scan.area(a.name, scan_opts)
     by_area[a.name] = { tasks = tasks or {}, errors = errs }
     for _, t in ipairs(tasks or {}) do
-      open_ids[t.id] = true
+      open_ids[t.id] = t
     end
   end
 
@@ -238,7 +243,17 @@ function M.run(opts)
         if ref_slug then
           if ref == t.id then
             add(findings, "error", "blocked-by-self", t, "blocked_by names the task itself")
-          elseif not open_ids[ref] then
+          elseif open_ids[ref] then
+            if t.actor == "cdx" and model.actor(open_ids[ref]) == "me" then
+              add(
+                findings,
+                "warn",
+                "actor-cdx-waits-on-me",
+                t,
+                ("actor is cdx but it waits on %s, which only you can do"):format(ref)
+              )
+            end
+          else
             if scan.find_done(ref, scan_opts) then
               add(
                 findings,

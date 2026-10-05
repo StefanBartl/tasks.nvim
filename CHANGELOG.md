@@ -15,6 +15,13 @@ the version is not tagged yet (the repository is not published).
 - `setup()` with a validated config (`vault`, `extra_areas`, `dashboard`, `staleness`, `ci`, `keys`); every key of
   the dashboard and the form is rebindable or can be switched off.
 - `:'<,'>Tasks new`: a task about the selected lines (a `refs:` entry for them, the first line as the title).
+- Fields `value` (1-5, expected benefit) and `actor` (`cdx` / `me` / `pair`): `new`/`set`, `--value=` and `--actor=`
+  filters (`--actor=me` also finds decisions and `needs-user` tasks without migrating), `--sort=roi`, dashboard row,
+  chips and filter menu, CSV columns `Value`, `ROI`, `Actor` (appended), `check` codes `bad-value`, `bad-actor`,
+  `actor-cdx-waits-on-me`, the CLI guard rail on `status=doing` for a task that is for the human, and
+  `migrate-actor [--write]`.
+- `tasks_nvim.done_flow`: one entry for finishing a task (`:Tasks done`, the dashboard and the CLI call only it); the
+  follow-up chain lands behind it.
 - `tasks_nvim.batch` (`set_many`, `done_many`): several changes with one index write per area; the dashboard uses it.
 - `tasks_nvim.filter_opts`: the option-to-filter parsing, shared by the CLI, the commands and the dashboard.
 - Help texts of the dashboard and the form are generated from the keys in force.

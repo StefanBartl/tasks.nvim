@@ -209,7 +209,17 @@ end
 ---@return string|nil
 local function filter_note(flags)
   local parts = {}
-  for _, name in ipairs({ "status", "prio", "effort", "kind", "category", "severity", "tag" }) do
+  for _, name in ipairs({
+    "status",
+    "prio",
+    "effort",
+    "kind",
+    "category",
+    "severity",
+    "value",
+    "actor",
+    "tag",
+  }) do
     if flags[name] ~= nil then
       parts[#parts + 1] = ("%s=%s"):format(name, flags[name])
     end
@@ -249,6 +259,8 @@ function M.list(ctx)
     kind = flags.kind,
     category = flags.category,
     severity = flags.severity,
+    value = flags.value,
+    actor = flags.actor,
     tag = flags.tag,
     stale = flags.stale,
     blocked = flags.blocked,
@@ -542,7 +554,7 @@ function M.task_new_form(given)
     areas[#areas + 1] = a.name
   end
   local ticks = {}
-  for _, key in ipairs({ "kind", "prio", "effort", "severity", "status" }) do
+  for _, key in ipairs({ "kind", "prio", "effort", "value", "actor", "severity", "status" }) do
     ticks[key] = given[key]
   end
   if given.category then
@@ -644,7 +656,17 @@ function M.task_new(ctx)
   local source = M.range_source(ctx)
   if area == nil or area == "" then
     local given = {}
-    for _, key in ipairs({ "kind", "prio", "effort", "tags", "category", "severity", "status" }) do
+    for _, key in ipairs({
+      "kind",
+      "prio",
+      "effort",
+      "value",
+      "actor",
+      "tags",
+      "category",
+      "severity",
+      "status",
+    }) do
       if ctx.kv[key] ~= nil and ctx.kv[key] ~= "" then
         given[key] = ctx.kv[key]
       end
@@ -660,7 +682,17 @@ function M.task_new(ctx)
     title = source.text
   end
   local given = {}
-  for _, key in ipairs({ "kind", "prio", "effort", "tags", "category", "severity", "status" }) do
+  for _, key in ipairs({
+    "kind",
+    "prio",
+    "effort",
+    "value",
+    "actor",
+    "tags",
+    "category",
+    "severity",
+    "status",
+  }) do
     if ctx.kv[key] ~= nil and ctx.kv[key] ~= "" then
       given[key] = ctx.kv[key]
     end
@@ -676,6 +708,8 @@ function M.task_new(ctx)
       tags = values.tags,
       category = values.category,
       severity = values.severity,
+      value = values.value,
+      actor = values.actor,
       status = values.status,
       refs = source and source.ref or nil,
       folder = ctx.flags.folder == true,

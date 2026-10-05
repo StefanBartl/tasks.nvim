@@ -99,6 +99,7 @@ order)`) picks the order:
 | `default` (no flag) | status rank, prio, area, slug -- what the index uses; unchanged |
 | `prio-effort` | status rank, prio, **effort ascending**, area, slug: important and small first; a task without (valid) effort comes last of its prio |
 | `severity` | **severity** (`critical`, `high`, `medium`, `low`, none last), then the default order |
+| `roi` | **value per effort**, highest first (`model.roi`); tasks without a figure after the ones with one, then the default order |
 | `frecency` | tasks the dashboard opened or changed, **highest score first** (see below), then the default order; ignores the status rank on purpose |
 
 `prio-effort` and `severity` keep the status rank in front on purpose, so `doing` / `decision`
@@ -120,6 +121,27 @@ task id. A corrupt file (also one over `MAX_FILE_BYTES`, 1 MiB; a real one is ~1
 that cannot be read is never overwritten. Why not `lib.nvim.frecency`: its fixed recency
 buckets use `os.time()` directly (nothing to inject), and it has neither a half-life nor
 an entry cap.
+
+### Value, return on effort and actor
+
+`value: 4` (optional, 1-5, `model.VALUES`) is the **expected benefit**, 5 the most. It is not `prio`: `prio` is the
+order decision a human makes (urgency), `value` does not depend on time, so a task may have a high value and a low
+prio for now. `roi = value / max(effort_days, 0.25)` (`model.roi`) is derived and never stored; a task without a
+value or without a valid effort has **no** figure (not 0), stays visible in every view and sorts after the ones with
+one. `--value=4,5` / `--value=>=4` filter, `--sort=roi` orders, the dashboard shows `v4`, the CSV gets the columns
+`Value` and `ROI`. A value outside 1-5 is the error `bad-value`.
+
+`actor: cdx | me | pair` (optional) says who can do the task: `cdx` an AI session alone, `me` only the human
+(decisions, live tests, accounts, publishing), `pair` the AI drafts and the human decides the rest. A task without
+the field is "unclear", not wrong. `model.actor(task)` is the written value, else `me` for `status: decision` or the
+tag `needs-user`, else `nil` (the tag `agent` is **not** read as `cdx`: it sometimes only means an agent hint). So
+`--actor=me` works on an unmigrated vault; `--actor=none` lists what nobody classified. `check` warns
+`actor-cdx-waits-on-me` when a task written `cdx` waits on an open task that only you can do, and `bad-actor` is the
+error for an unknown word. The CLI `set <id> status=doing` on a task that is for you prints a warning (a guard rail,
+never a refusal). `migrate-actor [area] [--write]` proposes `me` for the derivable tasks and leaves every other task
+empty on purpose (the share of empty ones is the honest number); it is a dry run unless `--write`, and writes through
+`set` (so `updated` and the index follow). Neither field appears in the generated index (the same reason as for
+severity: an extra column would make every index stale); the list TSV is unchanged, the CSV export appends columns.
 
 ### Severity
 
@@ -183,7 +205,8 @@ finished task with the same id under another date, is refused.
 | Code | Meaning |
 |---|---|
 | `frontmatter-missing`, `frontmatter-invalid`, `title-missing`, `status-missing`, `field-type`, `unreadable` | the file cannot be read as a task |
-| `unknown-status`, `unknown-kind`, `unknown-category`, `unknown-severity`, `bad-prio`, `bad-effort`, `bad-date` | a field has a value outside its enum / format |
+| `unknown-status`, `unknown-kind`, `unknown-category`, `unknown-severity`, `bad-prio`, `bad-effort`, `bad-value`, `bad-actor`, `bad-date` | a field has a value outside its enum / format |
+| `actor-cdx-waits-on-me` (warning) | a task written `actor: cdx` waits on an open task that only you can do (`model.actor` = `me`) |
 | `severity-without-bug-or-security` (warning) | `severity` on a task that is neither `kind: bug` nor in the bug / security category |
 | `slug` | filename is not a kebab-case ASCII slug, or the file lies in a subfolder of `tasks/` other than `<slug>/<slug>.md` |
 | `slug-conflict` | the same slug exists as a file and as a folder task |
@@ -279,9 +302,10 @@ nvim --headless -u NONE -l scripts/tasks.lua check
 
 | Command | Effect |
 |---|---|
-| `list [area] [--status=a,b] [--prio=1,2\|<=2] [--effort=S,M\|<=M] [--kind=k] [--category=c,d] [--severity=high,critical] [--tag=t] [--stale=N|refs] [--stale-refs] [--blocked] [--sort=default\|prio-effort\|severity] [--format=tsv\|ids]` | open tasks, sorted; `id status prio effort kind updated title`, tab-separated |
+| `list [area] [--status=a,b] [--prio=1,2\|<=2] [--effort=S,M\|<=M] [--kind=k] [--category=c,d] [--severity=high,critical] [--value=4,5\|>=4] [--actor=cdx,me,pair,none] [--tag=t] [--stale=N|refs] [--stale-refs] [--blocked] [--sort=default\|prio-effort\|severity\|frecency\|roi] [--format=tsv\|ids]` | open tasks, sorted; `id status prio effort kind updated title`, tab-separated |
 | `index [area] [--check]` | write / verify `ROADMAP/TASKS.md` (all areas without argument) |
-| `new <area> <title> [--kind --prio --effort --tags=a,b --category=c,d --severity=s --refs=a,b --lang=de\|en --summary --slug --status] [--folder] [--no-index]` | create a task file (`--lang` picks the language of the body headings, default `de`; `--folder` a folder task) |
+| `new <area> <title> [--kind --prio --effort --tags=a,b --category=c,d --severity=s --value=1..5 --actor=cdx\|me\|pair --refs=a,b --lang=de\|en --summary --slug --status] [--folder] [--no-index]` | create a task file (`--lang` picks the language of the body headings, default `de`; `--folder` a folder task) |
+| `migrate-actor [area] [--write]` | propose `actor=me` for tasks that wait for you (status decision, tag needs-user), leave the rest empty; dry run unless `--write` |
 | `attach <area>/<slug> <file> [--name=n] [--no-index]` | copy a file to `<slug>/assets/` (a plain task becomes a folder task), print the Markdown link |
 | `folderize <area>/<slug> [--no-index]` | turn a plain task file into a folder task |
 | `set <area>/<slug> key=value ... [--no-index]` | change frontmatter; an empty value removes the key |

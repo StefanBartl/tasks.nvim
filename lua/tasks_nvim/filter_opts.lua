@@ -47,7 +47,7 @@ end
 ---words the same way. Unknown words are an error, never silently ignored.
 ---`stale` may be a number, a digit string or `refs` (same as `stale_refs`: a
 ---file named in `refs` changed since `updated`); `today` is passed through.
----@param opt { status?: string, prio?: string|integer, effort?: string, kind?: string, tag?: string, category?: string, severity?: string, stale?: string|integer, stale_refs?: boolean, blocked?: boolean, today?: string }
+---@param opt { status?: string, prio?: string|integer, effort?: string, kind?: string, tag?: string, category?: string, severity?: string, value?: string|integer, actor?: string, stale?: string|integer, stale_refs?: boolean, blocked?: boolean, today?: string }
 ---@return Tasks.Filter|nil filter
 ---@return string|nil err
 function M.parse(opt)
@@ -168,6 +168,41 @@ function M.parse(opt)
     do
       if not model.is_severity(v) then
         return nil, "unknown severity in --severity: " .. v
+      end
+    end
+  end
+  if opt.value ~= nil then
+    local raw = tostring(opt.value)
+    local min = raw:match("^>=(%d)$")
+    if raw:sub(1, 2) == ">=" and not (min and model.to_value(min)) then
+      return nil, "--value must be 1..5 (comma list) or >=1 .. >=5, got " .. raw
+    end
+    if min then
+      f.value_min = tonumber(min)
+    else
+      local vlist, verr = listed(raw, "value")
+      if not vlist then
+        return nil, verr
+      end
+      f.value = {}
+      for _, v in ipairs(vlist) do
+        local n = model.to_value(v)
+        if not n then
+          return nil, "--value must be 1..5 (comma list) or >=N, got " .. raw
+        end
+        f.value[#f.value + 1] = n
+      end
+    end
+  end
+  if opt.actor then
+    local list, lerr = listed(opt.actor, "actor")
+    if not list then
+      return nil, lerr
+    end
+    f.actor = list
+    for _, a in ipairs(list) do
+      if not (model.is_actor(a) or a == "none") then
+        return nil, "unknown actor in --actor: " .. a .. " (expected cdx, me, pair or none)"
       end
     end
   end

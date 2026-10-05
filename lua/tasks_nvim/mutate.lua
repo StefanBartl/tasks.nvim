@@ -213,7 +213,7 @@ local function check_lang(lang)
 end
 
 ---Frontmatter keys in the order concept section 3 shows them.
----@param meta { title: string, status: string, kind?: string, prio?: integer|string, effort?: string, tags?: string[], category?: string[], severity?: string, refs?: string[], created: string, updated: string }
+---@param meta { title: string, status: string, kind?: string, prio?: integer|string, effort?: string, value?: integer|string, actor?: string, tags?: string[], category?: string[], severity?: string, refs?: string[], created: string, updated: string }
 ---@return table[] pairs
 local function meta_pairs(meta)
   local pairs_ = {
@@ -228,6 +228,12 @@ local function meta_pairs(meta)
   end
   if meta.effort then
     pairs_[#pairs_ + 1] = { "effort", meta.effort }
+  end
+  if meta.value then
+    pairs_[#pairs_ + 1] = { "value", tostring(meta.value) }
+  end
+  if meta.actor then
+    pairs_[#pairs_ + 1] = { "actor", meta.actor }
   end
   if meta.tags then
     pairs_[#pairs_ + 1] = { "tags", meta.tags }
@@ -375,6 +381,8 @@ local SETTABLE = {
   "tags",
   "category",
   "severity",
+  "value",
+  "actor",
   "summary",
   "blocked_by",
   "refs",
@@ -466,6 +474,21 @@ local function normalize_patch(patch, opts)
     elseif key == "effort" then
       if not model.is_effort(value) then
         return nil, ("effort '%s' is neither XS..XL nor days like 0.5d"):format(tostring(value))
+      end
+      result[#result + 1] = { key, value }
+    elseif key == "value" then
+      local v = model.to_value(value)
+      if not v then
+        return nil, "value must be 1, 2, 3, 4 or 5, got " .. tostring(value)
+      end
+      result[#result + 1] = { key, tostring(v) }
+    elseif key == "actor" then
+      if not model.is_actor(value) then
+        return nil,
+          ("unknown actor '%s' (expected %s)"):format(
+            tostring(value),
+            table.concat(model.ACTORS, ", ")
+          )
       end
       result[#result + 1] = { key, value }
     elseif key == "created" then
@@ -573,6 +596,20 @@ function M.new(area, opts)
   if opts.effort ~= nil and not model.is_effort(opts.effort) then
     return nil, ("effort '%s' is neither XS..XL nor days like 0.5d"):format(tostring(opts.effort))
   end
+  local value
+  if opts.value ~= nil then
+    value = model.to_value(opts.value)
+    if not value then
+      return nil, "value must be 1, 2, 3, 4 or 5, got " .. tostring(opts.value)
+    end
+  end
+  if opts.actor ~= nil and not model.is_actor(opts.actor) then
+    return nil,
+      ("unknown actor '%s' (expected %s)"):format(
+        tostring(opts.actor),
+        table.concat(model.ACTORS, ", ")
+      )
+  end
   local tags
   if opts.tags ~= nil then
     local list, lerr = string_list(opts.tags, "tags", true)
@@ -637,6 +674,8 @@ function M.new(area, opts)
       kind = kind,
       prio = prio,
       effort = opts.effort,
+      value = value,
+      actor = opts.actor,
       tags = tags,
       category = category,
       severity = opts.severity,

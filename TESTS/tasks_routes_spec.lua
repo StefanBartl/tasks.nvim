@@ -261,8 +261,8 @@ return function(H)
       local csv = lines_of(assert(H.read(csv_path)))
       eq(
         csv[1],
-        "Task,Status,Prio,Effort,Kind,Updated,Title,Tags,Blocked by,Summary,Path,Severity",
-        "the CSV gets Severity as its last column"
+        "Task,Status,Prio,Effort,Kind,Updated,Title,Tags,Blocked by,Summary,Path,Severity,Value,ROI,Actor",
+        "the CSV columns are appended (Severity, Value, ROI, Actor), never inserted"
       )
       eq(#csv, 3, "header and two rows")
       has(
@@ -1462,6 +1462,7 @@ return function(H)
         "--sort=prio-effort",
         "--sort=severity",
         "--sort=frecency",
+        "--sort=roi",
       })
       ok(vim.tbl_contains(complete("TaskT tasks --to="), "--to=mdview"))
       ok(vim.tbl_contains(complete("TaskT task preview lib.nvim/al"), "lib.nvim/alpha"))

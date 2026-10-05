@@ -77,10 +77,11 @@ A wrong key or value is ignored with a message and listed in
       quickfix list, a file, a browser preview. An existing file is only
       overwritten with `--force`.
       Filters: --status= --prio= --effort= --kind= --category= --severity=
+               --value=4,5|>=4 --actor=cdx|me|pair|none
                --tag= --stale=<days>|refs --blocked
 
-  :Tasks new [{area} [{title}...]] [kind= prio= effort= tags= category=
-              severity= status=] [--folder]
+  :Tasks new [{area} [{title}...]] [kind= prio= effort= value= actor=
+              tags= category= severity= status=] [--folder]
       Without arguments a Markdown form (`<C-s>` submits).
 
   :Tasks set {id} {key}={value} ...      Change frontmatter; an empty value
