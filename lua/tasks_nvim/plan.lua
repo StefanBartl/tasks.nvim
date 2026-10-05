@@ -76,7 +76,7 @@ local STATUS_ORDER = { doing = 1, decision = 2, open = 3, blocked = 4, parked = 
 local NO_PRIO = 99
 
 ---@param all_open Tasks.Task[]
----@param is_done? fun(id: string): boolean|table<string, boolean>  # A predicate or a set of finished ids.
+---@param is_done? (fun(id: string): boolean)|table<string, boolean>  # A predicate or a set of finished ids.
 ---@return Tasks.PlanIndex
 function M.index(all_open, is_done)
   local open = {}
