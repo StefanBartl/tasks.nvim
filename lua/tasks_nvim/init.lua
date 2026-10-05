@@ -37,11 +37,20 @@ local M = {}
 ---@param opts? Tasks.SetupOpts
 ---@return nil
 function M.setup(opts)
-  local cfg = require("tasks_nvim.config").merge(opts)
-  require("tasks_nvim.vault").configure(cfg)
-  if not vim.g.tasks_nvim_no_command then
-    require("tasks_nvim.bindings.usrcmds").register()
+  local config = require("tasks_nvim.config")
+  require("tasks_nvim.vault").configure(config.merge(opts))
+  -- The entry point is where the user is told what was ignored (the config layer only collects it).
+  local messages = config.take_unannounced()
+  if #messages > 0 then
+    vim.schedule(function()
+      local notify = require("lib.nvim.notify").create("[tasks]")
+      for _, msg in ipairs(messages) do
+        notify.warn(msg)
+      end
+    end)
   end
+  -- `:Tasks` is registered by `plugin/tasks_nvim.lua` (which a plugin manager sources when it loads the
+  -- plugin); the engine facade does not reach into the front end.
 end
 
 local SUBMODULES = {

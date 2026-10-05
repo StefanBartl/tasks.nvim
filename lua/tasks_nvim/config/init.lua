@@ -29,14 +29,17 @@ local SCHEMA = {
 ---@type string[]
 local ignored = {}
 
+---Messages nobody has been told about yet. The config layer only collects them (it is read by the engine
+---modules and must not call a front end); `tasks_nvim.setup` hands them to the notification channel.
+---@type string[]
+local unannounced = {}
+
 ---@param msg string
 local function warn(msg)
   if not vim.tbl_contains(ignored, msg) then
     ignored[#ignored + 1] = msg
+    unannounced[#unannounced + 1] = msg
   end
-  vim.schedule(function()
-    require("lib.nvim.notify").create("[tasks]").warn(msg)
-  end)
 end
 
 ---@param list any
@@ -181,6 +184,14 @@ end
 ---@return Tasks.Opts
 function M.get()
   return vim.deepcopy(state)
+end
+
+---The messages collected since the last call, each returned once.
+---@return string[]
+function M.take_unannounced()
+  local out = unannounced
+  unannounced = {}
+  return out
 end
 
 ---What `setup()` ignored (unknown keys, wrong types), one message each.
