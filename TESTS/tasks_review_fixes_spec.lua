@@ -374,4 +374,49 @@ return function(H)
   eq(ires, nil)
   has(ierr, "cannot read")
   vim.fn.delete(big_index)
+
+  -- ── PERF-V3: an unchanged file is not parsed again; a young or changed one is ──
+  local pdir = H.tmpdir() .. "/parse-cache"
+  vim.fn.mkdir(pdir, "p")
+  local pfile = pdir .. "/cached.md"
+  ---@param title string
+  local function put(title)
+    local f = assert(io.open(pfile, "wb"))
+    f:write("---\ntitle: " .. title .. "\nstatus: open\n---\n")
+    f:close()
+  end
+  local pctx = { area = "lib.nvim", slug = "cached" }
+  model.reset_parse_cache()
+  put("First")
+  eq(model.from_file(pfile, pctx).title, "First")
+  put("Other")
+  eq(
+    model.from_file(pfile, pctx).title,
+    "Other",
+    "a file younger than the racy window is never served from the cache"
+  )
+  -- backdate it: now the result may be cached
+  local old = os.time() - 3600
+  assert(vim.uv.fs_utime(pfile, old, old))
+  eq(model.from_file(pfile, pctx).title, "Other")
+  local first = model.from_file(pfile, pctx)
+  first.title = "mutated by the caller"
+  eq(
+    model.from_file(pfile, pctx).title,
+    "Other",
+    "the cache hands out copies: a caller cannot poison it"
+  )
+  put("Longer title")
+  assert(vim.uv.fs_utime(pfile, old, old))
+  eq(
+    model.from_file(pfile, pctx).title,
+    "Longer title",
+    "a changed size is seen even with the same mtime"
+  )
+  eq(
+    model.from_file(pfile, { area = "lib.nvim", slug = "cached", folder = true }).folder,
+    true,
+    "another ctx is another entry"
+  )
+  model.reset_parse_cache()
 end

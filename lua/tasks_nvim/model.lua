@@ -537,12 +537,59 @@ function M.parse_text(text, ctx)
   return task
 end
 
+---Parsed files by path: `{ sec, nsec, size, ctx, task }`. A file is parsed again when its mtime, size or the way
+---it is read (`ctx`) changed.
+---@type table<string, { sec: integer, nsec: integer, size: integer, ctx: string, task: Tasks.Task }>
+local parsed = {}
+local parsed_count = 0
+
+---Entries kept at most; the table is dropped when it overflows (it refills on the next scan).
+local PARSED_MAX = 5000
+
+---A file this young may still change within the timestamp's resolution (FAT: 2 s) without its mtime moving, so
+---it is never trusted from the cache (the same rule git applies to "racily clean" files).
+local RACY_SECONDS = 2
+
+---Forget every parsed file (specs that rewrite a file within the racy window need no call: such files are not cached).
+function M.reset_parse_cache()
+  parsed, parsed_count = {}, 0
+end
+
+---@param ctx table
+---@return string
+local function ctx_key(ctx)
+  return table.concat({
+    ctx.area or "",
+    ctx.location or "",
+    ctx.slug or "",
+    ctx.nested and "n" or "-",
+    ctx.folder and "f" or "-",
+  }, "\0")
+end
+
 ---Read and interpret one task file. An unreadable file yields an invalid task
----carrying the read error, never a raise.
+---carrying the read error, never a raise. A file whose mtime and size did not change since the last call is not read
+---and parsed again: the previous result is returned as a fresh copy (a scan of the vault is mostly unchanged files).
 ---@param path string
 ---@param ctx { area: string, location?: Tasks.Location, slug?: string, nested?: boolean, folder?: boolean }
 ---@return Tasks.Task
 function M.from_file(path, ctx)
+  local uv = vim.uv or vim.loop
+  local key = ctx_key(ctx)
+  local st = uv.fs_stat(path)
+  local mtime = st and st.mtime
+  if st and mtime and st.type == "file" then
+    local hit = parsed[path]
+    if
+      hit
+      and hit.sec == mtime.sec
+      and hit.nsec == mtime.nsec
+      and hit.size == st.size
+      and hit.ctx == key
+    then
+      return vim.deepcopy(hit.task)
+    end
+  end
   local full = vim.tbl_extend("force", { path = path }, ctx)
   local text, err = fsio.read(path)
   if not text then
@@ -552,7 +599,18 @@ function M.from_file(path, ctx)
     task.valid = false
     return task
   end
-  return M.parse_text(text, full)
+  local task = M.parse_text(text, full)
+  if st and mtime and st.type == "file" and mtime.sec < os.time() - RACY_SECONDS then
+    if parsed[path] == nil then
+      if parsed_count >= PARSED_MAX then
+        parsed, parsed_count = {}, 0
+      end
+      parsed_count = parsed_count + 1
+    end
+    parsed[path] =
+      { sec = mtime.sec, nsec = mtime.nsec, size = st.size, ctx = key, task = vim.deepcopy(task) }
+  end
+  return task
 end
 
 ---@param task Tasks.Task
