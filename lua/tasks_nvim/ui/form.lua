@@ -171,8 +171,24 @@ function M.open(opts)
       end
     end
   end
-  map("n", "<Space>", toggle_or("<Space>"), "Task form: tick/untick")
-  map("n", "<CR>", toggle_or("<CR>"), "Task form: tick/untick")
+  -- Keys from `setup({ keys = { form = ... } })`; `false` leaves an action unbound.
+  local keys = require("tasks_nvim.config").get().keys.form
+  ---@param modes string|string[]
+  ---@param name string
+  ---@param fn function
+  ---@param desc string
+  local function bind(modes, name, fn, desc)
+    local lhs = keys[name]
+    if lhs then
+      map(modes, lhs, fn, desc)
+    end
+  end
+  if keys.tick_space then
+    map("n", keys.tick_space, toggle_or(keys.tick_space), "Task form: tick/untick")
+  end
+  if keys.tick_enter then
+    map("n", keys.tick_enter, toggle_or(keys.tick_enter), "Task form: tick/untick")
+  end
   local function submit()
     vim.cmd("stopinsert")
     local values = M.read(buf, opts.areas)
@@ -180,7 +196,7 @@ function M.open(opts)
       opts.on_submit(values, buf)
     end
   end
-  map({ "n", "i" }, "<C-s>", submit, "Task form: submit")
+  bind({ "n", "i" }, "submit", submit, "Task form: submit")
   local function leave()
     M.close(buf)
     if opts.on_cancel then
@@ -204,9 +220,9 @@ function M.open(opts)
       end
     )
   end
-  map("n", "q", cancel, "Task form: cancel")
-  map({ "n", "i" }, "<C-q>", cancel, "Task form: cancel")
-  map("n", "g?", function()
+  bind("n", "cancel", cancel, "Task form: cancel")
+  bind({ "n", "i" }, "cancel_ctrl", cancel, "Task form: cancel")
+  bind("n", "help", function()
     require("lib.nvim.notify").create("[tasks]").info(table.concat(HELP, "\n"))
   end, "Task form: help")
 

@@ -51,6 +51,37 @@ return function(H)
   ok(#config.ignored() >= 1, "problems stay listed for :checkhealth")
   eq(require("tasks_nvim.config.DEFAULTS").ci.lint_timeout_ms, 120000, "defaults are data")
 
+  -- keys: an action name maps to a key or to false; unknown actions are reported, not bound
+  local kv = config.validate({ keys = { form = { submit = "<C-g>", cancel = false, nope = "x" } } })
+  eq(
+    kv.keys.form,
+    { submit = "<C-g>", cancel = false },
+    "known actions pass, `false` is kept, unknown ones go"
+  )
+  eq(
+    config.validate({ keys = { form = { submit = 5 } } }).keys,
+    {},
+    "a key that is no string or false is dropped"
+  )
+  eq(config.validate({ keys = { nowhere = {} } }).keys, {}, "an unknown key section is dropped")
+  eq(config.get().keys.form.submit, "<C-s>", "the defaults are the documented keys")
+
+  -- the form binds what the configuration says
+  local form_ui = require("tasks_nvim.ui.form")
+  local function map_of(lhs)
+    return vim.fn.maparg(lhs, "n", false, true)
+  end
+  config.merge({ keys = { form = { submit = "<C-g>", cancel = false } } })
+  local fbuf = form_ui.open({
+    areas = { "a" },
+    on_submit = function() end,
+  })
+  ok(map_of("<C-g>").buffer == 1, "the configured submit key is bound in the form")
+  ok(next(map_of("q")) == nil, "`false` leaves the action unbound")
+  ok(map_of("<C-s>").buffer ~= 1, "and the default key is not bound when it was replaced")
+  form_ui.close(fbuf)
+  config.merge({ keys = { form = { submit = "<C-s>", cancel = "q" } } })
+
   -- the health check reads only; it must not throw with or without a vault
   local vault = require("tasks_nvim.vault")
   vault.set_root(nil)

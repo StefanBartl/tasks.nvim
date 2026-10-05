@@ -114,8 +114,9 @@ require("tasks_nvim").setup({
 })
 ```
 
-A wrong key or value is reported (and listed in `:checkhealth`) and the default stays. Keys of the dashboard and
-the form are not configurable yet ([docs/BINDINGS.md](docs/BINDINGS.md)).
+A wrong key or value is reported (and listed in `:checkhealth`) and the default stays. Every key of the
+dashboard and the form can be moved or switched off with `keys = { dashboard = {...}, dashboard_input = {...},
+form = {...} }`, for example `keys = { form = { cancel = false } }` ([docs/BINDINGS.md](docs/BINDINGS.md)).
 
 ## Headless
 

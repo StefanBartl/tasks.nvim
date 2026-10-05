@@ -13,7 +13,7 @@ local M = {}
 ---@type Tasks.Opts
 local state = vim.deepcopy(DEFAULTS)
 
----@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"
+---@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"
 
 ---@type table<string, Tasks.ConfigType|table<string, Tasks.ConfigType>>
 local SCHEMA = {
@@ -22,6 +22,7 @@ local SCHEMA = {
   dashboard = { watch = "boolean", debounce_ms = "posint" },
   staleness = { git_timeout_ms = "posint", budget_ms = "posint", repo_bases = "string_list" },
   ci = { lint_timeout_ms = "posint" },
+  keys = { dashboard = "keymap", dashboard_input = "keymap", form = "keymap" },
 }
 
 ---What `validate` threw away (each message once), for `:checkhealth`: a one-time notification is easy to miss.
@@ -74,6 +75,16 @@ local function check(kind, value)
       return true, vim.deepcopy(value), nil
     end
     return false, nil, "a list of strings"
+  elseif kind == "keymap" then
+    if type(value) ~= "table" then
+      return false, nil, "a table of action = key"
+    end
+    for action, key in pairs(value) do
+      if type(action) ~= "string" or (type(key) ~= "string" and key ~= false) then
+        return false, nil, "a table of action = key (a string) or false"
+      end
+    end
+    return true, vim.deepcopy(value), nil
   elseif kind == "posint" then
     if type(value) == "number" and value > 0 and value == math.floor(value) then
       return true, value, nil
@@ -117,6 +128,21 @@ function M.validate(opts)
           unknown[#unknown + 1] = key .. "." .. tostring(subkey)
         else
           local good, kept, why = check(sub, subvalue)
+          if good and sub == "keymap" then
+            -- Only the actions the plugin has: a typo must not silently bind nothing.
+            local known = DEFAULTS.keys[subkey] or {}
+            local bad = {}
+            for action in pairs(kept) do
+              if known[action] == nil then
+                bad[#bad + 1] = action
+                kept[action] = nil
+              end
+            end
+            if #bad > 0 then
+              table.sort(bad)
+              unknown[#unknown + 1] = key .. "." .. subkey .. "." .. table.concat(bad, ",")
+            end
+          end
           if good then
             section[subkey] = kept
           else

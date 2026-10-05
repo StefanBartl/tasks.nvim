@@ -41,7 +41,23 @@ Details of every verb: [COMMANDS.md](COMMANDS.md).
 Counts are not used: `s`, `p` and `o` advance one step per press (mark several tasks with `<Tab>` instead).
 
 In the input window the same actions are on Alt (these shadow snacks.nvim's own `<M-d>` inspect, `<M-f>` follow,
-`<M-r>` regex, `<M-m>` maximize and `<M-p>` preview toggles there; the keys are not configurable yet): `<M-s> <M-p> <M-d> <M-f> <M-o> <M-e> <M-r> <M-b> <M-m> <M-v> <M-?>`.
+`<M-r>` regex, `<M-m>` maximize and `<M-p>` preview toggles there; turn any of them off or move it with `keys`, below): `<M-s> <M-p> <M-d> <M-f> <M-o> <M-e> <M-r> <M-b> <M-m> <M-v> <M-?>`.
+
+## Changing or switching off keys
+
+```lua
+require("tasks_nvim").setup({
+  keys = {
+    dashboard = { done = "X", preview = false },     -- list window; false: no key for that action
+    dashboard_input = { sort = "<M-t>", filter = false },  -- input window (normal and insert mode)
+    form = { cancel = false, submit = "<C-CR>" },    -- `:Tasks new` form
+  },
+})
+```
+
+An action that is not named keeps its default. Dashboard actions: `status prio done filter sort export rescan
+backlog roadmap preview help`. Form actions: `tick_space tick_enter submit cancel cancel_ctrl help`. An unknown
+action name is reported (and listed in `:checkhealth`), never bound. The help (`g?`) lists the default keys.
 
 ## Form (`:Tasks new` without arguments)
 

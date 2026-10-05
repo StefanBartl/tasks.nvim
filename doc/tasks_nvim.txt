@@ -58,6 +58,10 @@ blockers, plan or estimate is valid and stays visible everywhere.
   staleness.budget_ms      All git calls of one `--stale=refs` run together.
   staleness.repo_bases     Folders holding the repos by name (`<base>/<area>`).
   ci.lint_timeout_ms       The vault's `md_lint.lua` is killed after this long.
+  keys.dashboard           Dashboard list keys: action = key, or false.
+  keys.dashboard_input     Dashboard input-window keys (normal and insert).
+  keys.form                Keys of the `:Tasks new` form.
+                           Actions: see |tasks_nvim-keys|.
 
 A wrong key or value is ignored with a message and listed in
 `:checkhealth tasks_nvim`; the default stays.

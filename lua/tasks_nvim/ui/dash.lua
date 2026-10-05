@@ -808,10 +808,42 @@ local function open_snacks(Snacks, state)
     gp = { "tasks_preview", "<M-v>" },
     ["g?"] = { "tasks_help", "<M-?>" },
   }
-  local list_keys, input_keys = {}, {}
+  -- The keys come from `setup({ keys = { dashboard = ..., dashboard_input = ... } })`; `false` switches an
+  -- action's key off. `letters` above is only the table of actions and their built-in keys.
+  local configured = require("tasks_nvim.config").get().keys
+  local action_of = {}
   for key, spec in pairs(letters) do
-    list_keys[key] = spec[1]
-    input_keys[spec[2]] = { spec[1], mode = { "n", "i" } }
+    action_of[spec[1]] = { default_list = key, default_input = spec[2] }
+  end
+  local names = {
+    status = "tasks_status",
+    prio = "tasks_prio",
+    done = "tasks_done",
+    filter = "tasks_filter",
+    sort = "tasks_sort",
+    export = "tasks_export",
+    rescan = "tasks_rescan",
+    backlog = "tasks_backlog",
+    roadmap = "tasks_roadmap",
+    preview = "tasks_preview",
+    help = "tasks_help",
+  }
+  local list_keys, input_keys = {}, {}
+  for name, action in pairs(names) do
+    local list_key = configured.dashboard[name]
+    if list_key == nil then
+      list_key = action_of[action].default_list
+    end
+    if list_key then
+      list_keys[list_key] = action
+    end
+    local input_key = configured.dashboard_input[name]
+    if input_key == nil then
+      input_key = action_of[action].default_input
+    end
+    if input_key then
+      input_keys[input_key] = { action, mode = { "n", "i" } }
+    end
   end
 
   local picker = Snacks.picker({

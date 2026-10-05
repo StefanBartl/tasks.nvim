@@ -16,12 +16,22 @@
 ---@class Tasks.CiConfig
 ---@field lint_timeout_ms integer  The vault's `md_lint.lua` is killed after this long (`ci`).
 
+---Key maps: an action name to a key, or `false` to switch that action's key off. An action that is not named
+---keeps its default key.
+---@alias Tasks.KeyMap table<string, string|false>
+
+---@class Tasks.KeysConfig
+---@field dashboard Tasks.KeyMap        Keys in the dashboard list window.
+---@field dashboard_input Tasks.KeyMap  Keys in the dashboard input window (normal and insert mode).
+---@field form Tasks.KeyMap             Buffer-local keys of the `:Tasks new` form.
+
 ---@class Tasks.Opts
 ---@field vault string|nil          Vault folder (one folder per area). `nil`: `$TASKS_VAULT` is read.
 ---@field extra_areas string[]      Folders that are areas although they hold neither `ROADMAP/` nor `Backlog/`.
 ---@field dashboard Tasks.DashboardConfig
 ---@field staleness Tasks.StalenessConfig
 ---@field ci Tasks.CiConfig
+---@field keys Tasks.KeysConfig
 
 ---@type Tasks.Opts
 return {
@@ -30,4 +40,40 @@ return {
   dashboard = { watch = true, debounce_ms = 250 },
   staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },
   ci = { lint_timeout_ms = 120000 },
+  keys = {
+    dashboard = {
+      status = "s",
+      prio = "p",
+      done = "D",
+      filter = "f",
+      sort = "o",
+      export = "e",
+      rescan = "r",
+      backlog = "gb",
+      roadmap = "gr",
+      preview = "gp",
+      help = "g?",
+    },
+    dashboard_input = {
+      status = "<M-s>",
+      prio = "<M-p>",
+      done = "<M-d>",
+      filter = "<M-f>",
+      sort = "<M-o>",
+      export = "<M-e>",
+      rescan = "<M-r>",
+      backlog = "<M-b>",
+      roadmap = "<M-m>",
+      preview = "<M-v>",
+      help = "<M-?>",
+    },
+    form = {
+      tick_space = "<Space>",
+      tick_enter = "<CR>",
+      submit = "<C-s>",
+      cancel = "q",
+      cancel_ctrl = "<C-q>",
+      help = "g?",
+    },
+  },
 }
