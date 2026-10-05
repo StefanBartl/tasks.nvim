@@ -162,6 +162,7 @@ end
 ---@class Tasks.IndexOpts : Tasks.ScanOpts
 ---@field check? boolean        # Report only, write and remove nothing.
 ---@field max_summary? integer
+---@field scanned? { tasks: Tasks.Task[], errors: string[]|string|nil }  # The area was scanned by the caller just now: do not scan it again.
 
 ---Bring one area's index in line with its task files.
 ---
@@ -182,7 +183,13 @@ function M.write_area(area, opts)
   if not vault.has_area(root, area) then
     return nil, "unknown area: " .. tostring(area)
   end
-  local tasks, errors = scan.area(area, vim.tbl_extend("force", opts, { root = root }))
+  local tasks, errors
+  if opts.scanned then
+    -- The caller (`check`) scanned this area a moment ago; parsing every task again is the cost.
+    tasks, errors = opts.scanned.tasks, opts.scanned.errors
+  else
+    tasks, errors = scan.area(area, vim.tbl_extend("force", opts, { root = root }))
+  end
   if not tasks then
     return nil, tostring(errors)
   end

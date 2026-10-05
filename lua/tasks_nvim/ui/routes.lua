@@ -37,6 +37,10 @@ local M = {}
 ---repeatedly must not rescan 40 folders each time).
 local COMPLETE_TTL = 3
 
+---The id list of the last `TASK_ID` completion, for `COMPLETE_TTL` seconds.
+---@type { ids: string[]|nil, root: string|nil, at: integer }
+local id_cache = { at = 0 }
+
 ---@return table
 local function cmd()
   return require("tasks_nvim.ui.cmd")
@@ -121,6 +125,13 @@ function M.register_types()
       return false, nil, find_err or ("no such open task: " .. raw)
     end,
     complete = function(arg_lead)
+      -- The directory walk is cached by `scan.all`, but parsing 466 task files (96 ms) happened on every
+      -- `<Tab>` anyway; the finished, sorted id list is what is worth keeping for a moment.
+      local root = vault.root()
+      local now = (vim.uv or vim.loop).now()
+      if id_cache.ids and id_cache.root == root and now - id_cache.at < COMPLETE_TTL * 1000 then
+        return prefix_ci(id_cache.ids, arg_lead)
+      end
       local ok, tasks = pcall(scan.all, { ttl_seconds = COMPLETE_TTL })
       if not ok or not tasks then
         return {}
@@ -132,6 +143,7 @@ function M.register_types()
         end
       end
       table.sort(ids)
+      id_cache = { ids = ids, root = root, at = now }
       return prefix_ci(ids, arg_lead)
     end,
   })
