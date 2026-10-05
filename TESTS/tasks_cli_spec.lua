@@ -317,7 +317,7 @@ return function(H)
   --- Run the script in a child Neovim.
   ---@param argv string[]
   ---@param bare? boolean  do not append --vault/--today
-  ---@return vim.SystemCompleted
+  ---@return { code: integer, stdout: string, stderr: string }
   local function child(argv, bare)
     local cmd = { vim.v.progpath, "-n", "-i", "NONE", "--headless", "-u", "NONE", "-l", script }
     vim.list_extend(cmd, argv)

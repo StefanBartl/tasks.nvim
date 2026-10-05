@@ -3,7 +3,7 @@
 -- real composer command (registered here as :TaskT with the very routes the host verb gets) against a
 -- fixture vault.
 
----@diagnostic disable: duplicate-set-field
+---@diagnostic disable: duplicate-set-field, param-type-mismatch
 -- Why: specs replace module functions with test doubles on purpose.
 
 return function(H)

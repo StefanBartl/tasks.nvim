@@ -277,7 +277,7 @@ function M.list(ctx)
     return
   end
   if #errors > 0 then
-    notify.warn("cannot read directory " .. table.concat(errors, ", "))
+    notify.warn("cannot read directory " .. table.concat(errors or {}, ", "))
   end
   local filtered, stale_report = model.filter(open, filter)
   local shown = model.sort(filtered, order)

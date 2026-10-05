@@ -1033,7 +1033,7 @@ local function plan_done(id, opts)
   end
 
   ---@type Tasks.DonePlan
-  return {
+  local plan = {
     id = id,
     root = root,
     area = area,
@@ -1052,8 +1052,8 @@ local function plan_done(id, opts)
     readme_new = readme_new,
     readme_state = readme_state,
     index = opts.index ~= false,
-  },
-    nil
+  }
+  return plan, nil
 end
 
 ---The files the snapshot has to hold: the finished copy (plain task), the index and the README. The task file

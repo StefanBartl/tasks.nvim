@@ -789,6 +789,7 @@ end
 ---@param tasks Tasks.Task[]
 ---@param f? Tasks.Filter
 ---@return Tasks.Task[]
+---@return Tasks.StalenessReport|nil stale_report  # Only when `f.stale_refs` asked for the check.
 function M.filter(tasks, f)
   f = f or {}
   local status, kind, area = to_set(f.status), to_set(f.kind), to_set(f.area)
@@ -880,8 +881,9 @@ function M.filter(tasks, f)
       -- with refs stays in the list, marked as unverified.
       for _, t in ipairs(out) do
         if #(t.refs or {}) > 0 then
-          report.stale[t.id] =
-            { { ref = "(refs could not be checked)", date = "?", source = "unverified" } }
+          report.stale[t.id] = {
+            { ref = "(refs could not be checked)", file = "", date = "?", source = "unverified" },
+          }
         end
       end
     end

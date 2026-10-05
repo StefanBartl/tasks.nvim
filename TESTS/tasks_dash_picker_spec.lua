@@ -4,7 +4,7 @@
 -- input) are stubbed with scripted answers. Skipped (reported, not failed) when snacks.nvim is not
 -- installed; the plain vim.ui.select fallback is covered either way.
 
----@diagnostic disable: duplicate-set-field
+---@diagnostic disable: duplicate-set-field, param-type-mismatch
 -- Why: specs replace module functions with test doubles on purpose.
 
 return function(H)

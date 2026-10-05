@@ -2,7 +2,7 @@
 -- table cells (a backslash run in front of `|` stays escaped), no quadratic parse of a file with many opaque
 -- keys, `fsio.read` refuses what is not a small regular file, and C1 control characters never reach an asset name.
 
----@diagnostic disable: duplicate-set-field, need-check-nil
+---@diagnostic disable: duplicate-set-field, need-check-nil, param-type-mismatch, assign-type-mismatch
 -- Why: a value is bound with assert()/ok() in the same body, so a nil fails the spec at that line; specs replace module functions with test doubles on purpose.
 
 return function(H)

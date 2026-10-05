@@ -1,6 +1,6 @@
 -- TESTS/tasks/tasks_index_spec.lua -- tasks.index: render, write-only-when-different, check, global text.
 
----@diagnostic disable: need-check-nil
+---@diagnostic disable: need-check-nil, param-type-mismatch
 -- Why: a value is bound with assert()/ok() in the same body, so a nil fails the spec at that line.
 
 return function(H)

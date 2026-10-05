@@ -175,9 +175,12 @@ function M.all(opts)
   return all, all_errors
 end
 
+---@class Tasks.OpenTasksOpts : Tasks.ScanOpts
+---@field area? string   # One area (default: all of them).
+
 ---The open tasks, the one list every front end starts from: one area (`opts.area`) or all of them, with
 ---the tasks whose status is not an open one (a `done` file that is still in `ROADMAP/`) counted, not listed.
----@param opts? Tasks.ScanOpts & { area?: string }
+---@param opts? Tasks.OpenTasksOpts
 ---@return Tasks.Task[]|nil open
 ---@return integer|string skipped_or_err  the number of tasks left out, or the error when `open` is nil
 ---@return string[]|nil errors  directories that could not be listed (the result is then incomplete)

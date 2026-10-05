@@ -88,9 +88,10 @@ end
 
 ---@class Tasks.DashLoad
 ---@field tasks Tasks.Task[]   # Open tasks that passed the filter, sorted.
----@field open integer         # Open tasks before the filter.
----@field skipped integer      # Task files not listed (done, missing or unknown status).
+---@field open? integer        # Open tasks before the filter (absent in a re-sort of what is on screen).
+---@field skipped? integer     # Task files not listed (done, missing or unknown status).
 ---@field errors string[]      # Directories that could not be read.
+---@field stale_report? Tasks.StalenessReport  # With `--stale=refs`: what the check found and what it could not.
 
 ---A filter whose `stale_refs` lookup knows the vault root (a copy; the stored
 ---filter stays free of it).
@@ -731,7 +732,7 @@ M.EXPORT_CHOICES = {
 ---`tasks_view.deliver` takes.
 ---@param choice Tasks.DashExport
 ---@param path? string
----@return { kind: string, path?: string }|nil target
+---@return Tasks.Target|nil target
 ---@return string|nil err
 function M.export_target(choice, path)
   if choice.to == "file" then

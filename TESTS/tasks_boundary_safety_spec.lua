@@ -3,6 +3,9 @@
 -- task files, the CI gate reports a killed or hung md_lint, the scripts find their own folder from
 -- anywhere, and the editor's `task attach` takes a typed file name literally before it expands it.
 
+---@diagnostic disable: redundant-return-value
+-- Why: a value that can be nil is bound and then asserted by the next ok()/eq() of the same body, so a nil fails the spec at that line; some specs feed wrong types or incomplete tables on purpose.
+
 return function(H)
   local eq, ok, has, lacks = H.eq, H.ok, H.has, H.lacks
   local F = dofile(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)) .. "/fixture.lua")

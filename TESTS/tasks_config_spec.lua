@@ -86,6 +86,7 @@ return function(H)
   local defaults = require("tasks_nvim.config.DEFAULTS").keys
   local form_help = table.concat(form_ui.help_lines(), "\n")
   for name, lhs in pairs(defaults.form) do
+    ---@cast lhs string
     ok(
       form_help:find(lhs, 1, true) ~= nil,
       ("form help names the default key of %s (%s)"):format(name, lhs)

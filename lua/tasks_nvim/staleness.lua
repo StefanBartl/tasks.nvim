@@ -52,9 +52,9 @@ end
 
 ---@class Tasks.RefChange
 ---@field ref string      # The ref as written in the task.
----@field file string     # The file that changed (inside a directory ref: the file in it), forward slashes.
+---@field file string     # The file that changed (inside a directory ref: the file in it), forward slashes; empty when unverified.
 ---@field date string     # `YYYY-MM-DD` of the change.
----@field source "git"|"mtime"
+---@field source "git"|"mtime"|"unverified"  # `unverified`: the check itself failed (see `model.filter`).
 
 ---@class Tasks.StalenessReport
 ---@field stale table<string, Tasks.RefChange[]>  # Task id -> what changed.

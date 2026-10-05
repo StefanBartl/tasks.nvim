@@ -1,6 +1,6 @@
 -- TESTS/tasks/tasks_check_spec.lua -- tasks.check: every rule of concept section 9 has a finding.
 
----@diagnostic disable: need-check-nil
+---@diagnostic disable: need-check-nil, param-type-mismatch
 -- Why: a value is bound with assert()/ok() in the same body, so a nil fails the spec at that line.
 
 return function(H)

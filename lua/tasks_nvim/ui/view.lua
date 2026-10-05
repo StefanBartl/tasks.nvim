@@ -128,9 +128,14 @@ local COLUMNS = {
   },
 }
 
+---Where `:Tasks list --to=` puts the tasks: `kind` is `buffer`, `clipboard`, `qf`, `file`, `echo` or `mdview`; `path` only for `file`.
+---@class Tasks.Target
+---@field kind string
+---@field path? string
+
 ---Split a `--to=` token into `{ kind, path }` and reject what no sink knows.
 ---@param to string|nil  nil means "no target given"
----@return { kind: string, path?: string }|nil target
+---@return Tasks.Target|nil target
 ---@return string|nil err
 function M.parse_target(to)
   if to == nil then
@@ -150,7 +155,7 @@ function M.parse_target(to)
 end
 
 ---The format a file target implies when `--format` is not given: `.csv` -> csv.
----@param target { kind: string, path?: string }|nil
+---@param target Tasks.Target|nil
 ---@param format string|nil
 ---@return Tasks.Format
 function M.resolve_format(target, format)
@@ -259,7 +264,7 @@ end
 ---Why a delivery to `target` must not happen: a `file:<path>` target that already exists is never
 ---overwritten without the user saying so (a mistyped path used to replace a task file or a note with the table,
 ---with no question and no checkpoint). Resolves the path like the file sink does (`~`, environment variables).
----@param target { kind: string, path?: string }|nil
+---@param target Tasks.Target|nil
 ---@param force? boolean
 ---@return string|nil blocked  the sentence to show, `nil` when the delivery may go ahead
 function M.overwrite_guard(target, force)
@@ -286,7 +291,7 @@ end
 ---Deliver tasks to a target. `target == nil` means the default, a scratch
 ---buffer. Returns `ok, err`; the caller reports.
 ---@param tasks Tasks.Task[]
----@param target { kind: string, path?: string }|nil
+---@param target Tasks.Target|nil
 ---@param opts? Tasks.DeliverOpts
 ---@return boolean ok
 ---@return string|nil err

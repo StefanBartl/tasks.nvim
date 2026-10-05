@@ -1,6 +1,9 @@
 -- TESTS/tasks/tasks_form_spec.lua -- tasks.form: template, parsing, validation and the tick rules of the
 -- `:Tasks new` form, all on plain strings (no buffer, no vault).
 
+---@diagnostic disable: param-type-mismatch
+-- Why: a value that can be nil is bound and then asserted by the next ok()/eq() of the same body, so a nil fails the spec at that line; some specs feed wrong types or incomplete tables on purpose.
+
 return function(H)
   local eq, ok, has = H.eq, H.ok, H.has
   local form = require("tasks_nvim.form")

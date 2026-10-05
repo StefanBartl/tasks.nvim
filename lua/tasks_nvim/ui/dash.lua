@@ -696,10 +696,11 @@ local function start_watch(state, picker)
   }, M.config.watch_opts or {}))
   -- A handle factory that raises must not take the open picker down with it (the caller's pcall
   -- would open the plain list on top of it) and must not leave the handles it did start behind.
-  local ran, started, err = pcall(w.start, w)
+  local ran, res, err = pcall(w.start, w)
+  local started = ran and res == true
   if not ran then
     pcall(w.stop, w)
-    err, started = started, false
+    err = tostring(res)
   end
   if not started then
     notify.info(("no live refresh (%s) -- press r to rescan"):format(tostring(err)))

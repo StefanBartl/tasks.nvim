@@ -95,6 +95,7 @@ return function(H)
   for _ = 1, ROUNDS do
     local opt = {}
     for _ = 1, rnd(3) do
+      ---@type string|integer
       local value = noise(6)
       if rnd(5) == 1 then
         value = rnd(12) - 3
