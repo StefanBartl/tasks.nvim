@@ -1,0 +1,99 @@
+---@meta
+---@module 'tasks_nvim.@types'
+
+--- Where a task file lives: an open task in `ROADMAP/tasks/`, a finished one in
+--- `Backlog/FEATURES|TASKS/`.
+---@alias Tasks.Location "roadmap"|"backlog"
+
+---@alias Tasks.Status "open"|"doing"|"blocked"|"decision"|"parked"|"done"
+---@alias Tasks.Kind "feature"|"task"|"bug"|"idea"|"research"
+---@alias Tasks.Bucket "FEATURES"|"TASKS"
+
+--- One task file, read. Always produced, even for a broken file: `errors` says
+--- what is wrong and `valid` is false, so one bad file never hides the others.
+---@class Tasks.Task
+---@field id string                   # `<area>/<slug>`.
+---@field area string                 # Area (plugin folder) name.
+---@field slug string                 # Filename without `.md` (and without the `YYYY-MM-DD_` prefix in `Backlog/`).
+---@field path string                 # Absolute path of the task file, forward slashes.
+---@field folder boolean              # A folder task: the file is `<slug>/<slug>.md`, the folder may hold assets.
+---@field location Tasks.Location
+---@field title string                # Frontmatter `title`, or the slug when it is missing.
+---@field status? string              # As written; may be an unknown word (see `errors`).
+---@field kind? string
+---@field prio? integer               # 1..3; nil when absent or invalid.
+---@field effort? string
+---@field tags string[]
+---@field category string[]           # The `category` list as written (see `model.categories` for the effective set).
+---@field severity? string             # `low|medium|high|critical`, as written (meant for bug/security tasks; may be an unknown word, see `errors`).
+---@field created? string             # `YYYY-MM-DD`
+---@field updated? string             # `YYYY-MM-DD`
+---@field blocked_by string[]         # Task ids.
+---@field refs string[]
+---@field done_in? string
+---@field summary string              # Frontmatter `summary`, else the first body paragraph; "" when neither.
+---@field meta table<string, any>     # Every frontmatter key as parsed (unknown keys included).
+---@field errors string[]             # Validation problems; empty when the file is fine.
+---@field error_codes string[]        # One stable rule code per entry of `errors` (`unknown-status`, `bad-prio`, ...).
+---@field warnings string[]           # Lines the frontmatter reader kept verbatim without understanding.
+---@field hints { code: string, msg: string }[]  # Non-fatal remarks (`title-comment`): the file reads, but not as written.
+---@field valid boolean               # `#errors == 0`
+
+--- Filter for `model.filter`. Every set-like field matches any of its values.
+---@class Tasks.Filter
+---@field status? string|string[]
+---@field prio? integer|integer[]
+---@field prio_max? integer           # Matches prio <= prio_max (a task without prio never matches).
+---@field kind? string|string[]
+---@field tag? string|string[]
+---@field category? string|string[]   # Matches any effective category (`model.categories`).
+---@field effort? string|string[]      # Matches the written effort exactly (`XS`..`XL`, `0.5d`).
+---@field effort_max? string           # Matches an effort of at most this (sizes and days on one scale; no effort never matches).
+---@field severity? string|string[]    # Matches the written severity (a task without severity never matches).
+---@field area? string|string[]
+---@field blocked? boolean            # status `blocked` or a non-empty `blocked_by`.
+---@field stale? integer              # Not updated for at least this many days (undated counts as stale).
+---@field stale_refs? boolean         # A file named in `refs` changed after `updated` (`tasks.staleness`; reads files and git).
+---@field ref_stale? table<string, Tasks.RefChange[]>  # Ready answer for `stale_refs` (task id -> changes); computed when absent.
+---@field ref_opts? Tasks.StalenessOpts  # Handed to `staleness.compute` (specs: `git_dates`, `repo_bases`, `root`).
+---@field today? string              # `YYYY-MM-DD` the `stale` age is measured against (default: today).
+
+---@class Tasks.Area
+---@field name string
+---@field path string                 # Absolute path of the area folder.
+
+--- Outcome of one index operation (`index.write_area`).
+---@class Tasks.IndexResult
+---@field area string
+---@field path string                 # `<area>/ROADMAP/TASKS.md`
+---@field open integer                # Open tasks that are (or would be) listed.
+---@field action "written"|"removed"|"unchanged"|"stale"  # `stale` only in check mode: the file differs from what would be generated.
+---@field reason? string              # For `stale`: "missing", "outdated" or "orphan".
+
+---@class Tasks.Finding
+---@field code string                 # Stable rule code, e.g. `unknown-status`.
+---@field severity "error"|"warn"
+---@field area string
+---@field path string                 # Absolute path.
+---@field id? string
+---@field message string
+
+---@class Tasks.NewOpts
+---@field root? string
+---@field title string
+---@field kind? string
+---@field prio? integer|string
+---@field effort? string
+---@field tags? string[]|string       # A string is split at commas.
+---@field category? string[]|string   # Concerns (`model.CATEGORIES`); a string is split at commas.
+---@field severity? string            # `model.SEVERITIES`; meant for bug/security tasks (a warning from `check` otherwise).
+---@field folder? boolean             # Create a folder task (`<slug>/<slug>.md`) so assets can be attached.
+---@field refs? string[]|string       # Paths or `repo@commit`; a string is split at commas.
+---@field lang? "de"|"en"             # Language of the body headings (default "de").
+---@field status? string
+---@field summary? string
+---@field slug? string
+---@field today? string
+---@field index? boolean              # Regenerate the area index afterwards (default true).
+
+return {}

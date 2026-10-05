@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  stylua:
+    name: stylua (format check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: JohnnyMorganz/stylua-action@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Pinned, not "latest", like every repo of the fleet.
+          version: v2.5.2
+          args: --check .
+
+  luacheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: leafo/gh-actions-lua@v13
+        with:
+          luaVersion: "5.4"
+      - uses: leafo/gh-actions-luarocks@v6
+      - run: luarocks install luacheck 1.2.0
+      - run: luacheck lua TESTS scripts
+
+  tests:
+    name: specs (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      # lib.nvim is a hard runtime dependency; TESTS/run.lua finds it in .deps/lib.nvim.
+      - uses: actions/checkout@v5
+        with:
+          repository: StefanBartl/lib.nvim
+          path: .deps/lib.nvim
+          ref: ci-verified
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - run: nvim -n -i NONE --headless -u NONE -l TESTS/run.lua

@@ -1,0 +1,16 @@
+*tasks_nvim.txt*  Task files in a Markdown vault: engine and headless CLI
+
+==============================================================================
+INTRODUCTION                                                    *tasks_nvim*
+
+One Markdown file per task (flat YAML frontmatter), one generated overview
+per area. The engine is pure Lua; the CLI is `scripts/tasks.lua`.
+
+Setup: >lua
+  require("tasks_nvim").setup({ vault = "~/vault", extra_areas = { "ALL" } })
+<
+There is no built-in vault path; `$TASKS_VAULT` is read when `vault` is unset.
+The editor commands are not part of this stage; see docs/ENGINE.md for the
+format, the verbs and the checks.
+
+ vim:tw=78:ts=8:ft=help:norl:

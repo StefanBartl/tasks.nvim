@@ -1,0 +1,200 @@
+-- TESTS/tasks/tasks_ci_spec.lua -- the vault gate (`tasks.ci`, `tasks ci`, scripts/tasks-ci.lua): green and red.
+
+return function(H)
+  local eq, ok, has, lacks = H.eq, H.ok, H.has, H.lacks
+  local F = dofile(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)) .. "/fixture.lua")
+  local ci = require("tasks_nvim.ci")
+  local index = require("tasks_nvim.index")
+
+  local script_dir = vim.fs.dirname(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)))
+
+  ---@param root string
+  ---@param area string
+  ---@param slug string
+  ---@param extra? table[]
+  local function task(root, area, slug, extra)
+    local meta = F.meta(slug, "open", { { "created", "2026-09-01" }, { "updated", "2026-09-02" } })
+    vim.list_extend(meta, extra or {})
+    F.task(H, root, area, slug, meta)
+  end
+
+  --- A green vault: two tasks, indexes written, a stand-in md_lint script.
+  ---@return string root
+  ---@return string md_lint
+  local function green_vault()
+    local root = F.vault(H)
+    task(root, "lib.nvim", "alpha", { { "prio", "1" } })
+    task(root, "cascade.nvim", "beta")
+    assert(index.write_all({ root = root }))
+    local md_lint = root .. "/TOOLS/scripts/md_lint.lua"
+    H.write(md_lint, "os.exit(0)\n")
+    return root, md_lint
+  end
+
+  -- a runner that records its input instead of starting Neovim
+  local linted = {}
+  local function runner(code, text)
+    return function(files, script)
+      linted[#linted + 1] = { files = files, script = script }
+      return code, text or ""
+    end
+  end
+
+  -- ── green ───────────────────────────────────────────────────────────────
+  local root = green_vault()
+  local res = ci.run({ root = root, run_lint = runner(0) })
+  eq(res.code, 0, table.concat(res.lines, "\n"))
+  ok(res.ok)
+  eq(res.failed, {})
+  has(table.concat(res.lines, "\n"), "tasks-ci: OK")
+  has(table.concat(res.lines, "\n"), "index --check: 5 area(s) up to date")
+  eq(#linted, 1, "md_lint ran once for the generated indexes")
+  eq(#linted[1].files, 2, "both generated TASKS.md files are linted")
+  for _, file in ipairs(linted[1].files) do
+    ok(file:match("ROADMAP/TASKS%.md$"), file .. " is a generated index")
+  end
+  eq(linted[1].script, root .. "/TOOLS/scripts/md_lint.lua")
+
+  -- say() receives every line as it is produced
+  local said = {}
+  ci.run({ root = root, run_lint = runner(0) }, function(l)
+    said[#said + 1] = l
+  end)
+  eq(said[#said], "tasks-ci: OK")
+
+  -- lint = false skips the lint step (and needs no script)
+  linted = {}
+  res = ci.run({ root = root, lint = false, run_lint = runner(0) })
+  eq(res.code, 0)
+  eq(#linted, 0)
+  has(table.concat(res.lines, "\n"), "md_lint skipped")
+
+  -- ── red: a rule error ───────────────────────────────────────────────────
+  root = green_vault()
+  H.write(root .. "/lib.nvim/ROADMAP/tasks/broken.md", "no frontmatter at all\n")
+  res = ci.run({ root = root, run_lint = runner(0) })
+  eq(res.code, 1)
+  ok(vim.tbl_contains(res.failed, "check"), "the broken file fails the check step")
+  has(table.concat(res.lines, "\n"), "frontmatter-missing")
+  has(table.concat(res.lines, "\n"), "tasks-ci: FAILED (")
+
+  -- ── red: a stale index ──────────────────────────────────────────────────
+  root = green_vault()
+  H.write(root .. "/lib.nvim/ROADMAP/TASKS.md", "# hand-edited\n")
+  res = ci.run({ root = root, run_lint = runner(0) })
+  eq(res.code, 1)
+  ok(vim.tbl_contains(res.failed, "index"), "the outdated index fails the index step")
+  has(table.concat(res.lines, "\n"), "outdated")
+
+  -- ── red: md_lint reports problems / is missing ──────────────────────────
+  root = green_vault()
+  res =
+    ci.run({ root = root, run_lint = runner(1, "TASKS.md:3  MISSING FILE  ../x.md\nOK nothing\n") })
+  eq(res.code, 1)
+  eq(res.failed, { "md_lint" })
+  has(table.concat(res.lines, "\n"), "md_lint: TASKS.md:3  MISSING FILE")
+  lacks(
+    table.concat(res.lines, "\n"),
+    "md_lint: OK",
+    "the OK line of a clean chunk is not a problem"
+  )
+
+  vim.fn.delete(root .. "/TOOLS/scripts/md_lint.lua")
+  res = ci.run({ root = root, run_lint = runner(0) })
+  eq(res.code, 1, "a gate that cannot lint fails instead of skipping")
+  has(table.concat(res.lines, "\n"), "script not found")
+
+  -- ── warnings: only --strict fails on them ───────────────────────────────
+  root = green_vault()
+  -- a done blocker is a warning (blocked-by-done); the finished task goes to Backlog
+  H.write(
+    root .. "/lib.nvim/Backlog/TASKS/2026-09-02_ghost.md",
+    F.text(F.meta("ghost", "done", { { "created", "2026-09-01" }, { "updated", "2026-09-02" } }))
+  )
+  H.write(
+    root .. "/lib.nvim/ROADMAP/tasks/gamma.md",
+    F.text(F.meta("gamma", "open", {
+      { "created", "2026-09-01" },
+      { "updated", "2026-09-02" },
+      { "blocked_by", "[lib.nvim/ghost]" },
+    }))
+  )
+  assert(index.write_all({ root = root }))
+  H.write(root .. "/TOOLS/scripts/md_lint.lua", "os.exit(0)\n")
+  res = ci.run({ root = root, run_lint = runner(0) })
+  has(table.concat(res.lines, "\n"), "blocked-by-done")
+  eq(res.code, 0, "a warning alone does not fail: " .. table.concat(res.lines, "\n"))
+  res = ci.run({ root = root, strict = true, run_lint = runner(0) })
+  eq(res.code, 1, "--strict makes the warning fail")
+
+  -- ── no vault ────────────────────────────────────────────────────────────
+  res = ci.run({ root = root .. "/missing" })
+  eq(res.code, 1)
+  has(table.concat(res.lines, "\n"), "vault FAILED")
+
+  -- ── CLI `ci` in-process ─────────────────────────────────────────────────
+  local cli = require("tasks_nvim.cli")
+  ---@param argv string[]
+  local function run_cli(argv)
+    local out, err = {}, {}
+    local code = cli.run(argv, {
+      out = function(t)
+        out[#out + 1] = t
+      end,
+      err = function(t)
+        err[#err + 1] = t
+      end,
+    })
+    return code, table.concat(out), table.concat(err)
+  end
+  root = green_vault()
+  local code, out = run_cli({ "ci", "--vault=" .. root, "--no-lint" })
+  eq(code, 0, out)
+  has(out, "tasks-ci: OK")
+  code = run_cli({ "ci", "extra", "--vault=" .. root })
+  eq(code, 2, "ci takes no positional argument")
+  code = run_cli({ "ci", "--bogus", "--vault=" .. root })
+  eq(code, 2)
+
+  -- ── the real script in a child Neovim, real md_lint ─────────────────────
+  local lib = vim.env.LIB_NVIM_DIR
+  if lib and lib ~= "" then
+    root = green_vault()
+    -- the stand-in is replaced by a tiny real linter: exits 1 when a TASKS.md has a table row of the wrong width
+    H.write(
+      root .. "/TOOLS/scripts/md_lint.lua",
+      table.concat({
+        "local bad = 0",
+        "for i = 1, #arg do",
+        "  local f = io.open(arg[i], 'rb')",
+        "  if not f then bad = bad + 1; print(arg[i] .. ':1  MISSING FILE') else f:close() end",
+        "end",
+        "os.exit(bad == 0 and 0 or 1)",
+        "",
+      }, "\n")
+    )
+    ---@param ... string
+    ---@return integer code
+    ---@return string output
+    local function child(...)
+      local cmd =
+        { vim.v.progpath, "--headless", "-u", "NONE", "-l", script_dir .. "/scripts/tasks-ci.lua" }
+      vim.list_extend(cmd, { ... })
+      local r = vim.system(cmd, { text = true, env = { LIB_NVIM_DIR = lib } }):wait(60000)
+      return r.code, (r.stdout or "") .. (r.stderr or "")
+    end
+    local ccode, cout = child("--vault=" .. root)
+    eq(ccode, 0, cout)
+    has(cout, "tasks-ci: OK")
+    has(cout, "md_lint: 2 index file(s) clean")
+
+    H.write(root .. "/cascade.nvim/ROADMAP/TASKS.md", "# stale\n")
+    ccode, cout = child("--vault=" .. root)
+    eq(ccode, 1, cout)
+    has(cout, "FAILED (")
+    has(cout, "index")
+
+    ccode = child("--vault=" .. root .. "/not-there")
+    eq(ccode, 1, "a missing vault is a failure, not a pass")
+  end
+end
