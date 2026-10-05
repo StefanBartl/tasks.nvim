@@ -143,8 +143,12 @@ function M.open(opts)
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].swapfile = false
+  vim.bo[buf].buflisted = false
   vim.bo[buf].filetype = "markdown"
-  pcall(vim.api.nvim_buf_set_name, buf, "myplugins://task-new")
+  -- A second form must still get a name: the first one may be open.
+  if not pcall(vim.api.nvim_buf_set_name, buf, "tasks://task-new") then
+    pcall(vim.api.nvim_buf_set_name, buf, ("tasks://task-new/%d"):format(buf))
+  end
   set_lines(
     buf,
     form.template({
@@ -186,7 +190,7 @@ function M.open(opts)
   map("n", "q", cancel, "Task form: cancel")
   map({ "n", "i" }, "<C-q>", cancel, "Task form: cancel")
   map("n", "g?", function()
-    vim.notify(table.concat(HELP, "\n"), vim.log.levels.INFO, { title = "Task form" })
+    require("lib.nvim.notify").create("[tasks]").info(table.concat(HELP, "\n"))
   end, "Task form: help")
 
   -- Start on the first free text line.

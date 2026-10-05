@@ -356,6 +356,7 @@ function M.list(ctx)
 
   local label = area or "alle Bereiche"
   local ok, err = view.deliver(shown, target, {
+    force = flags.force,
     format = flags.format,
     heading = ("Offene Tasks — %s (%d)"):format(label, #shown),
     note = (function()
@@ -365,7 +366,7 @@ function M.list(ctx)
       end
       return base
     end)(),
-    title = "myplugins://tasks/" .. (area or "all"),
+    title = "tasks://tasks/" .. (area or "all"),
   })
   if not ok then
     notify.error(("cannot deliver the task list: %s"):format(tostring(err)))
@@ -407,7 +408,7 @@ function M.index(ctx)
       res.tasks
     )
     local level = (not res.ok) and "error" or (res.warnings > 0 and "warn" or "info")
-    report(level, summary, lines, "myplugins://tasks-check")
+    report(level, summary, lines, "tasks://tasks-check")
     return
   end
 
@@ -441,7 +442,7 @@ function M.index(ctx)
     counts.unchanged,
     #errors
   )
-  report(#errors > 0 and "error" or "info", summary, lines, "myplugins://tasks-index")
+  report(#errors > 0 and "error" or "info", summary, lines, "tasks://tasks-index")
 end
 
 -- ── task new ─────────────────────────────────────────────────────────────────
@@ -566,7 +567,8 @@ function M.task_new_form(given)
 
   local ui = require("tasks_nvim.ui.form")
   local open = M.form_open or ui.open
-  local busy = false
+  -- No "busy" flag: a second `<C-s>` only reopens the dialog (the kit holds one at a time and calls back only
+  -- on an answer), whereas a flag that waited for a callback stayed set when the dialog was closed from outside.
   open({
     areas = areas,
     tags = given.tags,
@@ -575,15 +577,10 @@ function M.task_new_form(given)
       notify.info("task new cancelled")
     end,
     on_submit = function(values, buf)
-      if busy then
-        return
-      end
-      busy = true
       confirm.yesno(
         "Attach assets (screenshots, logs) to the new task?\n\nYes makes a folder task with an assets/ folder and opens the file explorer on it.",
         "attach assets",
         function(with_assets)
-          busy = false
           local opts = vim.tbl_extend("force", values.opts, { folder = with_assets })
           local res, err = mutate.new(values.area, opts)
           if not res then
@@ -816,7 +813,8 @@ function M.task_attach(ctx)
     { name = ctx.kv.name ~= "" and ctx.kv.name or nil }
   )
   if not res then
-    notify.error(tostring(err))
+    -- The engine speaks CLI (`--name=`); here the same option is `name=<file name>`.
+    notify.error((tostring(err):gsub("pass %-%-name=", "pass name=<file name>")))
     return
   end
   if res.folderized and before then
@@ -858,7 +856,7 @@ function M.task_done(ctx)
   confirm.yesno(
     ("Finish task %s?\n\n%s\n\nIt moves to Backlog/%s/%s_%s%s."):format(
       id,
-      task.title,
+      confirm.shorten(task.title, 70),
       bucket,
       date,
       task.slug,
@@ -888,15 +886,20 @@ function M.task_template(ctx)
     notify.error(terr or "--to=qf makes no sense for the template")
     return
   end
+  local blocked = view.overwrite_guard(target, ctx.flags.force)
+  if blocked then
+    notify.error(blocked .. " (pass --force to overwrite it)")
+    return
+  end
   local text = mutate.template({})
   local ok, err = harvest.emit(text, target.kind, {
     path = target.path,
-    title = "myplugins://task-template",
+    title = "tasks://task-template",
     filetype = "markdown",
   })
   if not ok then
     if target.kind == "clipboard" then
-      harvest.sink.scratch(text, { title = "myplugins://task-template", filetype = "markdown" })
+      harvest.sink.scratch(text, { title = "tasks://task-template", filetype = "markdown" })
       notify.warn(("no clipboard (%s): the template is in a buffer instead"):format(tostring(err)))
       return
     end
@@ -1034,9 +1037,14 @@ function M.open_area(ctx)
       return
     end
     local kind = target and target.kind or "buffer"
+    local blocked = view.overwrite_guard(target, ctx.flags.force)
+    if blocked then
+      notify.error(blocked .. " (pass --force to overwrite it)")
+      return
+    end
     local ok, err = harvest.emit(table.concat(lines, "\n") .. "\n", kind, {
       path = target and target.path or nil,
-      title = ("myplugins://open/%s/%s"):format(area, folder),
+      title = ("tasks://open/%s/%s"):format(area, folder),
       filetype = "text",
     })
     if not ok then

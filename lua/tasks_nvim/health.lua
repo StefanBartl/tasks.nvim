@@ -31,6 +31,13 @@ function M.check()
     { "lib.nvim.checkpoint", "`done` rolls back from it" },
     { "lib.nvim.bindings.usercmd.composer", "the :Tasks command" },
     { "lib.nvim.harvest", "delivery of lists (--to=)" },
+    { "lib.nvim.notify", "messages" },
+    { "lib.nvim.fs.read", "file reads" },
+    { "lib.nvim.fs.mkdirp", "creating folders" },
+    { "lib.nvim.fs.scan_cached", "the cached vault scan (completion)" },
+    { "lib.nvim.cross.fs.mutate", "moving and removing files" },
+    { "lib.nvim.ui.list", "quickfix delivery (--to=qf)" },
+    { "lib.nvim.harvest.render", "Markdown and CSV tables" },
   }
   local lib_ok = true
   for _, req in ipairs(required) do
@@ -70,18 +77,28 @@ function M.check()
     ok("setup() options are valid")
   end
 
+  start("tasks.nvim: command")
+  if vim.fn.exists(":Tasks") == 2 then
+    ok(":Tasks is registered")
+  elseif vim.g.tasks_nvim_no_command then
+    info(":Tasks is not registered (vim.g.tasks_nvim_no_command is set)")
+  else
+    warn(
+      ":Tasks is not registered",
+      { "call require('tasks_nvim').setup({ ... }) or load the plugin on `cmd = 'Tasks'`" }
+    )
+  end
+
   start("tasks.nvim: optional pieces")
   if pcall(require, "snacks") then
     ok("snacks.nvim -- the interactive dashboard")
   else
-    info(
-      "snacks.nvim not found -- `:Tasks list` falls back to a Markdown table in a scratch buffer"
-    )
+    info("snacks.nvim not found -- the dashboard falls back to a plain vim.ui.select list")
   end
   if vim.fn.executable("git") == 1 then
     ok("git -- `--stale=refs` dates files by their last commit")
   else
-    warn("git not found -- `--stale=refs` falls back to file modification times")
+    info("git not found -- `--stale=refs` uses file modification times")
   end
   if pcall(require, "mdview") then
     ok("mdview.nvim -- browser preview (`:Tasks preview`, `--to=mdview`)")

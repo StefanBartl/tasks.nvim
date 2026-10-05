@@ -402,7 +402,7 @@ return function(H)
       run("tasks lib.nvim --to=qf")
       local qf = vim.fn.getqflist({ title = 1, items = 1 })
       eq(#qf.items, 4)
-      has(qf.title, "myplugins://tasks/lib.nvim")
+      has(qf.title, "tasks://tasks/lib.nvim")
       has(qf.items[1].text, "doing")
       has(qf.items[1].text, "lib.nvim/alpha")
       eq(
@@ -853,7 +853,7 @@ return function(H)
       local delivered, derr = view.deliver(tsk, dash_target, {
         format = "md",
         heading = "Open tasks -- all areas",
-        title = "myplugins://tasks/all",
+        title = "tasks://tasks/all",
       })
       ok(delivered, derr)
       eq(shown_in_mdview[5].path, vim.fs.normalize(preview_dir) .. "/tasks-all.md")

@@ -256,7 +256,30 @@ function M.qf_items(tasks)
   return items
 end
 
+---Why a delivery to `target` must not happen: a `file:<path>` target that already exists is never
+---overwritten without the user saying so (a mistyped path used to replace a task file or a note with the table,
+---with no question and no checkpoint). Resolves the path like the file sink does (`~`, environment variables).
+---@param target { kind: string, path?: string }|nil
+---@param force? boolean
+---@return string|nil blocked  the sentence to show, `nil` when the delivery may go ahead
+function M.overwrite_guard(target, force)
+  if force or not target or target.kind ~= "file" or not target.path then
+    return nil
+  end
+  local ok, resolved = pcall(function()
+    return vim.fs.normalize(require("lib.nvim.cross.fs.expand_path")(target.path))
+  end)
+  if not ok then
+    return nil
+  end
+  if (vim.uv or vim.loop).fs_stat(resolved) then
+    return ("%s already exists"):format(resolved)
+  end
+  return nil
+end
+
 ---@class Plugin_repos.TasksDeliverOpts : Plugin_repos.TasksRenderOpts
+---@field force? boolean       # Overwrite an existing `file:` target.
 ---@field title? string        # Buffer name / quickfix title.
 ---@field filetype? string     # Scratch buffer filetype (default: `markdown`, `csv` for csv).
 
@@ -270,6 +293,11 @@ end
 function M.deliver(tasks, target, opts)
   opts = opts or {}
   local kind = target and target.kind or "buffer"
+
+  local blocked = M.overwrite_guard(target, opts.force)
+  if blocked then
+    return false, blocked .. " (pass --force to overwrite it)"
+  end
 
   if kind == "qf" then
     local list = require("lib.nvim.ui.list")

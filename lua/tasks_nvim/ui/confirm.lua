@@ -16,6 +16,18 @@
 
 local M = {}
 
+---`s` cut to `max` characters with an ellipsis. A dialog line wider than the editor pushes the buttons out of
+---the window (the kit centres them on the widest line), so a task title goes through this first.
+---@param s string
+---@param max integer
+---@return string
+function M.shorten(s, max)
+  if vim.fn.strchars(s) <= max then
+    return s
+  end
+  return vim.fn.strcharpart(s, 0, max - 1) .. "…"
+end
+
 ---@param msg string
 ---@param yes_label string|nil e.g. "delete" — shown as "Yes, delete"
 ---@param cb fun(accepted: boolean)
@@ -25,14 +37,15 @@ function M.yesno(msg, yes_label, cb)
   if ok_kit and type(kit.confirm) == "function" then
     kit.confirm({
       question = msg,
-      choices = { yes, "No" },
+      -- "No" first: the dialog starts on the first choice, and `<CR>` must not be the destructive one.
+      choices = { "No", yes },
       on_answer = function(choice)
         cb(choice == yes)
       end,
     })
     return
   end
-  vim.ui.select({ yes, "No" }, { prompt = msg }, function(choice)
+  vim.ui.select({ "No", yes }, { prompt = msg }, function(choice)
     cb(choice == yes)
   end)
 end

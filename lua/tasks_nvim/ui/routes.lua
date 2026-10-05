@@ -156,6 +156,7 @@ local LIST_FLAGS = {
     values = { "buffer", "clipboard", "qf", "file:", "echo", "mdview" },
   },
   { name = "format", type = "STRING", enum = { "md", "csv" } },
+  { name = "force", bool = true },
 }
 
 ---The `key=` completions of `task set`: every settable key, with value hints.
@@ -267,7 +268,10 @@ local function nested_routes()
 
     {
       path = { "task", "template" },
-      flags = { { name = "to", type = "STRING", values = { "clipboard", "buffer", "file:" } } },
+      flags = {
+        { name = "to", type = "STRING", values = { "clipboard", "buffer", "file:" } },
+        { name = "force", bool = true },
+      },
       desc = "Copy the task file template to the + register (--to=buffer|file:<path> for the other targets)",
       run = function(ctx)
         cmd().task_template(ctx)
@@ -307,6 +311,7 @@ local function nested_routes()
         { name = "action", type = "STRING", enum = { "files", "grep", "smart" } },
         { name = "list", bool = true },
         { name = "to", type = "STRING", values = { "buffer", "clipboard", "file:", "echo" } },
+        { name = "force", bool = true },
       },
       desc = "Picker over the files of one folder of an area (tasks|roadmap|backlog|handover|notes|all, default all) through pickers.nvim; --action=grep|smart searches content, --list or --to= delivers the file list",
       run = function(ctx)

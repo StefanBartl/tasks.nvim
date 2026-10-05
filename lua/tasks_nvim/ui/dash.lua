@@ -196,6 +196,16 @@ local function reload(state)
       )
     end
     state.errors_seen = sig
+    -- `--stale=refs` reports through `staleness.last.notes` (git missing, a cap hit, a failed check). Without
+    -- this a failed check looked like "no stale tasks" in the list.
+    if state.filter and state.filter.stale_refs then
+      local last = require("tasks_nvim.staleness").last
+      local joined = table.concat(last and last.notes or {}, " | ")
+      if joined ~= "" and joined ~= state.notes_seen then
+        notify.warn("stale-refs filter: " .. joined)
+      end
+      state.notes_seen = joined
+    end
   end
   state.widths = core.widths(state.shown)
   state.signature = core.signature(state.shown)
@@ -236,7 +246,7 @@ local function describe(tasks)
       lines[#lines + 1] = ("... and %d more"):format(#tasks - MAX_CONFIRM_LINES)
       break
     end
-    lines[#lines + 1] = ("%s  %s"):format(t.id, t.title)
+    lines[#lines + 1] = ("%s  %s"):format(t.id, confirm.shorten(t.title, 70))
   end
   return lines
 end
@@ -415,19 +425,37 @@ function M.export(state, tasks, after)
       if sort_chip then
         chips[#chips + 1] = sort_chip
       end
-      local ok, err = view.deliver(tasks, target, {
-        format = choice.format,
-        heading = ("Open tasks -- %s (%d)"):format(state.area or "all areas", #tasks),
-        note = #chips > 0 and ("Filter: " .. table.concat(chips, ", ")) or nil,
-        title = "myplugins://tasks/" .. (state.area or "all"),
-      })
-      if not ok then
-        notify.error(("cannot export: %s"):format(tostring(err)))
-        after(false)
-        return
+      ---@param force boolean
+      local function go(force)
+        local ok, err = view.deliver(tasks, target, {
+          force = force,
+          format = choice.format,
+          heading = ("Open tasks -- %s (%d)"):format(state.area or "all areas", #tasks),
+          note = #chips > 0 and ("Filter: " .. table.concat(chips, ", ")) or nil,
+          title = "tasks://tasks/" .. (state.area or "all"),
+        })
+        if not ok then
+          notify.error(("cannot export: %s"):format(tostring(err)))
+          after(false)
+          return
+        end
+        notify.info(("%d task(s) -> %s"):format(#tasks, target.path or choice.label))
+        after(true)
       end
-      notify.info(("%d task(s) -> %s"):format(#tasks, choice.label))
-      after(true)
+      -- An existing file is replaced only after the user says yes.
+      local blocked = view.overwrite_guard(target, false)
+      if blocked then
+        confirm.yesno(blocked .. ". Overwrite it?", "overwrite", function(yes)
+          if yes then
+            go(true)
+          else
+            notify.info("export cancelled")
+            after(false)
+          end
+        end)
+      else
+        go(false)
+      end
     end
     if choice.ask_path then
       vim.ui.input({ prompt = "File path: ", completion = "file" }, deliver)

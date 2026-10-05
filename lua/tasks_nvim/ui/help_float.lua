@@ -17,16 +17,20 @@ local M = {}
 function M.open(lines, ns_name)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
   local width = 0
   for _, l in ipairs(lines) do
     width = math.max(width, vim.fn.strdisplaywidth(l))
   end
+  -- Never larger than the editor: a help wider or taller than the screen was cut off and could not scroll.
+  width = math.min(width, math.max(10, vim.o.columns - 6))
+  local height = math.min(#lines, math.max(3, vim.o.lines - 6))
   local win = vim.api.nvim_open_win(buf, false, {
     relative = "editor",
-    row = math.max(0, math.floor((vim.o.lines - #lines) / 2) - 1),
+    row = math.max(0, math.floor((vim.o.lines - height) / 2) - 1),
     col = math.max(0, math.floor((vim.o.columns - width - 2) / 2)),
     width = width + 2,
-    height = #lines,
+    height = height,
     style = "minimal",
     border = "rounded",
     zindex = 250,
