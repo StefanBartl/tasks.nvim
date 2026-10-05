@@ -1,5 +1,5 @@
 ---@module 'tasks_nvim.form'
----@brief The Markdown form behind `:MyPlugins task new` -- text in, validated values out; no UI.
+---@brief The Markdown form behind `:Tasks new` -- text in, validated values out; no UI.
 ---@description
 --- The form is a Markdown buffer: text lines for the free fields and a
 --- `- [ ]` / `- [x]` bullet list per choice field. This module builds the

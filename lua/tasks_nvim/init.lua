@@ -33,6 +33,9 @@ local M = {}
 ---@return nil
 function M.setup(opts)
   require("tasks_nvim.vault").configure(opts)
+  if not vim.g.tasks_nvim_no_command then
+    require("tasks_nvim.ui.command").register()
+  end
 end
 
 local SUBMODULES = {

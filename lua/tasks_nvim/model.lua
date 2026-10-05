@@ -676,7 +676,7 @@ end
 ---`frecency` ranks by `opts.scores` (task id -> score, highest first; unscored
 ---tasks follow in the default order). Without `opts.scores` the scores come from
 ---the frecency file (`tasks.frecency.load_scores`), so `list --sort=frecency`
----and `:MyPlugins tasks --sort=frecency` need no extra wiring; a missing or
+---and `:Tasks list --sort=frecency` need no extra wiring; a missing or
 ---broken file just means no scores, i.e. the default order.
 ---@param tasks Tasks.Task[]
 ---@param order? string
