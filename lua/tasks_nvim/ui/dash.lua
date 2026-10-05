@@ -210,11 +210,10 @@ local function reload(state)
       )
     end
     state.errors_seen = sig
-    -- `--stale=refs` reports through `staleness.last.notes` (git missing, a cap hit, a failed check). Without
+    -- `--stale=refs` reports through the notes of its report (git missing, a cap hit, a failed check). Without
     -- this a failed check looked like "no stale tasks" in the list.
     if state.filter and state.filter.stale_refs then
-      local last = require("tasks_nvim.staleness").last
-      local joined = table.concat(last and last.notes or {}, " | ")
+      local joined = table.concat(res.stale_report and res.stale_report.notes or {}, " | ")
       if joined ~= "" and joined ~= state.notes_seen then
         notify.warn("stale-refs filter: " .. joined)
       end

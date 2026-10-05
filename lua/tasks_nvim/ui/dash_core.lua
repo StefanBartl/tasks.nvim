@@ -127,15 +127,13 @@ function M.load(opts)
       skipped = skipped + 1
     end
   end
+  local filtered, stale_report = model.filter(open, M.with_root(opts.filter, opts.root))
   return {
-    tasks = model.sort(
-      model.filter(open, M.with_root(opts.filter, opts.root)),
-      opts.sort,
-      { scores = opts.scores }
-    ),
+    tasks = model.sort(filtered, opts.sort, { scores = opts.scores }),
     open = #open,
     skipped = skipped,
     errors = type(errors) == "table" and errors or {},
+    stale_report = stale_report,
   },
     nil
 end

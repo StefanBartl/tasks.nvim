@@ -74,11 +74,6 @@ end
 ---@field budget_ms? integer          # Time all git calls may take together (default `staleness.budget_ms` of `setup()`).
 ---@field git_dates? fun(base: string, rels: string[], gopts?: Tasks.GitDatesOpts): table<string, { date: string, file: string }>|nil, string|nil  # Replaces the git lookup (specs).
 
----The last report `compute` produced, so a front end that only sees the
----filtered task list can still print which file changed.
----@type Tasks.StalenessReport|nil
-M.last = nil
-
 ---How a ref is read.
 ---@param ref any
 ---@return "path"|"skip" kind
@@ -424,7 +419,6 @@ function M.compute(tasks, opts)
   ---@type Tasks.StalenessReport
   local report =
     { stale = {}, tasks = 0, files = 0, unresolved = 0, skipped = 0, capped = 0, notes = {} }
-  M.last = report
 
   local root = opts.root
   if not root then

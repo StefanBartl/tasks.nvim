@@ -311,9 +311,9 @@ function commands.list(ctx)
       skipped = skipped + 1
     end
   end
-  local shown = model.sort(model.filter(open, filter), order)
-  -- `--stale=refs`: `model.filter` left its report in `staleness.last`.
-  local report = filter.stale_refs and staleness.last or nil
+  -- `--stale=refs`: the second result of `model.filter` is the report that names the changed files.
+  local filtered, report = model.filter(open, filter)
+  local shown = model.sort(filtered, order)
   for _, t in ipairs(shown) do
     if format == "ids" then
       ctx.say(t.id)

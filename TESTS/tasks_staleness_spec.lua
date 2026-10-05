@@ -181,7 +181,7 @@ return function(H)
     )
     local joined = table.concat(rep.notes, "\n")
     has(joined, "not a git repository", "the non-git base is mentioned")
-    eq(staleness.last, rep, "the report is kept for the front ends")
+    ok(staleness.last == nil, "there is no module-level report any more: the filter hands it back")
     has(staleness.describe(rep.stale["lib.nvim/stale-git"]), "lua/a.lua (2026-10-01, git)")
     has(staleness.describe(rep.stale["lib.nvim/two-changed"], 1), "+1 more")
   end
@@ -463,8 +463,11 @@ return function(H)
       status = { "open" },
       ref_opts = vim.tbl_extend("force", opts, { git_dates = recording }),
     }
-    model.filter(tasks, all_open)
+    local _, handed_back = model.filter(tasks, all_open)
     ok(#looked_up > 0, "the open tasks are looked up")
-    ok(staleness.last and staleness.last.tasks > 0, "the report is kept for the front ends")
+    ok(
+      handed_back and handed_back.tasks > 0,
+      "model.filter hands the report back as its second result"
+    )
   end
 end

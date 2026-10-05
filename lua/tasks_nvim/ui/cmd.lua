@@ -302,11 +302,11 @@ function M.list(ctx)
       skipped = skipped + 1
     end
   end
-  local shown = model.sort(model.filter(open, filter), order)
+  local filtered, stale_report = model.filter(open, filter)
+  local shown = model.sort(filtered, order)
   local ref_note = nil
   if filter.stale_refs then
-    -- `model.filter` left its report in `staleness.last`: name the files that changed.
-    local stale_report = staleness.last
+    -- The second result of `model.filter` is the report: name the files that changed.
     if stale_report then
       local lines = {}
       for _, t in ipairs(shown) do

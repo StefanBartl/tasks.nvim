@@ -971,12 +971,13 @@ function M.filter(tasks, f)
     end
   end
 
+  ---@type Tasks.StalenessReport|nil
+  local stale_report
   if f.stale_refs and not ref_stale then
-    -- `tasks.staleness.last` keeps the report so a front end can say which file changed.
     local staleness = require("tasks_nvim.staleness")
     local ok, report = pcall(staleness.compute, out, f.ref_opts)
     if not ok then
-      staleness.last = {
+      report = {
         stale = {},
         tasks = 0,
         files = 0,
@@ -985,9 +986,9 @@ function M.filter(tasks, f)
         capped = 0,
         notes = { "refs could not be checked: " .. tostring(report) },
       }
-      report = staleness.last
     end
     ---@cast report Tasks.StalenessReport
+    stale_report = report
     local dated = {}
     for _, t in ipairs(out) do
       if report.stale[t.id] then
@@ -996,7 +997,7 @@ function M.filter(tasks, f)
     end
     out = dated
   end
-  return out
+  return out, stale_report
 end
 
 return M
