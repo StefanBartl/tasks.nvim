@@ -34,7 +34,7 @@ local view = require("tasks_nvim.ui.view")
 
 local M = {}
 
-local is_windows = vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1
+local is_windows = require("lib.nvim.cross.platform.is_windows")()
 
 ---Dashboard seam. `:Tasks list` calls it instead of delivering a table
 ---when neither `--to=` nor `--format=` was given. It receives the filtered,
@@ -345,7 +345,13 @@ function M.list(ctx)
       end
     end
     if dash then
-      dash({ tasks = shown, area = area, filter = filter, sort = order, root = root })
+      dash({
+        tasks = shown,
+        area = area,
+        filter = filter,
+        sort = flags.sort ~= nil and order or nil,
+        root = root,
+      })
       return
     end
   end
@@ -601,8 +607,14 @@ function M.task_new_form(given)
           open_file(res.path)
           if with_assets then
             local assets = vim.fs.dirname(res.path) .. "/" .. mutate.ASSETS_DIR
-            vim.fn.mkdir(assets, "p")
-            open_explorer(assets)
+            local made, merr = fsio.mkdirp(assets)
+            if made then
+              open_explorer(assets)
+            else
+              notify.warn(
+                ("task created, but %s could not be created: %s"):format(assets, tostring(merr))
+              )
+            end
           end
         end
       )

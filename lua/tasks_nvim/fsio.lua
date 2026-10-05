@@ -104,23 +104,11 @@ function M.clean(s)
   return (s:gsub("%c", " "):gsub("\194[\128-\159]", " "))
 end
 
----`s` without leading and trailing whitespace, in linear time. The usual
----`s:match("^%s*(.-)%s*$")` retries the rest of a whitespace run from every
----byte inside it, so one line with 40 000 spaces costs seconds (SEC-32); this
----one walks the trailing run once.
----@param s string
----@return string
-function M.trim(s)
-  local first = s:find("%S")
-  if not first then
-    return ""
-  end
-  local last = #s
-  while last > first and s:find("^%s", last) do
-    last = last - 1
-  end
-  return s:sub(first, last)
-end
+---`s` without leading and trailing whitespace, in linear time (the lib.nvim implementation; the usual
+---`s:match("^%s*(.-)%s*$")` backtracks over a whitespace run and cost seconds on a 40 000-space line, SEC-32).
+---Non-string input trims to `""`.
+---@type fun(s: any): string
+M.trim = require("lib.lua.strings.core").trim
 
 ---Double every run of backslashes that sits directly in front of a character matching `set` (a Lua
 ---pattern anchored by the caller, e.g. `"^[|]"`), and, with `at_end`, a run at the very end of `s`.

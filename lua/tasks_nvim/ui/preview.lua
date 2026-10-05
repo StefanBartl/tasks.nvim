@@ -31,7 +31,7 @@ local M = {}
 
 local uv = vim.uv or vim.loop
 
-local is_windows = vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1
+local is_windows = require("lib.nvim.cross.platform.is_windows")()
 
 ---Delete retries and their spacing (ms), for a file Windows still holds.
 local REMOVE_RETRIES = 4

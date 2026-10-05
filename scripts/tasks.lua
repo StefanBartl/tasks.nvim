@@ -37,9 +37,11 @@ local function find_lib()
     LIB_NVIM_DIR = vim.env.LIB_NVIM_DIR,
     LIB_NVIM_PATH = vim.env.LIB_NVIM_PATH,
     REPOS_DIR = (repos and repos ~= "") and (repos .. "/lib.nvim") or nil,
+    deps = plugin_root .. "/.deps/lib.nvim",
+    sibling = vim.fs.dirname(plugin_root) .. "/lib.nvim",
     lazy = vim.fn.stdpath("data") .. "/lazy/lib.nvim",
   }
-  for _, key in ipairs({ "LIB_NVIM_DIR", "LIB_NVIM_PATH", "REPOS_DIR", "lazy" }) do
+  for _, key in ipairs({ "LIB_NVIM_DIR", "LIB_NVIM_PATH", "REPOS_DIR", "deps", "sibling", "lazy" }) do
     if has_lib(candidates[key]) then
       return candidates[key]
     end

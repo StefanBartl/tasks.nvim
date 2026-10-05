@@ -11,15 +11,17 @@ local state = vim.deepcopy(DEFAULTS)
 ---@type table<string, true>
 local KNOWN_KEYS = { vault = true, extra_areas = true }
 
----What `validate` threw away, for `:checkhealth` (a one-time notification is easy to miss).
+---What `validate` threw away (each message once), for `:checkhealth`: a one-time notification is easy to miss.
 ---@type string[]
 local ignored = {}
 
 ---@param msg string
 local function warn(msg)
-  ignored[#ignored + 1] = msg
+  if not vim.tbl_contains(ignored, msg) then
+    ignored[#ignored + 1] = msg
+  end
   vim.schedule(function()
-    vim.notify("[tasks.nvim] " .. msg, vim.log.levels.WARN)
+    require("lib.nvim.notify").create("[tasks]").warn(msg)
   end)
 end
 
@@ -41,7 +43,6 @@ end
 ---@param opts any
 ---@return Tasks.Opts validated  only the keys that passed
 function M.validate(opts)
-  ignored = {}
   if opts == nil then
     return {}
   end
@@ -81,8 +82,10 @@ end
 ---@param opts? table
 ---@return Tasks.Opts
 function M.merge(opts)
+  -- What any `setup()` threw away stays listed for `:checkhealth`: a second call that ignores nothing
+  -- must not erase the first call's messages.
   state = vim.tbl_extend("force", state, M.validate(opts))
-  return state
+  return vim.deepcopy(state)
 end
 
 ---A copy: the state changes only through `merge`.

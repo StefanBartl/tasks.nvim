@@ -1204,7 +1204,9 @@ return function(H)
       eq(seen.filter.effort_max, "M")
       eq(seen.filter.severity, { "high" })
       run("tasks lib.nvim")
-      eq(seen.sort, "default", "no --sort: the default order")
+      eq(seen.sort, nil, "no --sort: left open, the dashboard may use the remembered order")
+      run("tasks lib.nvim --sort=default")
+      eq(seen.sort, "default", "an explicit --sort=default is the user's choice and is passed on")
       cmd.dashboard = false
 
       -- ── task new without arguments: the form ────────────────────────────

@@ -204,10 +204,27 @@ local function day_of(ts)
   return os.date("%Y-%m-%d", ts) or "0000-00-00"
 end
 
----Folders `git log` answered "not a git repository" for. Only that answer is
----remembered: it is stable, and asking costs nothing a second time.
----@type table<string, boolean>
+---Folders `git log` answered "not a git repository" for, with the time of the answer. Only that answer is
+---remembered, and only for `NO_REPO_TTL` seconds: a folder that is `git init`ed meanwhile must not stay
+---"no repository" until the editor restarts.
+---@type table<string, integer>
 local no_repo = {}
+
+local NO_REPO_TTL = 30
+
+---@param base string
+---@return boolean
+local function is_no_repo(base)
+  local at = no_repo[base]
+  if at == nil then
+    return false
+  end
+  if os.time() - at >= NO_REPO_TTL then
+    no_repo[base] = nil
+    return false
+  end
+  return true
+end
 
 ---Forget which folders were no git repos (specs build and remove temp repos).
 function M.reset_cache()
@@ -296,7 +313,7 @@ end
 ---@return table<string, { date: string, file: string }>|nil dates  # nil when `base` is no repo or git cannot be used
 ---@return string|nil err
 function M.git_dates(base, rels, gopts)
-  if no_repo[base] then
+  if is_no_repo(base) then
     return nil, "not a git repository"
   end
   local deadline = gopts and gopts.deadline
@@ -330,7 +347,7 @@ function M.git_dates(base, rels, gopts)
     if kind then
       stopped, failed = true, failed + #paths
       if kind == "no_repo" then
-        no_repo[base] = true
+        no_repo[base] = os.time()
       end
     elseif #paths == 1 then
       failed = failed + 1
@@ -344,7 +361,7 @@ function M.git_dates(base, rels, gopts)
   for i = 1, #rels, M.GIT_CHUNK do
     lookup(vim.list_slice(rels, i, math.min(i + M.GIT_CHUNK - 1, #rels)))
   end
-  if no_repo[base] then
+  if is_no_repo(base) then
     return nil, "not a git repository"
   end
   if failed > 0 then

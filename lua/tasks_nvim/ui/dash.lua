@@ -128,14 +128,17 @@ end
 function M.new_state(v, opts)
   opts = opts or {}
   local filter = v.filter or {}
-  local sort = (v.sort and v.sort ~= "") and v.sort or "default"
+  -- A sort the command carried (even `default`) is the user's explicit choice; only an absent one falls
+  -- back to the remembered order (LUA-87: stored state never overrules an explicit input).
+  local explicit_sort = v.sort ~= nil and v.sort ~= ""
+  local sort = explicit_sort and v.sort or "default"
   local do_persist = opts.persist ~= false
   if do_persist then
     local last_filter, last_sort = remembered(v.root)
     if core.filter_is_empty(filter) then
       filter = last_filter
     end
-    if sort == "default" then
+    if not explicit_sort then
       sort = last_sort
     end
   end

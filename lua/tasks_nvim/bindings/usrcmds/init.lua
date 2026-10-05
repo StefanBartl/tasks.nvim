@@ -31,7 +31,9 @@ function M.register()
     if not warned then
       warned = true
       vim.schedule(function()
-        vim.notify("[tasks.nvim] :Tasks is unavailable: " .. tostring(err), vim.log.levels.WARN)
+        require("lib.nvim.notify")
+          .create("[tasks]")
+          .warn(":Tasks is unavailable: " .. tostring(err))
       end)
     end
     return false
