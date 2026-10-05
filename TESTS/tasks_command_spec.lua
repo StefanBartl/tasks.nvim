@@ -15,28 +15,38 @@ return function(H)
     return out
   end
 
-  eq(paths(routes.routes()), {
-    "open",
-    "task attach",
-    "task done",
-    "task folderize",
-    "task new",
-    "task open",
-    "task preview",
-    "task set",
-    "task template",
-    "tasks",
-    "tasks index",
-  }, "the nested grammar (`:MyPlugins`) is unchanged")
+  eq(
+    paths(routes.routes()),
+    {
+      "open",
+      "task attach",
+      "task done",
+      "task estimate",
+      "task folderize",
+      "task new",
+      "task next",
+      "task open",
+      "task plan",
+      "task preview",
+      "task set",
+      "task template",
+      "tasks",
+      "tasks index",
+    },
+    "the nested grammar (`:MyPlugins`): the old paths are unchanged, plan / next / estimate are new"
+  )
   eq(paths(routes.routes({ flat = true })), {
     "attach",
     "done",
+    "estimate",
     "folder",
     "folderize",
     "index",
     "list",
     "new",
+    "next",
     "open",
+    "plan",
     "preview",
     "set",
     "template",

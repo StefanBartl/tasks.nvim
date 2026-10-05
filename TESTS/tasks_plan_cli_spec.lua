@@ -185,6 +185,27 @@ return function(H)
   lacks(quiet.out, "next:", "--no-next silences it")
   lacks(quiet.out, "freed:")
 
+  -- --unblock: the freed tasks that still read `blocked` become open, only when asked
+  local gate = new("lib.nvim", "Gate", {})
+  local held = new("lib.nvim", "Held", {})
+  assert(mutate.set(held, { status = "blocked", blocked_by = "[" .. gate .. "]" }, o))
+  local plain_done = run({ "done", gate, "--no-next" })
+  eq(plain_done.code, 0, plain_done.err)
+  eq(
+    require("tasks_nvim.scan").find(held, { root = root }).status,
+    "blocked",
+    "never changed unasked"
+  )
+  local gate2 = new("lib.nvim", "Gate two", {})
+  local held2 = new("lib.nvim", "Held two", {})
+  assert(mutate.set(held2, { status = "blocked", blocked_by = "[" .. gate2 .. "]" }, o))
+  local unblock = run({ "done", gate2, "--unblock" })
+  eq(unblock.code, 0, unblock.err)
+  has(unblock.out, "unblocked\t" .. held2)
+  eq(require("tasks_nvim.scan").find(held2, { root = root }).status, "open")
+  run({ "done", held, "--no-next" })
+  run({ "done", held2, "--no-next" })
+
   -- the last open tasks: an honest empty answer, never a cheer while work is left
   local pending = lines(run({ "list", "--format=ids" }))
   for _, id in ipairs(pending) do

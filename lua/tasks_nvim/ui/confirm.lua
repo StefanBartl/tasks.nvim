@@ -50,4 +50,35 @@ function M.yesno(msg, yes_label, cb)
   end)
 end
 
+---A question with several answers. The FIRST choice is the one the dialog starts on, so it must be the harmless one.
+---`cb` gets the chosen index (1-based) or `nil` when the dialog was dismissed; it is called once, never before this
+---function returns.
+---@param msg string
+---@param choices string[]
+---@param cb fun(index: integer|nil)
+function M.choose(msg, choices, cb)
+  local function index_of(choice)
+    for i, c in ipairs(choices) do
+      if c == choice then
+        return i
+      end
+    end
+    return nil
+  end
+  local kit = require("tasks_nvim.soft").require("ui.kit", { "confirm" })
+  if kit then
+    kit.confirm({
+      question = msg,
+      choices = choices,
+      on_answer = function(choice)
+        cb(index_of(choice))
+      end,
+    })
+    return
+  end
+  vim.ui.select(choices, { prompt = msg }, function(choice)
+    cb(index_of(choice))
+  end)
+end
+
 return M

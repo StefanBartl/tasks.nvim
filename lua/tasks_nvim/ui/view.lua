@@ -312,6 +312,38 @@ end
 ---@field title? string        # Buffer name / quickfix title.
 ---@field filetype? string     # Scratch buffer filetype (default: `markdown`, `csv` for csv).
 
+---Deliver a finished text (a plan, a summary) to a target: a scratch buffer, the clipboard, a file, the echo area or
+---a browser preview. `qf` makes no sense for text and is refused. An existing file is only overwritten with `force`.
+---@param text string
+---@param target Tasks.Target|nil
+---@param opts? { force?: boolean, title?: string, filetype?: string }
+---@return boolean ok
+---@return string|nil err
+function M.deliver_text(text, target, opts)
+  opts = opts or {}
+  local kind = target and target.kind or "buffer"
+  if kind == "qf" then
+    return false,
+      "--to=qf lists tasks; this output is text (use buffer, clipboard, file:<path>, echo or mdview)"
+  end
+  local blocked = M.overwrite_guard(target, opts.force)
+  if blocked then
+    return false, blocked .. " (pass --force to overwrite it)"
+  end
+  if kind == "mdview" then
+    return require("tasks_nvim.ui.preview").open_text(
+      text,
+      opts.title and opts.title:match("([^/]+)$") or nil
+    )
+  end
+  return harvest.emit(text, kind, {
+    title = opts.title,
+    filetype = opts.filetype or "markdown",
+    split = "split",
+    path = target and target.path or nil,
+  })
+end
+
 ---Deliver tasks to a target. `target == nil` means the default, a scratch
 ---buffer. Returns `ok, err`; the caller reports.
 ---@param tasks Tasks.Task[]

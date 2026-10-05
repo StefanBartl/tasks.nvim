@@ -351,6 +351,14 @@ function M.finish(state, tasks, after)
     end
     notify[level](text)
     after(#res.done > 0)
+    -- ONE answer for the whole stack, after the list is back: the tasks that still read `blocked` (offered to be
+    -- opened) and what to start next, from the last finished task.
+    local last = res.done[#res.done]
+    if last and res.next then
+      vim.schedule(function()
+        cmd().after_finish({ next = res.next }, last.id)
+      end)
+    end
   end)
 end
 

@@ -51,6 +51,30 @@ function M.index(root)
   return index, open, errors
 end
 
+---Keep the tasks that are ready (`which = "ready"`) or wait on an open blocker (`which = "waiting"`), judged against
+---EVERY open task of the vault: a blocker may sit in another area than the list being filtered.
+---@param tasks Tasks.Task[]
+---@param which "ready"|"waiting"
+---@param root? string
+---@return Tasks.Task[]|nil kept
+---@return string|nil err
+function M.filter_readiness(tasks, which, root)
+  local index, everything = M.index(root)
+  if not index then
+    return nil, tostring(everything)
+  end
+  local kept = {}
+  for _, t in ipairs(tasks) do
+    local state = plan.classify(t, index)
+    local is_ready = state == "ready" or state == "decision"
+    local is_waiting = state == "waiting" or state == "stuck"
+    if (which == "ready" and is_ready) or (which == "waiting" and is_waiting) then
+      kept[#kept + 1] = t
+    end
+  end
+  return kept, nil
+end
+
 ---@param opts Tasks.PlanScopeOpts
 ---@return Tasks.PlanScope|nil scope
 ---@return string|nil err
@@ -62,10 +86,11 @@ function M.load(opts)
   ---@cast open Tasks.Task[]
   local tasks, title
   if opts.for_id then
-    tasks = plan.scope_for(index, opts.for_id)
-    if not tasks then
+    local closure = plan.scope_for(index, opts.for_id)
+    if not closure then
       return nil, "no such open task: " .. opts.for_id
     end
+    tasks = closure
     title = "for " .. opts.for_id
   elseif opts.area then
     tasks = {}
@@ -89,7 +114,7 @@ function M.load(opts)
     tasks = tasks,
     index = index,
     errors = errors or {},
-    title = title,
+    title = title or "",
   }
   if opts.area and not opts.for_id then
     local finished = scan.backlog(opts.area, { root = opts.root })

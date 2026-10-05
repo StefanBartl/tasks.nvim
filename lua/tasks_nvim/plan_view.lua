@@ -322,8 +322,8 @@ function M.next_message(pick, done_id)
     end
     lines[#lines + 1] = head
   end
-  if pick.task then
-    local t = pick.task
+  local t = pick.task
+  if t then
     local facts = {}
     if t.prio then
       facts[#facts + 1] = "P" .. t.prio
@@ -358,8 +358,8 @@ function M.next_message(pick, done_id)
   end
   if #pick.cdx > 0 then
     local names = {}
-    for _, t in ipairs(pick.cdx) do
-      names[#names + 1] = t.id
+    for _, ai_task in ipairs(pick.cdx) do
+      names[#names + 1] = ai_task.id
     end
     lines[#lines + 1] = "An AI session could take: " .. fsio.clean(table.concat(names, ", "))
   end

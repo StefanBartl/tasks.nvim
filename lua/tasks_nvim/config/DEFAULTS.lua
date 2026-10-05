@@ -13,6 +13,10 @@
 ---@field budget_ms integer       All git calls of one `--stale=refs` run share this much time; the rest falls back to mtimes.
 ---@field repo_bases string[]     Folders that hold the repos by name (`<base>/<area>`); empty: derived from the vault and `$REPOS_DIR`.
 
+---@class Tasks.NextConfig
+---@field popup boolean     After finishing a task: offer the next one to open (a small dialog; headless sessions get a message).
+---@field cdx_hint boolean  Name the ready tasks written `cdx` apart ("an AI session could take ..."), never as your next task.
+
 ---@class Tasks.CiConfig
 ---@field lint_timeout_ms integer  The vault's `md_lint.lua` is killed after this long (`ci`).
 ---@field trust_vault_lint boolean  Allow `ci` to run `<vault>/TOOLS/scripts/md_lint.lua` (code from the vault itself).
@@ -32,6 +36,7 @@
 ---@field dashboard Tasks.DashboardConfig
 ---@field staleness Tasks.StalenessConfig
 ---@field ci Tasks.CiConfig
+---@field next Tasks.NextConfig
 ---@field keys Tasks.KeysConfig
 
 ---@type Tasks.Opts
@@ -41,6 +46,7 @@ return {
   dashboard = { watch = true, debounce_ms = 250 },
   staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },
   ci = { lint_timeout_ms = 120000, trust_vault_lint = false },
+  next = { popup = true, cdx_hint = true },
   keys = {
     dashboard = {
       status = "s",

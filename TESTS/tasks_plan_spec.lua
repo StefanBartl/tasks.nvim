@@ -1,7 +1,7 @@
 -- TESTS/tasks_plan_spec.lua -- tasks_nvim.plan: readiness, scopes, stages, leverage, effective prio, critical path
 -- and cycles, on in-memory tasks (the engine reads no file here).
 
----@diagnostic disable: need-check-nil
+---@diagnostic disable: need-check-nil, param-type-mismatch
 -- Why: a value is bound with assert()/ok() in the same body, so a nil fails the spec at that line.
 
 return function(H)

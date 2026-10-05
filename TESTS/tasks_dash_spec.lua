@@ -406,6 +406,7 @@ return function(H)
           failed = { { id = "a", err = "b" } },
           areas = {},
           index_errors = {},
+          freed = {},
         })
       ),
       "error"

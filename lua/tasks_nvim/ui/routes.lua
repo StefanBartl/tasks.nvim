@@ -287,6 +287,9 @@ local LIST_FLAGS = {
   { name = "tag", type = "TASK_TAGS" },
   { name = "stale", type = "STRING", values = { "7", "30", "90", "refs" } },
   { name = "blocked", bool = true },
+  { name = "ready", bool = true },
+  { name = "waiting", bool = true },
+  { name = "unestimated", bool = true },
   { name = "sort", type = "STRING", enum = model.SORTS },
   {
     name = "to",
@@ -296,6 +299,21 @@ local LIST_FLAGS = {
   { name = "format", type = "STRING", enum = { "md", "csv" } },
   { name = "force", bool = true },
 }
+
+---The filter flags of `list`, for the commands that take the same filters (`plan`, `estimate`).
+---@param extra table[]
+---@return table[]
+local function filter_flags(extra)
+  local skip = { sort = true, to = true, format = true, force = true, ready = true, waiting = true }
+  local out = {}
+  for _, flag in ipairs(LIST_FLAGS) do
+    if not skip[flag.name] then
+      out[#out + 1] = flag
+    end
+  end
+  vim.list_extend(out, extra)
+  return out
+end
 
 ---The `key=` completions of `task set`: every settable key, with value hints.
 ---@return table[]
@@ -424,6 +442,52 @@ local function nested_routes()
       desc = "Copy the task file template to the + register (--to=buffer|file:<path> for the other targets)",
       run = function(ctx)
         cmd().task_template(ctx)
+      end,
+    },
+
+    {
+      path = { "task", "plan" },
+      args = { { name = "area", type = "TASK_AREA", allow_all = true, optional = true } },
+      flags = filter_flags({
+        { name = "for", type = "TASK_ID" },
+        { name = "ready", bool = true },
+        { name = "format", type = "STRING", enum = { "md", "tsv", "ids" } },
+        {
+          name = "to",
+          type = "TASK_TARGET",
+          values = { "buffer", "clipboard", "file:", "echo", "mdview" },
+        },
+        { name = "force", bool = true },
+      }),
+      desc = "The plan of the open tasks of an area (default: all) or of one task and everything before it (--for=<id>): what is ready now, decisions by leverage, stages, critical path, an estimate line; filters like list; --ready shows only what can be started",
+      run = function(ctx)
+        cmd().plan(ctx)
+      end,
+    },
+
+    {
+      path = { "task", "next" },
+      args = { { name = "area", type = "TASK_AREA", allow_all = true, optional = true } },
+      flags = {
+        { name = "n", type = "STRING", values = { "1", "2", "3", "5" } },
+        { name = "actor", type = "STRING", values = { "cdx", "me", "pair", "none" } },
+      },
+      desc = "What to start next: the best ready task with the reason, and a dialog to jump into it; --actor=cdx asks for the AI queue instead of yours",
+      run = function(ctx)
+        cmd().next(ctx)
+      end,
+    },
+
+    {
+      path = { "task", "estimate" },
+      args = { { name = "area", type = "TASK_AREA", allow_all = true, optional = true } },
+      flags = filter_flags({
+        { name = "for", type = "TASK_ID" },
+        { name = "walk", bool = true },
+      }),
+      desc = "Sums of effort and value of an area (default: all) or of one task and everything before it, with what is missing; --walk goes through the tasks without effort or value and asks for them one by one",
+      run = function(ctx)
+        cmd().estimate(ctx)
       end,
     },
 

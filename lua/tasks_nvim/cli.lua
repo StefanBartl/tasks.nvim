@@ -26,7 +26,6 @@ local done_flow = require("tasks_nvim.done_flow")
 local estimate = require("tasks_nvim.estimate")
 local mutate = require("tasks_nvim.mutate")
 local next_pick = require("tasks_nvim.next_pick")
-local plan = require("tasks_nvim.plan")
 local plan_scope = require("tasks_nvim.plan_scope")
 local plan_view = require("tasks_nvim.plan_view")
 local scan = require("tasks_nvim.scan")
@@ -77,8 +76,9 @@ commands:
        [--lang=de|en] [--folder]             create a task file (--lang: body headings;
                                                --folder: a folder task that can hold assets)
   set <area>/<slug> key=value ...         change frontmatter (empty value removes the key)
-  done <area>/<slug> [--done-in=text] [--date=YYYY-MM-DD] [--no-next]   finish: move to Backlog/; prints
-                                          the tasks it freed and what to start next
+  done <area>/<slug> [--done-in=text] [--date=YYYY-MM-DD] [--no-next] [--unblock]
+                                          finish: move to Backlog/; prints the tasks it freed and what to start
+                                          next; --unblock sets the freed tasks that still say blocked to open
   attach <area>/<slug> <file> [--name=n]  copy a file to <slug>/assets/ (a plain task becomes a
                                           folder task) and print the Markdown link
   folderize <area>/<slug>                 turn a plain task file into a folder task
@@ -174,7 +174,7 @@ local SPECS = {
   },
   set = { value = {}, flag = { "no-index" } },
   ["migrate-actor"] = { value = {}, flag = { "write", "no-index" } },
-  done = { value = { "done-in", "date" }, flag = { "no-index", "no-next" } },
+  done = { value = { "done-in", "date" }, flag = { "no-index", "no-next", "unblock" } },
   attach = { value = { "name" }, flag = { "no-index" } },
   folderize = { value = {}, flag = { "no-index" } },
   check = { value = {}, flag = { "all" } },
@@ -369,23 +369,14 @@ function commands.list(ctx)
       ctx.warn("error: --ready and --waiting exclude each other")
       return 2
     end
-    -- The same definition of "ready" as the plan, the dashboard and `next`: judged against EVERY open task of the
-    -- vault (a blocker may be in another area), not just the ones listed.
-    local readiness, everything = plan_scope.index(eo.root)
-    if not readiness then
-      ctx.warn("error: " .. tostring(everything))
+    -- The same definition of "ready" as the plan, the dashboard and `next`.
+    local kept, kerr =
+      plan_scope.filter_readiness(filtered, args.opt.ready and "ready" or "waiting", eo.root)
+    if not kept then
+      ctx.warn("error: " .. tostring(kerr))
       return 1
     end
-    local keep = {}
-    for _, t in ipairs(filtered) do
-      local state = plan.classify(t, readiness)
-      local is_ready = state == "ready" or state == "decision"
-      local is_waiting = state == "waiting" or state == "stuck"
-      if (args.opt.ready and is_ready) or (args.opt.waiting and is_waiting) then
-        keep[#keep + 1] = t
-      end
-    end
-    filtered = keep
+    filtered = kept
   end
   local shown = model.sort(filtered, order)
   for _, t in ipairs(shown) do
@@ -501,7 +492,7 @@ function commands.plan(ctx)
   end
   local scope, code = load_scope(ctx, "plan")
   if not scope then
-    return code
+    return code or 1
   end
   local ready_only = ctx.args.opt.ready == true
   if format == "ids" then
@@ -526,7 +517,7 @@ end
 function commands.estimate(ctx)
   local scope, code = load_scope(ctx, "estimate")
   if not scope then
-    return code
+    return code or 1
   end
   local sums = estimate.rollup(scope.tasks, { done = scope.done })
   ctx.say(estimate.describe(sums))
@@ -727,7 +718,9 @@ function commands.migrate_actor(ctx)
   local batch = require("tasks_nvim.batch")
   local proposals, left = batch.plan_actor_migration(open)
   for _, p in ipairs(proposals) do
-    ctx.say(("%s	%s	%s	%s"):format(args.opt.write and "set" or "propose", p.id, p.actor, p.reason))
+    ctx.say(
+      ("%s\t%s\t%s\t%s"):format(args.opt.write and "set" or "propose", p.id, p.actor, p.reason)
+    )
   end
   ctx.warn(
     ("%d proposed, %d left empty (of %d open)%s"):format(
@@ -783,6 +776,21 @@ function commands.done(ctx)
   end
   for _, note in ipairs(flow.notes) do
     ctx.warn(("warn: %s: %s"):format(res.id, note))
+  end
+  if args.opt.unblock and flow.next and #flow.next.freed_blocked > 0 then
+    -- Never without being asked: only the tasks that waited on exactly this one and still read `blocked`.
+    local steps = {}
+    for _, task_id in ipairs(flow.next.freed_blocked) do
+      steps[#steps + 1] = { id = task_id, patch = { status = "open" } }
+    end
+    local unblocked =
+      require("tasks_nvim.batch").set_many(steps, { root = eo.root, today = eo.today })
+    for _, changed in ipairs(unblocked.changed) do
+      ctx.say(("unblocked\t%s"):format(changed.id))
+    end
+    for _, f in ipairs(unblocked.failed) do
+      ctx.warn(("warn: %s: %s"):format(f.id, f.err))
+    end
   end
   if flow.next and not args.opt["no-next"] then
     for _, line in ipairs(plan_view.next_lines(flow.next)) do

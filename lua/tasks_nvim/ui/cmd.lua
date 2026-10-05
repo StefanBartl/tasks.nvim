@@ -203,6 +203,7 @@ local function open_file(path)
     notify.error(("cannot open %s: %s"):format(path, tostring(err)))
   end
 end
+M.open_file = open_file
 
 ---Describe the active filter for the table heading.
 ---@param flags table
@@ -232,6 +233,11 @@ local function filter_note(flags)
   if flags.blocked then
     parts[#parts + 1] = "blocked"
   end
+  for _, name in ipairs({ "ready", "waiting", "unestimated" }) do
+    if flags[name] then
+      parts[#parts + 1] = name
+    end
+  end
   if #parts == 0 then
     return nil
   end
@@ -239,6 +245,288 @@ local function filter_note(flags)
 end
 
 -- ── tasks ────────────────────────────────────────────────────────────────────
+
+---The filter flags the list-like commands share, as `filter_opts` wants them.
+---@param flags table
+---@return table
+local function filter_options(flags)
+  return {
+    status = flags.status,
+    prio = flags.prio,
+    effort = flags.effort,
+    kind = flags.kind,
+    category = flags.category,
+    severity = flags.severity,
+    value = flags.value,
+    actor = flags.actor,
+    tag = flags.tag,
+    stale = flags.stale,
+    blocked = flags.blocked,
+    unestimated = flags.unestimated,
+  }
+end
+
+---The scope of `plan` and `estimate` from the command: area (or `all`), `--for=<id>`, the filters.
+---@param ctx table
+---@return Tasks.PlanScope|nil scope
+local function load_scope(ctx)
+  local flags = ctx.flags
+  local filter, ferr = filter_opts.parse(filter_options(flags))
+  if not filter then
+    notify.error(tostring(ferr))
+    return nil
+  end
+  local root = vault_root()
+  if not root then
+    return nil
+  end
+  filter.ref_opts = { root = root }
+  local area = ctx.args.area
+  if area == "all" then
+    area = nil
+  end
+  local scope, err = require("tasks_nvim.plan_scope").load({
+    root = root,
+    area = area,
+    for_id = flags["for"],
+    filter = filter,
+  })
+  if not scope then
+    notify.error(tostring(err))
+    return nil
+  end
+  if #scope.errors > 0 then
+    notify.warn("cannot read directory " .. table.concat(scope.errors, ", "))
+  end
+  return scope
+end
+
+---`:Tasks plan [<area>|all] [--for=<id>] [filters] [--ready] [--format=md|tsv|ids] [--to=] [--force]`
+---@param ctx table  composer context
+function M.plan(ctx)
+  if not no_stray_words(ctx) then
+    return
+  end
+  local flags = ctx.flags
+  local target, terr = view.parse_target(flags.to)
+  if terr then
+    notify.error(terr)
+    return
+  end
+  local format = flags.format or "md"
+  if format ~= "md" and format ~= "tsv" and format ~= "ids" then
+    notify.error("--format must be md, tsv or ids")
+    return
+  end
+  local scope = load_scope(ctx)
+  if not scope then
+    return
+  end
+  local plan_view = require("tasks_nvim.plan_view")
+  local text
+  if format == "md" then
+    text = plan_view.markdown(scope.plan, {
+      title = scope.title,
+      today = model.today(),
+      done = scope.done,
+      ready_only = flags.ready == true,
+    })
+  elseif format == "tsv" then
+    text = table.concat(plan_view.tsv(scope.plan, { ready_only = flags.ready == true }), "\n")
+      .. "\n"
+  else
+    text = table.concat(plan_view.ids(scope.plan, { ready_only = flags.ready == true }), "\n")
+      .. "\n"
+  end
+  local ok, err = view.deliver_text(text, target, {
+    force = flags.force,
+    title = "tasks/plan/" .. scope.title:gsub("[^%w._-]+", "-"),
+    filetype = format == "md" and "markdown" or "text",
+  })
+  if not ok then
+    notify.error(tostring(err))
+    return
+  end
+  notify.info(
+    ("plan of %s: %d task(s), %d ready"):format(scope.title, #scope.tasks, #scope.plan.ready)
+  )
+end
+
+---Walk the tasks that miss an effort or a value and ask for them one by one; everything given is written in ONE
+---batch at the end (an index write per area). `Skip` leaves a field out, `Stop` ends the walk and keeps what was given.
+---@param tasks Tasks.Task[]
+local function walk_estimates(tasks)
+  local queue = {}
+  for _, t in ipairs(tasks) do
+    if t.value == nil or model.effort_days(t.effort) == nil then
+      queue[#queue + 1] = t
+    end
+  end
+  if #queue == 0 then
+    notify.info("every task has an effort and a value")
+    return
+  end
+  local ask = M.chooser or confirm.choose
+  local steps = {}
+
+  local function finish()
+    if #steps == 0 then
+      notify.info("estimate: nothing given, nothing changed")
+      return
+    end
+    local res = require("tasks_nvim.batch").set_many(steps, {})
+    local level, text = require("tasks_nvim.ui.dash_core").describe_set("estimate", res)
+    notify[level](text)
+  end
+
+  local function visit(i)
+    local t = queue[i]
+    if not t then
+      finish()
+      return
+    end
+    local patch = {}
+    local function done_task()
+      if next(patch) then
+        steps[#steps + 1] = { id = t.id, patch = patch }
+      end
+      visit(i + 1)
+    end
+    local function ask_value()
+      if t.value ~= nil then
+        done_task()
+        return
+      end
+      local msg = ("%s -- %s\n\nValue (1 = little, 5 = a lot)  [%d of %d]"):format(
+        t.id,
+        confirm.shorten(t.title, 60),
+        i,
+        #queue
+      )
+      ask(msg, { "Skip", "Stop", "1", "2", "3", "4", "5" }, function(pos)
+        if pos == nil or pos == 2 then
+          if pos == 2 then
+            done_task()
+            finish()
+          end
+          return
+        end
+        if pos >= 3 then
+          patch.value = tostring(pos - 2)
+        end
+        done_task()
+      end)
+    end
+    if model.effort_days(t.effort) ~= nil then
+      ask_value()
+      return
+    end
+    local msg = ("%s -- %s\n\nEffort  [%d of %d]"):format(
+      t.id,
+      confirm.shorten(t.title, 60),
+      i,
+      #queue
+    )
+    ask(msg, { "Skip", "Stop", "XS", "S", "M", "L", "XL" }, function(pos)
+      if pos == nil then
+        return
+      end
+      if pos == 2 then
+        if next(patch) then
+          steps[#steps + 1] = { id = t.id, patch = patch }
+        end
+        finish()
+        return
+      end
+      if pos >= 3 then
+        patch.effort = ({ "XS", "S", "M", "L", "XL" })[pos - 2]
+      end
+      ask_value()
+    end)
+  end
+  visit(1)
+end
+
+---Replaces the dialog of `estimate --walk` (specs): `function(msg, choices, cb)`.
+---@type (fun(msg: string, choices: string[], cb: fun(index: integer|nil)))|nil
+M.chooser = nil
+
+---`:Tasks estimate [<area>|all] [--for=<id>] [filters] [--walk]`
+---@param ctx table  composer context
+function M.estimate(ctx)
+  if not no_stray_words(ctx) then
+    return
+  end
+  local scope = load_scope(ctx)
+  if not scope then
+    return
+  end
+  local estimate = require("tasks_nvim.estimate")
+  local sums = estimate.rollup(scope.tasks, { done = scope.done })
+  local lines = { scope.title .. ": " .. estimate.describe(sums) }
+  if #sums.quick_wins > 0 then
+    lines[#lines + 1] = "Quick wins: " .. table.concat(sums.quick_wins, ", ")
+  end
+  if #sums.unestimated > 0 then
+    lines[#lines + 1] = ("%d task(s) miss an effort or a value (:Tasks estimate --walk goes through them)"):format(
+      #sums.unestimated
+    )
+  end
+  notify.info(table.concat(lines, "\n"))
+  if ctx.flags.walk then
+    walk_estimates(scope.tasks)
+  end
+end
+
+---`:Tasks next [<area>|all] [--n=3] [--actor=]`
+---@param ctx table  composer context
+function M.next(ctx)
+  if not no_stray_words(ctx) then
+    return
+  end
+  local flags = ctx.flags
+  local count = 3
+  if flags.n ~= nil then
+    local n = tonumber(flags.n)
+    if not n or n < 1 or n % 1 ~= 0 then
+      notify.error("--n must be a whole number of at least 1, got " .. tostring(flags.n))
+      return
+    end
+    count = n
+  end
+  if flags.actor and not (model.is_actor(flags.actor) or flags.actor == "none") then
+    notify.error(
+      "unknown actor in --actor: " .. tostring(flags.actor) .. " (expected cdx, me, pair or none)"
+    )
+    return
+  end
+  local area = ctx.args.area
+  if area == "all" then
+    area = nil
+  end
+  local root = vault_root()
+  if not root then
+    return
+  end
+  local pick, err = require("tasks_nvim.next_pick").pick_from_vault({
+    root = root,
+    area = area,
+    actor = flags.actor,
+    n = count - 1,
+  })
+  if not pick then
+    notify.error(tostring(err))
+    return
+  end
+  if pick.incomplete then
+    notify.warn(
+      "cannot read directory "
+        .. table.concat(pick.incomplete, ", ")
+        .. " (the answer may be incomplete)"
+    )
+  end
+  require("tasks_nvim.ui.next_popup").show(pick, nil)
+end
 
 ---`:Tasks list [<area>|all] [filters] [--to=] [--format=]`
 ---@param ctx table  composer context
@@ -264,6 +552,7 @@ function M.list(ctx)
     tag = flags.tag,
     stale = flags.stale,
     blocked = flags.blocked,
+    unestimated = flags.unestimated,
   })
   if not filter then
     notify.error(tostring(ferr))
@@ -293,6 +582,22 @@ function M.list(ctx)
     notify.warn("cannot read directory " .. table.concat(errors or {}, ", "))
   end
   local filtered, stale_report = model.filter(open, filter)
+  if flags.ready or flags.waiting then
+    if flags.ready and flags.waiting then
+      notify.error("--ready and --waiting exclude each other")
+      return
+    end
+    local kept, kerr = require("tasks_nvim.plan_scope").filter_readiness(
+      filtered,
+      flags.ready and "ready" or "waiting",
+      root
+    )
+    if not kept then
+      notify.error(tostring(kerr))
+      return
+    end
+    filtered = kept
+  end
   local shown = model.sort(filtered, order)
   local ref_note = nil
   if filter.stale_refs then
@@ -815,6 +1120,45 @@ end
 
 -- ── task done ────────────────────────────────────────────────────────────────
 
+---What a finish leaves to say: the tasks that still read `blocked` although this was their last blocker (offered to be
+---set to open, with a question, never silently), then the next task. Needs somebody to answer; a headless session
+---only gets the next-task message.
+---@param flow Tasks.DoneFlow
+---@param id string
+function M.after_finish(flow, id)
+  local nxt = flow.next
+  if not nxt then
+    return
+  end
+  local show = function()
+    require("tasks_nvim.ui.next_popup").show(nxt, id)
+  end
+  if #nxt.freed_blocked > 0 and #vim.api.nvim_list_uis() > 0 then
+    local names = table.concat(nxt.freed_blocked, "\n")
+    confirm.yesno(
+      ("These tasks waited only on %s and still say blocked:\n\n%s\n\nSet them to open?"):format(
+        id,
+        names
+      ),
+      "set to open",
+      function(yes)
+        if yes then
+          local steps = {}
+          for _, task_id in ipairs(nxt.freed_blocked) do
+            steps[#steps + 1] = { id = task_id, patch = { status = "open" } }
+          end
+          local res = require("tasks_nvim.batch").set_many(steps, {})
+          local level, text = require("tasks_nvim.ui.dash_core").describe_set("status", res)
+          notify[level](text)
+        end
+        show()
+      end
+    )
+    return
+  end
+  show()
+end
+
 ---@param id string
 ---@param opts { done_in?: string, date?: string }
 local function finish_task(id, opts)
@@ -840,6 +1184,7 @@ local function finish_task(id, opts)
   for _, note in ipairs(flow.notes) do
     notify.warn(("%s: %s"):format(id, note))
   end
+  M.after_finish(flow, id)
 end
 
 ---`:Tasks folderize <id>`

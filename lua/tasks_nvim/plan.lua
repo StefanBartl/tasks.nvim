@@ -422,6 +422,7 @@ function M.build(tasks, index)
   for i = #topo, 1, -1 do
     local id = topo[i]
     local set = {}
+    ---@type { prio: integer, id: string }|false
     local best_dep = false
     for _, d in ipairs(dependents[id]) do
       if not cyclic[d] then
