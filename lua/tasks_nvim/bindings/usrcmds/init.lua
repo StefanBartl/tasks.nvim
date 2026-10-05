@@ -1,4 +1,4 @@
----@module 'tasks_nvim.ui.command'
+---@module 'tasks_nvim.bindings.usrcmds'
 ---@brief Registers the `:Tasks` user command (composer verb) with the flat route grammar.
 ---@description
 --- `:Tasks <verb>`: `list`, `index`, `new`, `set`, `done`, `attach`, `folderize`, `template`, `open <id>`,

@@ -27,14 +27,16 @@ local M = {}
 ---@class Tasks.SetupOpts
 ---@field vault? string          # The vault folder (one folder per area); without it `$TASKS_VAULT` is read.
 ---@field extra_areas? string[]  # Folders that are areas although they hold neither `ROADMAP/` nor `Backlog/`.
+-- Defaults and validation: `tasks_nvim.config`.
 
 ---Tell the engine where the vault is. Safe to call twice; the last call wins per key.
 ---@param opts? Tasks.SetupOpts
 ---@return nil
 function M.setup(opts)
-  require("tasks_nvim.vault").configure(opts)
+  local cfg = require("tasks_nvim.config").merge(opts)
+  require("tasks_nvim.vault").configure(cfg)
   if not vim.g.tasks_nvim_no_command then
-    require("tasks_nvim.ui.command").register()
+    require("tasks_nvim.bindings.usrcmds").register()
   end
 end
 

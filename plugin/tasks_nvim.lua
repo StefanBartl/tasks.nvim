@@ -3,4 +3,4 @@ if vim.g.loaded_tasks_nvim or vim.g.tasks_nvim_no_command then
   return
 end
 vim.g.loaded_tasks_nvim = true
-require("tasks_nvim.ui.command").register()
+require("tasks_nvim.bindings.usrcmds").register()

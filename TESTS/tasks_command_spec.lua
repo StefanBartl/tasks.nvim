@@ -46,7 +46,7 @@ return function(H)
   -- a second call must not see the first call's paths changed
   eq(paths(routes.routes())[1], "open", "routes() builds a fresh list each time")
 
-  local command = require("tasks_nvim.ui.command")
+  local command = require("tasks_nvim.bindings.usrcmds")
   ok(command.register(), "register succeeds with lib.nvim on the runtimepath")
   ok(command.register(), "and a second time")
   eq(vim.fn.exists(":Tasks"), 2, ":Tasks exists")
