@@ -53,6 +53,45 @@ end
 ---@field patch table<string, any>                          # As for `mutate.set`.
 ---@field expect? { key: string, value: any }               # The task must still have this value, else the step fails.
 
+---A step planned by `plan_cycle`: the batch step plus what it does, for a summary.
+---@class Tasks.CycleStep : Tasks.BatchSetStep
+---@field field "status"|"prio"
+---@field from string|integer|nil
+---@field to string|integer|nil   # nil: the key is removed.
+
+---Plan advancing `field` of every task: each one from ITS OWN current value, so a mixed selection stays mixed.
+---Pure; nothing is written. The steps carry `expect`, so applying them refuses a task that no longer has the value
+---it was planned from.
+---@param tasks Tasks.Task[]
+---@param field "status"|"prio"
+---@param count? integer  presses to advance (`3p` is three); default 1
+---@return Tasks.CycleStep[]
+function M.plan_cycle(tasks, field, count)
+  local model = require("tasks_nvim.model")
+  local plan = {}
+  local presses = math.max(1, count or 1)
+  for _, t in ipairs(tasks) do
+    local from = field == "status" and t.status or t.prio
+    local to = from
+    for _ = 1, presses do
+      if field == "status" then
+        to = model.cycle_status(to)
+      else
+        to = model.cycle_prio(to)
+      end
+    end
+    plan[#plan + 1] = {
+      id = t.id,
+      field = field,
+      from = from,
+      to = to,
+      expect = { key = field, value = from },
+      patch = { [field] = to == nil and mutate.REMOVE or to },
+    }
+  end
+  return plan
+end
+
 ---@class Tasks.BatchSetResult
 ---@field changed { id: string, path: string }[]
 ---@field unchanged string[]

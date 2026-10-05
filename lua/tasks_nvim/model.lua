@@ -785,6 +785,33 @@ local function is_stale(task, today, days)
   return age == nil or age >= days
 end
 
+---The next open status after `cur`, wrapping around; an unknown or missing status starts at the first.
+---@param cur string|nil
+---@return string
+function M.cycle_status(cur)
+  for i, s in ipairs(M.OPEN_STATUSES) do
+    if s == cur then
+      return M.OPEN_STATUSES[i % #M.OPEN_STATUSES + 1]
+    end
+  end
+  return M.OPEN_STATUSES[1]
+end
+
+---The next prio after `cur`: none -> 1 -> 2 -> 3 -> none (`nil` = remove the key).
+---@param cur integer|nil
+---@return integer|nil
+function M.cycle_prio(cur)
+  if cur == nil then
+    return M.PRIOS[1]
+  end
+  for i, p in ipairs(M.PRIOS) do
+    if p == cur then
+      return M.PRIOS[i + 1]
+    end
+  end
+  return M.PRIOS[1]
+end
+
 ---Keep the tasks matching every given criterion. Does not reorder.
 ---@param tasks Tasks.Task[]
 ---@param f? Tasks.Filter

@@ -26,7 +26,6 @@
 
 local filter_opts = require("tasks_nvim.filter_opts")
 local model = require("tasks_nvim.model")
-local mutate = require("tasks_nvim.mutate")
 local scan = require("tasks_nvim.scan")
 
 local M = {}
@@ -541,99 +540,34 @@ end
 
 -- ── cycles and plans ─────────────────────────────────────────────────────────
 
----The next open status after `cur`, wrapping around; an unknown or missing
----status starts at the first.
----@param cur string|nil
----@return string
-function M.cycle_status(cur)
-  for i, s in ipairs(model.OPEN_STATUSES) do
-    if s == cur then
-      return model.OPEN_STATUSES[i % #model.OPEN_STATUSES + 1]
-    end
-  end
-  return model.OPEN_STATUSES[1]
-end
+---@alias Tasks.DashStep Tasks.CycleStep
 
----The next prio after `cur`: none -> 1 -> 2 -> 3 -> none (`nil` = remove the key).
----@param cur integer|nil
----@return integer|nil
-function M.cycle_prio(cur)
-  if cur == nil then
-    return model.PRIOS[1]
-  end
-  for i, p in ipairs(model.PRIOS) do
-    if p == cur then
-      return model.PRIOS[i + 1]
-    end
-  end
-  return model.PRIOS[1]
-end
+---The cycles and the plan live in the engine (`model.cycle_status`, `model.cycle_prio`, `batch.plan_cycle`): what an
+---`s` / `p` press means is not a property of the picker. These are the dashboard's names for them.
+M.cycle_status = model.cycle_status
+M.cycle_prio = model.cycle_prio
 
----@class Tasks.DashStep
----@field id string
----@field field "status"|"prio"
----@field from string|integer|nil
----@field to string|integer|nil   # nil: the key is removed.
----@field checked? boolean         # Planned from a displayed value: `apply_set` re-reads it before writing.
----@field patch table<string, any>
-
----Plan an `s` / `p` press: every task advances from ITS OWN current value, so
----a mixed selection stays mixed (the same rule as the per-row cycle in
----`picker.lua`). Pure; nothing is written.
+---Plan an `s` / `p` press (see `batch.plan_cycle`). Pure; nothing is written.
 ---@param tasks Tasks.Task[]
 ---@param field "status"|"prio"
 ---@param count? integer  steps to advance (`3p` is three presses); default 1
----@return Tasks.DashStep[]
+---@return Tasks.CycleStep[]
 function M.plan_cycle(tasks, field, count)
-  local plan = {}
-  local steps = math.max(1, count or 1)
-  for _, t in ipairs(tasks) do
-    local from, to
-    if field == "status" then
-      from = t.status
-      to = from
-      for _ = 1, steps do
-        to = M.cycle_status(to)
-      end
-    else
-      from = t.prio
-      to = from
-      for _ = 1, steps do
-        to = M.cycle_prio(to)
-      end
-    end
-    plan[#plan + 1] = {
-      id = t.id,
-      field = field,
-      from = from,
-      to = to,
-      checked = true,
-      patch = { [field] = to == nil and mutate.REMOVE or to },
-    }
-  end
-  return plan
+  return require("tasks_nvim.batch").plan_cycle(tasks, field, count)
 end
 
 -- ── applying ─────────────────────────────────────────────────────────────────
 
 ---@alias Tasks.DashSetResult Tasks.BatchSetResult
 
----Run a cycle plan through the engine's batch (`tasks_nvim.batch.set_many`): one write per task, ONE index
+---Run a plan through the engine's batch (`tasks_nvim.batch.set_many`): one write per task, ONE index
 ---regeneration per area that changed, a failing task does not stop the others. A step planned from a displayed
 ---value is refused when the task no longer has it.
----@param plan Tasks.DashStep[]
+---@param plan Tasks.BatchSetStep[]
 ---@param opts { root: string, today?: string }
 ---@return Tasks.DashSetResult
 function M.apply_set(plan, opts)
-  local steps = {}
-  for _, step in ipairs(plan) do
-    steps[#steps + 1] = {
-      id = step.id,
-      patch = step.patch,
-      expect = step.checked and { key = step.field, value = step.from } or nil,
-    }
-  end
-  return require("tasks_nvim.batch").set_many(steps, opts)
+  return require("tasks_nvim.batch").set_many(plan, opts)
 end
 
 ---One summary for the whole batch: the level and the text (first line the
