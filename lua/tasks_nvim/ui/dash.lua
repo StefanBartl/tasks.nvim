@@ -279,17 +279,19 @@ end
 
 -- ── the actions (shared by the picker and the fallback) ──────────────────────
 
----`s` / `p`: advance the field of every target in one batch.
+---`s` / `p`: advance the field of every target in one batch; a count (`3p`) advances it that many steps.
 ---@param state Tasks.DashState
 ---@param tasks Tasks.Task[]
 ---@param field "status"|"prio"
+---@param count? integer
 ---@return Tasks.DashSetResult|nil result
-function M.cycle(state, tasks, field)
+function M.cycle(state, tasks, field, count)
   if #tasks == 0 then
     return nil
   end
   local prog = new_progress("[tasks.dash] " .. field)
-  local ran, res = pcall(core.apply_set, core.plan_cycle(tasks, field), { root = state.root })
+  local ran, res =
+    pcall(core.apply_set, core.plan_cycle(tasks, field, count), { root = state.root })
   if not ran then
     -- An unexpected error must not leave the statusline progress (and its timer) running for good.
     if prog then
@@ -398,8 +400,11 @@ end
 
 ---`o`: the next sort order (default -> prio-effort -> severity -> frecency -> default).
 ---@param state Tasks.DashState
-function M.cycle_sort(state)
-  state.sort = core.cycle_sort(state.sort)
+---@param count? integer  steps to advance (`3o`)
+function M.cycle_sort(state, count)
+  for _ = 1, math.max(1, count or 1) do
+    state.sort = core.cycle_sort(state.sort)
+  end
   persist(state)
 end
 
@@ -712,16 +717,18 @@ local function open_snacks(Snacks, state)
   local actions = {
     tasks_status = function(picker)
       local tasks = targets(picker, true)
-      if held(function()
-        return M.cycle(state, tasks, "status")
-      end) then
+      if
+        held(function()
+          return M.cycle(state, tasks, "status", vim.v.count1)
+        end)
+      then
         refresh_keep(picker, false)
       end
     end,
     tasks_prio = function(picker)
       local tasks = targets(picker, true)
       if held(function()
-        return M.cycle(state, tasks, "prio")
+        return M.cycle(state, tasks, "prio", vim.v.count1)
       end) then
         refresh_keep(picker, false)
       end
@@ -734,7 +741,7 @@ local function open_snacks(Snacks, state)
       end
     end,
     tasks_sort = function(picker)
-      M.cycle_sort(state)
+      M.cycle_sort(state, vim.v.count1)
       -- Only the order changes: sort the list that is on screen instead of scanning and parsing the whole
       -- vault again (3.5 ms against ~120 ms). The finder uses `state.preload` once.
       state.preload = {

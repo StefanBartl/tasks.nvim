@@ -38,7 +38,7 @@ Details of every verb: [COMMANDS.md](COMMANDS.md).
 | `gb` / `gr` | Backlog picker / ROADMAP of the area under the cursor |
 | `g?` | help |
 
-Counts are not used: `s`, `p` and `o` advance one step per press (mark several tasks with `<Tab>` instead).
+A count works on the cycling keys: `3p` advances the priority three steps, `2s` the status, `3o` the sort order. The other keys ignore a count (mark several tasks with `<Tab>` instead).
 
 In the input window the same actions are on Alt (these shadow snacks.nvim's own `<M-d>` inspect, `<M-f>` follow,
 `<M-r>` regex, `<M-m>` maximize and `<M-p>` preview toggles there; turn any of them off or move it with `keys`, below): `<M-s> <M-p> <M-d> <M-f> <M-o> <M-e> <M-r> <M-b> <M-m> <M-v> <M-?>`.

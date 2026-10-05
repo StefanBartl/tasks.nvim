@@ -234,6 +234,17 @@ return function(H)
   )
   ok(vim.endswith(confirm.shorten(string.rep("x", 400), 70), "…"), "and says so")
 
+  -- ── a count on s / p advances that many steps ───────────────────────────
+  local cyc = assert(scan.find(shown.id, { root = root }))
+  local one = core.plan_cycle({ cyc }, "status", 1)[1].to
+  local two = core.plan_cycle({ cyc }, "status", 2)[1].to
+  eq(core.cycle_status(one), two, "two steps are two presses")
+  eq(core.plan_cycle({ cyc }, "status")[1].to, one, "no count is one step")
+  eq(
+    core.plan_cycle({ cyc }, "prio", 3)[1].to,
+    core.cycle_prio(core.cycle_prio(core.cycle_prio(cyc.prio)))
+  )
+
   -- ── a TASKS.md that is not a generated index is never overwritten or removed ──
   local own = root .. "/cascade.nvim/ROADMAP/TASKS.md"
   H.write(own, "my own notes, no marker")

@@ -580,17 +580,25 @@ end
 ---`picker.lua`). Pure; nothing is written.
 ---@param tasks Tasks.Task[]
 ---@param field "status"|"prio"
+---@param count? integer  steps to advance (`3p` is three presses); default 1
 ---@return Tasks.DashStep[]
-function M.plan_cycle(tasks, field)
+function M.plan_cycle(tasks, field, count)
   local plan = {}
+  local steps = math.max(1, count or 1)
   for _, t in ipairs(tasks) do
     local from, to
     if field == "status" then
       from = t.status
-      to = M.cycle_status(t.status)
+      to = from
+      for _ = 1, steps do
+        to = M.cycle_status(to)
+      end
     else
       from = t.prio
-      to = M.cycle_prio(t.prio)
+      to = from
+      for _ = 1, steps do
+        to = M.cycle_prio(to)
+      end
     end
     plan[#plan + 1] = {
       id = t.id,
