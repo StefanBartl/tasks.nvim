@@ -56,6 +56,7 @@ return function(H)
   local F = dofile(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)) .. "/fixture.lua")
   local mutate = require("tasks_nvim.mutate")
   local vault = require("tasks_nvim.vault")
+  local scan = require("tasks_nvim.scan")
   local root = F.vault(H_)
   local o = { root = root, today = F.TODAY, checkpoint_dir = H_.tmpdir() .. "/cp" }
   local alpha = assert(
@@ -93,5 +94,50 @@ return function(H)
     "open takes a finished task too and offers it"
   )
   eq(complete("Tasks set lib.nvim/"), { alpha.id }, "set only offers open tasks")
+
+  -- ── NEW-23: `:'<,'>Tasks new` makes a task about the selected lines ──
+  local cmd = require("tasks_nvim.ui.cmd")
+  eq(cmd.range_source({ range = { range = 0, line1 = 1, line2 = 1 } }), nil, "no range: no source")
+  local code_dir = H_.tmpdir() .. "/code"
+  vim.fn.mkdir(code_dir, "p")
+  local code_file = code_dir .. "/a.lua"
+  vim.fn.writefile({ "", "   local   x   = 1  ", "local y = 2", "" }, code_file)
+  vim.cmd("edit " .. vim.fn.fnameescape(code_file))
+  local code_buf = vim.api.nvim_get_current_buf()
+  local src = assert(cmd.range_source({ range = { range = 2, line1 = 1, line2 = 3 } }, code_buf))
+  eq(src.text, "local x = 1", "the first non-blank selected line, whitespace squeezed")
+  ok(src.ref and src.ref:find("a.lua:1$") ~= nil, "the ref is file:first-line")
+  vim.fn.writefile({ string.rep("w", 200) }, code_file)
+  vim.cmd("edit!")
+  local long = assert(cmd.range_source({ range = { range = 1, line1 = 1, line2 = 99 } }, code_buf))
+  eq(
+    vim.fn.strchars(long.text),
+    80,
+    "the title candidate is cut; a line2 beyond the end is clamped"
+  )
+  vim.cmd("enew")
+  local scratch = vim.api.nvim_get_current_buf()
+  vim.bo[scratch].buftype = "nofile"
+  vim.api.nvim_buf_set_lines(scratch, 0, -1, false, { "just text" })
+  local plain = assert(cmd.range_source({ range = { range = 1, line1 = 1, line2 = 1 } }, scratch))
+  eq(plain.ref, nil, "a scratch buffer names no file to point at")
+  eq(plain.text, "just text")
+
+  vault.set_root(root)
+  vim.cmd("edit " .. vim.fn.fnameescape(code_file))
+  vim.fn.writefile({ "alpha beta" }, code_file)
+  vim.cmd("edit!")
+  cmd.task_new({
+    args = { area = "lib.nvim" },
+    kv = {},
+    flags = {},
+    rest = {},
+    range = { range = 1, line1 = 1, line2 = 1 },
+  })
+  local made =
+    assert(scan.find("lib.nvim/alpha-beta", { root = root }), "the selected line became the title")
+  eq(made.title, "alpha beta")
+  ok(made.refs[1] and made.refs[1]:find("a.lua:1$") ~= nil, "and the task refers to the lines")
+  vim.cmd("enew")
   vault.set_root(nil)
 end

@@ -554,7 +554,9 @@ function M.task_new_form(given)
   -- on an answer), whereas a flag that waited for a callback stayed set when the dialog was closed from outside.
   open({
     areas = areas,
+    title = given.title,
     tags = given.tags,
+    refs = given.refs,
     ticks = ticks,
     on_cancel = function()
       notify.info("task new cancelled")
@@ -599,10 +601,46 @@ function M.task_new_form(given)
   })
 end
 
----`:Tasks new [<area> [title...]] [kind= prio= effort= tags= status=]`
+---The code a range names: `:'<,'>Tasks new` (from a visual selection or any `:5,10Tasks new`) makes a task about
+---those lines. `ref` is the buffer's file relative to the working directory plus the first line (`lua/a.lua:5`, a
+---ref the staleness check understands), `text` the first non-blank line, squeezed and cut, for a title nobody typed.
+---@param ctx table  composer context; `ctx.range = { range, line1, line2 }`
+---@param buf? integer  default: the current buffer
+---@return { ref?: string, text?: string }|nil source  # nil: no range given
+function M.range_source(ctx, buf)
+  local r = ctx.range
+  if not r or (r.range or 0) == 0 then
+    return nil
+  end
+  buf = buf or vim.api.nvim_get_current_buf()
+  if not vim.api.nvim_buf_is_valid(buf) then
+    return nil
+  end
+  local last = vim.api.nvim_buf_line_count(buf)
+  local first_line = math.max(1, math.min(r.line1 or 1, last))
+  local last_line = math.max(first_line, math.min(r.line2 or first_line, last))
+  local source = {}
+  local name = vim.api.nvim_buf_get_name(buf)
+  -- A real file only: `term://`, `tasks://` and the like name no path a ref could point at.
+  if name ~= "" and not name:match("^%a[%w+.-]*://") and vim.bo[buf].buftype == "" then
+    source.ref = ("%s:%d"):format(fsio.norm(vim.fn.fnamemodify(name, ":.")), first_line)
+  end
+  for _, line in ipairs(vim.api.nvim_buf_get_lines(buf, first_line - 1, last_line, false)) do
+    local squeezed = vim.trim((line:gsub("%s+", " ")))
+    if squeezed ~= "" then
+      source.text = vim.fn.strcharpart(squeezed, 0, 80)
+      break
+    end
+  end
+  return source
+end
+
+---`:Tasks new [<area> [title...]] [kind= prio= effort= tags= status=]`. With a range, the task is about those lines:
+---it gets a `refs:` entry for them, and the first selected line as its title when none was typed.
 ---@param ctx table
 function M.task_new(ctx)
   local area = ctx.args.area
+  local source = M.range_source(ctx)
   if area == nil or area == "" then
     local given = {}
     for _, key in ipairs({ "kind", "prio", "effort", "tags", "category", "severity", "status" }) do
@@ -610,10 +648,16 @@ function M.task_new(ctx)
         given[key] = ctx.kv[key]
       end
     end
+    if source then
+      given.refs, given.title = source.ref, source.text
+    end
     M.task_new_form(given)
     return
   end
   local title = unquote(table.concat(ctx.rest, " "))
+  if title == "" and source and source.text then
+    title = source.text
+  end
   local given = {}
   for _, key in ipairs({ "kind", "prio", "effort", "tags", "category", "severity", "status" }) do
     if ctx.kv[key] ~= nil and ctx.kv[key] ~= "" then
@@ -632,6 +676,7 @@ function M.task_new(ctx)
       category = values.category,
       severity = values.severity,
       status = values.status,
+      refs = source and source.ref or nil,
       folder = ctx.flags.folder == true,
     })
     if not res then

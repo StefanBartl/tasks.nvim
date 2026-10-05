@@ -227,6 +227,15 @@ chain of `vim.ui.input` prompts. Fields already given as `key=value` are not ask
 `<Esc>` on an optional field leaves it out, `<Esc>` on the title cancels. Tags may not
 contain `, [ ] " ' #` (they sit in an inline list).
 
+**With a range** (a visual selection, or `:5,10Tasks new <area>`) the task is *about those lines*: it gets a
+`refs:` entry for them (`lua/a.lua:5`: file relative to the working directory, first line -- the staleness check
+reads it) and, when you typed no title, the first non-blank selected line as the title. Without an area the form
+opens with the same title and ref filled in.
+
+```vim
+:'<,'>Tasks new lib.nvim                    " title = first selected line, refs = this file:line
+```
+
 ### `:Tasks set <id> key=value ...`
 
 Changes frontmatter of an *open* task and sets `updated` -- but only when something really

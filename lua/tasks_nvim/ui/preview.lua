@@ -320,22 +320,18 @@ function M.open_text(text, label)
     })
     -- `BufUnload` is where every other way of dropping the buffer's text ends up -- but `:edit!`
     -- (a reload) fires it too, so look again once the command is over: gone, the file goes.
-    autocmd.create(
-      "BufUnload",
-      function()
-        vim.schedule(function()
-          if not vim.api.nvim_buf_is_loaded(buf) then
-            M.forget(path)
-          end
-        end)
-      end,
-      {
-        group = group,
-        buffer = buf,
-        record = false,
-        desc = "tasks.nvim: delete the preview file when its text is dropped",
-      }
-    )
+    autocmd.create("BufUnload", function()
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_loaded(buf) then
+          M.forget(path)
+        end
+      end)
+    end, {
+      group = group,
+      buffer = buf,
+      record = false,
+      desc = "tasks.nvim: delete the preview file when its text is dropped",
+    })
   end
   return true, nil, path
 end

@@ -313,9 +313,10 @@ A vault is data that other people and tools write, so the engine is strict about
   backslashes; table cells are escaped in one linear pass (`fsio.md_cell`).
 - Filter options with no value (`--status=`) and a `--today` that is no date are usage errors, not filters
   that match nothing.
-- The text the engine generates (the `TASKS.md` table headings, the headings of the task template) is German,
-  the language of the vault it was written for; it is a data format (the committed indexes are compared
-  byte for byte), so it is not translated per session. Messages, commands and docs are English.
+- The text the engine generates is German, the language of the vault it was written for: the `TASKS.md` table
+  headings always, the headings of a new task's body unless `--lang=en` / `lang = "en"` is given. It is a data
+  format (the committed indexes are compared byte for byte), so the index text is not translated per session.
+  Messages, commands and docs are English.
 - `done` never removes a finished copy it did not create, and re-reads the task right before removing the
   original; the dashboard re-reads a task before advancing `s` / `p`.
 

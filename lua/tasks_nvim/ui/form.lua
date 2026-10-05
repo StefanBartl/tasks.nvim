@@ -150,7 +150,7 @@ function M.close(buf)
 end
 
 ---Open the form.
----@param opts { areas?: string[], area?: string, title?: string, tags?: string, ticks?: table<string, string|string[]>, on_submit: fun(values: Tasks.FormValues, buf: integer), on_cancel?: fun() }
+---@param opts { areas?: string[], area?: string, title?: string, tags?: string, refs?: string, ticks?: table<string, string|string[]>, on_submit: fun(values: Tasks.FormValues, buf: integer), on_cancel?: fun() }
 ---@return integer buf
 function M.open(opts)
   vim.cmd("botright new")
@@ -171,6 +171,7 @@ function M.open(opts)
       title = opts.title,
       areas = opts.areas,
       tags = opts.tags,
+      refs = opts.refs,
       ticks = opts.ticks,
     })
   )
