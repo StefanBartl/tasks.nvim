@@ -41,10 +41,10 @@ local is_windows = require("lib.nvim.cross.platform.is_windows")()
 ---sorted open tasks. `nil` (the default) means the interactive dashboard
 ---(`tasks_dash`); assign a function to replace it, or `false` for the old
 ---behaviour, a scratch buffer.
----@type (fun(view: Plugin_repos.TasksView): any)|false|nil
+---@type (fun(view: Tasks.View): any)|false|nil
 M.dashboard = nil
 
----@class Plugin_repos.TasksView
+---@class Tasks.View
 ---@field tasks Tasks.Task[]     # Open tasks that passed the filter, sorted.
 ---@field area string|nil        # nil: every area.
 ---@field filter Tasks.Filter

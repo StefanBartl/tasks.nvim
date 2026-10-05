@@ -87,7 +87,7 @@ end
 
 -- ── loading ──────────────────────────────────────────────────────────────────
 
----@class Plugin_repos.TasksDashLoad
+---@class Tasks.DashLoad
 ---@field tasks Tasks.Task[]   # Open tasks that passed the filter, sorted.
 ---@field open integer         # Open tasks before the filter.
 ---@field skipped integer      # Task files not listed (done, missing or unknown status).
@@ -107,7 +107,7 @@ end
 
 ---Scan, keep the open tasks, filter and sort -- what `:Tasks list` shows.
 ---@param opts { root: string, area?: string|nil, filter?: Tasks.Filter, sort?: string, scores?: table<string, number> }
----@return Plugin_repos.TasksDashLoad|nil result
+---@return Tasks.DashLoad|nil result
 ---@return string|nil err
 function M.load(opts)
   local tasks, errors
@@ -584,7 +584,7 @@ function M.cycle_prio(cur)
   return model.PRIOS[1]
 end
 
----@class Plugin_repos.TasksDashStep
+---@class Tasks.DashStep
 ---@field id string
 ---@field field "status"|"prio"
 ---@field from string|integer|nil
@@ -597,7 +597,7 @@ end
 ---`picker.lua`). Pure; nothing is written.
 ---@param tasks Tasks.Task[]
 ---@param field "status"|"prio"
----@return Plugin_repos.TasksDashStep[]
+---@return Tasks.DashStep[]
 function M.plan_cycle(tasks, field)
   local plan = {}
   for _, t in ipairs(tasks) do
@@ -653,7 +653,7 @@ local function reindex(areas, root)
   return errors
 end
 
----@class Plugin_repos.TasksDashSetResult
+---@class Tasks.DashSetResult
 ---@field changed { id: string, path: string }[]
 ---@field unchanged string[]
 ---@field failed { id: string, err: string }[]
@@ -663,11 +663,11 @@ end
 ---Run a cycle plan: one `mutate.set` per task without its own index write,
 ---then ONE index regeneration per area that changed. A failing task does not
 ---stop the others.
----@param plan Plugin_repos.TasksDashStep[]
+---@param plan Tasks.DashStep[]
 ---@param opts { root: string, today?: string }
----@return Plugin_repos.TasksDashSetResult
+---@return Tasks.DashSetResult
 function M.apply_set(plan, opts)
-  ---@type Plugin_repos.TasksDashSetResult
+  ---@type Tasks.DashSetResult
   local res = { changed = {}, unchanged = {}, failed = {}, areas = {}, index_errors = {} }
   local changed_ids = {}
   for _, step in ipairs(plan) do
@@ -707,7 +707,7 @@ end
 ---One summary for the whole batch: the level and the text (first line the
 ---counts, then one line per failure / index problem).
 ---@param field string
----@param res Plugin_repos.TasksDashSetResult
+---@param res Tasks.DashSetResult
 ---@return "info"|"warn"|"error" level
 ---@return string text
 function M.describe_set(field, res)
@@ -734,7 +734,7 @@ function M.describe_set(field, res)
   return level, table.concat(lines, "\n")
 end
 
----@class Plugin_repos.TasksDashDoneResult
+---@class Tasks.DashDoneResult
 ---@field done { id: string, from: string, to: string, readme?: string }[]
 ---@field already string[]
 ---@field failed { id: string, err: string }[]
@@ -745,9 +745,9 @@ end
 ---at the end.
 ---@param ids string[]
 ---@param opts { root: string, today?: string, date?: string }
----@return Plugin_repos.TasksDashDoneResult
+---@return Tasks.DashDoneResult
 function M.apply_done(ids, opts)
-  ---@type Plugin_repos.TasksDashDoneResult
+  ---@type Tasks.DashDoneResult
   local res = { done = {}, already = {}, failed = {}, areas = {}, index_errors = {} }
   local moved = {}
   for _, id in ipairs(ids) do
@@ -767,7 +767,7 @@ function M.apply_done(ids, opts)
   return res
 end
 
----@param res Plugin_repos.TasksDashDoneResult
+---@param res Tasks.DashDoneResult
 ---@return "info"|"warn"|"error" level
 ---@return string text
 function M.describe_done(res)
@@ -800,14 +800,14 @@ end
 
 -- ── export ───────────────────────────────────────────────────────────────────
 
----@class Plugin_repos.TasksDashExport
+---@class Tasks.DashExport
 ---@field label string
 ---@field to "buffer"|"clipboard"|"qf"|"file"|"mdview"
 ---@field format? "md"|"csv"
 ---@field ask_path? boolean
 
 ---The targets of the `e` key: the sinks `--to=` knows.
----@type Plugin_repos.TasksDashExport[]
+---@type Tasks.DashExport[]
 M.EXPORT_CHOICES = {
   { label = "Scratch buffer (Markdown)", to = "buffer", format = "md" },
   { label = "Clipboard (Markdown)", to = "clipboard", format = "md" },
@@ -821,7 +821,7 @@ M.EXPORT_CHOICES = {
 
 ---Turn a menu choice (and the path the user typed, for a file) into what
 ---`tasks_view.deliver` takes.
----@param choice Plugin_repos.TasksDashExport
+---@param choice Tasks.DashExport
 ---@param path? string
 ---@return { kind: string, path?: string }|nil target
 ---@return string|nil err

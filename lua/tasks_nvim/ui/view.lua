@@ -23,7 +23,7 @@ local fsio = require("tasks_nvim.fsio")
 
 local M = {}
 
----@alias Plugin_repos.TasksFormat "md"|"csv"
+---@alias Tasks.Format "md"|"csv"
 
 ---The targets `--to=` accepts, for completion.
 ---@type string[]
@@ -31,7 +31,7 @@ M.TARGETS = { "buffer", "clipboard", "qf", "file:", "echo", "mdview" }
 
 local EN_DASH = "–"
 
----@class Plugin_repos.TasksColumn
+---@class Tasks.Column
 ---@field header string
 ---@field get fun(t: Tasks.Task): any
 ---@field csv_only? boolean   # Left out of the Markdown table (too wide to read).
@@ -46,7 +46,7 @@ local function or_empty(value, empty)
   return tostring(value)
 end
 
----@type Plugin_repos.TasksColumn[]
+---@type Tasks.Column[]
 local COLUMNS = {
   {
     header = "Task",
@@ -152,7 +152,7 @@ end
 ---The format a file target implies when `--format` is not given: `.csv` -> csv.
 ---@param target { kind: string, path?: string }|nil
 ---@param format string|nil
----@return Plugin_repos.TasksFormat
+---@return Tasks.Format
 function M.resolve_format(target, format)
   if format == "csv" or format == "md" then
     return format
@@ -181,7 +181,7 @@ local function csv_safe(s)
 end
 
 ---@param tasks Tasks.Task[]
----@param format Plugin_repos.TasksFormat
+---@param format Tasks.Format
 ---@return string[] headers
 ---@return string[][] rows
 local function matrix(tasks, format)
@@ -210,15 +210,15 @@ local function matrix(tasks, format)
   return headers, rows
 end
 
----@class Plugin_repos.TasksRenderOpts
----@field format? Plugin_repos.TasksFormat   # Default `md`.
+---@class Tasks.RenderOpts
+---@field format? Tasks.Format   # Default `md`.
 ---@field heading? string                    # Markdown only: the `#` line above the table.
 ---@field note? string                       # Markdown only: a line under the heading (the active filter).
 
 ---Render tasks as text. Markdown gets a heading and a GFM table; CSV gets one
 ---header line and one line per task with the extra columns.
 ---@param tasks Tasks.Task[]
----@param opts? Plugin_repos.TasksRenderOpts
+---@param opts? Tasks.RenderOpts
 ---@return string text
 function M.render(tasks, opts)
   opts = opts or {}
@@ -278,7 +278,7 @@ function M.overwrite_guard(target, force)
   return nil
 end
 
----@class Plugin_repos.TasksDeliverOpts : Plugin_repos.TasksRenderOpts
+---@class Tasks.DeliverOpts : Tasks.RenderOpts
 ---@field force? boolean       # Overwrite an existing `file:` target.
 ---@field title? string        # Buffer name / quickfix title.
 ---@field filetype? string     # Scratch buffer filetype (default: `markdown`, `csv` for csv).
@@ -287,7 +287,7 @@ end
 ---buffer. Returns `ok, err`; the caller reports.
 ---@param tasks Tasks.Task[]
 ---@param target { kind: string, path?: string }|nil
----@param opts? Plugin_repos.TasksDeliverOpts
+---@param opts? Tasks.DeliverOpts
 ---@return boolean ok
 ---@return string|nil err
 function M.deliver(tasks, target, opts)

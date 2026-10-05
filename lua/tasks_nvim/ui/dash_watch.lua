@@ -43,11 +43,11 @@ local uv = vim.uv or vim.loop
 
 local M = {}
 
----@class Plugin_repos.TasksDashWatchDir
+---@class Tasks.DashWatchDir
 ---@field path string
 ---@field only? string   # Waiting for this entry (a folder that may not exist yet): events count once it exists.
 
----@class Plugin_repos.TasksDashWatchOpts
+---@class Tasks.DashWatchOpts
 ---@field root string
 ---@field area? string|nil               # nil: every area of the vault.
 ---@field on_refresh fun()               # Called on the main loop, once per quiet period.
@@ -116,7 +116,7 @@ end
 ---@param root string
 ---@param area string|nil
 ---@param opts? { backlog?: boolean }
----@return Plugin_repos.TasksDashWatchDir[]
+---@return Tasks.DashWatchDir[]
 function M.dirs(root, area, opts)
   local with_backlog = not (opts and opts.backlog == false)
   local names = {}
@@ -210,8 +210,8 @@ local function default_now()
   return uv.hrtime() / 1e6
 end
 
----@class Plugin_repos.TasksDashWatcher
----@field opts Plugin_repos.TasksDashWatchOpts
+---@class Tasks.DashWatcher
+---@field opts Tasks.DashWatchOpts
 ---@field handles table<string, { handle: table, only?: string }>
 ---@field stopped boolean
 ---@field held boolean
@@ -223,8 +223,8 @@ end
 local Watcher = {}
 Watcher.__index = Watcher
 
----@param opts Plugin_repos.TasksDashWatchOpts
----@return Plugin_repos.TasksDashWatcher
+---@param opts Tasks.DashWatchOpts
+---@return Tasks.DashWatcher
 function M.new(opts)
   local o = vim.tbl_extend("force", M.DEFAULTS, opts)
   o.start = o.start or default_start

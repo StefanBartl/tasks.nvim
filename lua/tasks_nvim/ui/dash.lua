@@ -44,7 +44,7 @@ local M = {}
 ---Overrides of the dashboard settings, for a script or a spec (`require(...).config.watch = false`); the
 ---settings themselves are `dashboard = { watch, debounce_ms }` of `setup()`. `nil` means "from `setup()`".
 ---`watch_opts` is merged into the `dash_watch.new` options (the seam the specs use).
----@class Plugin_repos.TasksDashConfig
+---@class Tasks.DashConfig
 ---@field watch? boolean              # Rescan on file changes while open.
 ---@field watch_debounce_ms? integer  # Quiet period before a rescan.
 ---@field watch_opts? table
@@ -61,7 +61,7 @@ local STORE_KEY = "tasks/dashboard-filter"
 ---Most task lines the finish confirmation lists before it says "... and n more".
 local MAX_CONFIRM_LINES = 8
 
----@class Plugin_repos.TasksDashState
+---@class Tasks.DashState
 ---@field root string
 ---@field area string|nil
 ---@field filter Tasks.Filter
@@ -70,10 +70,10 @@ local MAX_CONFIRM_LINES = 8
 ---@field widths { area: integer, effort: integer, status: integer }
 ---@field persist boolean
 ---@field signature? string                          # `core.signature` of `shown`.
----@field preload? Plugin_repos.TasksDashLoad        # A load the next `reload` uses instead of scanning again.
+---@field preload? Tasks.DashLoad        # A load the next `reload` uses instead of scanning again.
 ---@field watch? boolean                             # Live refresh for this dashboard.
 
----@class Plugin_repos.TasksDashOpts
+---@class Tasks.DashOpts
 ---@field persist? boolean   # Remember the filter between sessions (default true).
 ---@field backend? "snacks"|"select"   # Force a backend (default: snacks when present).
 ---@field watch? boolean     # Live refresh (default: `M.config.watch`).
@@ -95,7 +95,7 @@ local function new_progress(title)
   return progress_mod.create({ title = title, style = "statusline" })
 end
 
----@param state Plugin_repos.TasksDashState
+---@param state Tasks.DashState
 local function persist(state)
   if not state.persist then
     return
@@ -126,11 +126,11 @@ local function remembered(root)
   return core.filter_from_stored(data.filter), core.sort_from_stored(data.sort)
 end
 
----Dashboard state for a `Plugin_repos.TasksView`: the command's own filter and
+---Dashboard state for a `Tasks.View`: the command's own filter and
 ---sort order if it carried them, else the ones remembered from the last session.
----@param v Plugin_repos.TasksView
----@param opts? Plugin_repos.TasksDashOpts
----@return Plugin_repos.TasksDashState
+---@param v Tasks.View
+---@param opts? Tasks.DashOpts
+---@return Tasks.DashState
 function M.new_state(v, opts)
   opts = opts or {}
   local filter = v.filter or {}
@@ -168,8 +168,8 @@ function M.new_state(v, opts)
   }
 end
 
----@param state Plugin_repos.TasksDashState
----@return Plugin_repos.TasksDashLoad|nil res
+---@param state Tasks.DashState
+---@return Tasks.DashLoad|nil res
 ---@return string|nil err
 local function load_state(state)
   return core.load({
@@ -182,7 +182,7 @@ end
 
 ---Rescan and refilter; the result is `state.shown`. A `state.preload` (what the
 ---watcher just compared against the list) is used once instead of scanning again.
----@param state Plugin_repos.TasksDashState
+---@param state Tasks.DashState
 ---@return Tasks.Task[]
 local function reload(state)
   local res, err = state.preload, nil
@@ -243,7 +243,7 @@ function M.touch(tasks)
   return ok and res == true
 end
 
----@param state Plugin_repos.TasksDashState
+---@param state Tasks.DashState
 ---@return string
 local function title_of(state)
   return core.header(state.shown, state.filter, state.area, state.sort)
@@ -264,7 +264,7 @@ local function describe(tasks)
 end
 
 ---The tasks of the vault's open list by id (for the refresh of buffers after a write).
----@param res Plugin_repos.TasksDashSetResult
+---@param res Tasks.DashSetResult
 local function refresh_buffers(res)
   local c = cmd()
   if type(c.refresh_buffers) ~= "function" then
@@ -278,10 +278,10 @@ end
 -- ── the actions (shared by the picker and the fallback) ──────────────────────
 
 ---`s` / `p`: advance the field of every target in one batch.
----@param state Plugin_repos.TasksDashState
+---@param state Tasks.DashState
 ---@param tasks Tasks.Task[]
 ---@param field "status"|"prio"
----@return Plugin_repos.TasksDashSetResult|nil result
+---@return Tasks.DashSetResult|nil result
 function M.cycle(state, tasks, field)
   if #tasks == 0 then
     return nil
@@ -306,7 +306,7 @@ function M.cycle(state, tasks, field)
 end
 
 ---`D`: ask once for the whole batch, then finish every target.
----@param state Plugin_repos.TasksDashState
+---@param state Tasks.DashState
 ---@param tasks Tasks.Task[]
 ---@param after fun(done: boolean)  # Called once, after the answer and the work.
 function M.finish(state, tasks, after)
@@ -350,7 +350,7 @@ function M.finish(state, tasks, after)
 end
 
 ---`f`: pick a dimension, then a value; empty choices clear.
----@param state Plugin_repos.TasksDashState
+---@param state Tasks.DashState
 ---@param after fun()  # Called once, changed or not.
 function M.set_filter(state, after)
   local dims = vim.deepcopy(core.FILTER_DIMS)
@@ -395,14 +395,14 @@ function M.set_filter(state, after)
 end
 
 ---`o`: the next sort order (default -> prio-effort -> severity -> frecency -> default).
----@param state Plugin_repos.TasksDashState
+---@param state Tasks.DashState
 function M.cycle_sort(state)
   state.sort = core.cycle_sort(state.sort)
   persist(state)
 end
 
 ---`e`: ask where, deliver the tasks with the `--to=` sinks.
----@param state Plugin_repos.TasksDashState
+---@param state Tasks.DashState
 ---@param tasks Tasks.Task[]
 ---@param after fun(delivered: boolean)
 function M.export(state, tasks, after)
@@ -490,7 +490,7 @@ function M.preview_task(task)
 end
 
 ---`gb` / `gr`: the Backlog picker, or ROADMAP.md, of an area.
----@param state Plugin_repos.TasksDashState
+---@param state Tasks.DashState
 ---@param task Tasks.Task|nil
 ---@param which "backlog"|"roadmap"
 function M.open_area_doc(state, task, which)
@@ -597,7 +597,7 @@ end
 ---What the file watcher calls: rescan, and only when the result differs from
 ---the list on screen redraw it. A scan that fails is not reported -- nobody
 ---asked for it -- the next change or `r` tries again.
----@param state Plugin_repos.TasksDashState
+---@param state Tasks.DashState
 ---@param picker table
 ---@return boolean refreshed
 function M.refresh_if_changed(state, picker)
@@ -615,9 +615,9 @@ end
 
 ---Start the live refresh of a picker. Returns the watcher, or nil when it is
 ---off or could not start (said once; `r` still works).
----@param state Plugin_repos.TasksDashState
+---@param state Tasks.DashState
 ---@param picker table
----@return Plugin_repos.TasksDashWatcher|nil
+---@return Tasks.DashWatcher|nil
 local function start_watch(state, picker)
   if not state.watch then
     return nil
@@ -653,9 +653,9 @@ local function start_watch(state, picker)
 end
 
 ---@param Snacks table
----@param state Plugin_repos.TasksDashState
+---@param state Tasks.DashState
 local function open_snacks(Snacks, state)
-  ---@type Plugin_repos.TasksDashWatcher|nil
+  ---@type Tasks.DashWatcher|nil
   local watcher
 
   ---Run a write batch of the dashboard so its own file events do not trigger a rescan.
@@ -855,7 +855,7 @@ end
 
 -- ── fallback backend ─────────────────────────────────────────────────────────
 
----@param state Plugin_repos.TasksDashState
+---@param state Tasks.DashState
 local function open_select(state)
   local shown = reload(state)
   if #shown == 0 then
@@ -963,8 +963,8 @@ end
 
 -- ── entry ────────────────────────────────────────────────────────────────────
 
----@param state Plugin_repos.TasksDashState
----@param opts? Plugin_repos.TasksDashOpts
+---@param state Tasks.DashState
+---@param opts? Tasks.DashOpts
 function open_state(state, opts)
   opts = opts or {}
   if opts.backend ~= "select" then
@@ -981,9 +981,9 @@ function open_state(state, opts)
 end
 
 ---Open the dashboard for what `:Tasks list` collected. Never raises.
----@param v Plugin_repos.TasksView
----@param opts? Plugin_repos.TasksDashOpts
----@return Plugin_repos.TasksDashState|nil state
+---@param v Tasks.View
+---@param opts? Tasks.DashOpts
+---@return Tasks.DashState|nil state
 function M.open(v, opts)
   local ok, state = pcall(M.new_state, v, opts)
   if not ok then
