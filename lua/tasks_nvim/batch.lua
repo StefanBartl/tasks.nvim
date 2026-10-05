@@ -14,6 +14,7 @@
 local done_flow = require("tasks_nvim.done_flow")
 local index = require("tasks_nvim.index")
 local mutate = require("tasks_nvim.mutate")
+local next_pick = require("tasks_nvim.next_pick")
 local scan = require("tasks_nvim.scan")
 local vault = require("tasks_nvim.vault")
 
@@ -200,18 +201,25 @@ end
 ---@field failed { id: string, err: string }[]
 ---@field areas string[]
 ---@field index_errors string[]
+---@field next? Tasks.NextPick          # What to start next, worked out ONCE after the last finished task.
+---@field freed string[]                # Tasks that the last finished task freed.
 
 ---Finish tasks (rule R6) one after the other, the index regenerated once per area at the end.
 ---@param ids string[]
----@param opts { root: string, today?: string, date?: string }
+---@param opts { root: string, today?: string, date?: string, pick_next?: boolean }
 ---@return Tasks.BatchDoneResult
 function M.done_many(ids, opts)
   ---@type Tasks.BatchDoneResult
-  local res = { done = {}, already = {}, failed = {}, areas = {}, index_errors = {} }
+  local res = { done = {}, already = {}, failed = {}, areas = {}, index_errors = {}, freed = {} }
   local moved = {}
   for _, id in ipairs(ids) do
-    local flow, err =
-      done_flow.run(id, { root = opts.root, index = false, today = opts.today, date = opts.date })
+    local flow, err = done_flow.run(id, {
+      root = opts.root,
+      index = false,
+      today = opts.today,
+      date = opts.date,
+      pick_next = false,
+    })
     local r = flow and flow.done
     if not flow or not r then
       res.failed[#res.failed + 1] = { id = id, err = tostring(err) }
@@ -224,6 +232,18 @@ function M.done_many(ids, opts)
   end
   res.areas = areas_of(moved)
   res.index_errors = reindex(res.areas, opts.root)
+  -- One answer for the whole batch, from the last finished task and after the indexes are written: a stack of
+  -- finished tasks gets one "what next", not one per task.
+  local last = res.done[#res.done]
+  if last and opts.pick_next ~= false then
+    local area = last.id:match("^([^/]+)/")
+    local ran, pick =
+      pcall(next_pick.pick_from_vault, { root = opts.root, done = { id = last.id, area = area } })
+    if ran and pick then
+      res.next = pick
+      res.freed = pick.freed
+    end
+  end
   return res
 end
 
