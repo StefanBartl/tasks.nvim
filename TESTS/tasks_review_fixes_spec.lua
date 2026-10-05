@@ -282,6 +282,8 @@ return function(H)
     assert(scan.find(with_refs.id, { root = root })),
     assert(scan.find(without_refs.id, { root = root })),
   }
+  ---@type string|nil
+  local refresh_error
   local real_compute = staleness.compute
   staleness.compute = function()
     error("boom")
@@ -293,4 +295,31 @@ return function(H)
   eq(kept[1].id, with_refs.id)
   has(report.notes[1], "refs could not be checked")
   has(report.notes[1], "unverified")
+
+  -- ── a refresh that raises is counted and reported, the watcher survives ──
+  local watcher = require("tasks_nvim.ui.dash_watch").new({
+    root = root,
+    on_refresh = function()
+      error("refresh boom")
+    end,
+    on_error = function(e)
+      refresh_error = tostring(e)
+    end,
+  })
+  watcher.stopped = false -- as `start` leaves it; the handles are not needed to drive one refresh
+  watcher:fire()
+  eq(watcher.stats.errors, 1, "the failure is counted")
+  has(refresh_error, "refresh boom")
+  ok(not watcher.stopped, "and the watcher is still there")
+  watcher:stop()
+
+  -- ── an unreadable (here: oversized) index is an error, not "missing" ──
+  local big_index = root .. "/lib.nvim/ROADMAP/TASKS.md"
+  local bf = assert(io.open(big_index, "wb"))
+  bf:write(string.rep("x", fsio.MAX_READ_BYTES + 1))
+  bf:close()
+  local ires, ierr = index.write_area("lib.nvim", { root = root })
+  eq(ires, nil)
+  has(ierr, "cannot read")
+  vim.fn.delete(big_index)
 end

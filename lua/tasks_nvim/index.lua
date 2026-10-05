@@ -201,7 +201,15 @@ function M.write_area(area, opts)
   local text, open = M.render(area, tasks, opts)
   ---@type Tasks.IndexResult
   local result = { area = area, path = path, open = open, action = "unchanged" }
-  local current = fsio.is_file(path) and fsio.read(path) or nil
+  local current
+  if fsio.is_file(path) then
+    -- An index that exists but cannot be read is an error: it used to count as "missing" and was then overwritten.
+    local text_read, read_err = fsio.read(path)
+    if not text_read then
+      return nil, ("cannot read %s: %s"):format(path, tostring(read_err))
+    end
+    current = text_read
+  end
   if current ~= nil and not M.is_generated(current) then
     return nil,
       ("%s is not a generated index (no GENERATED marker): move or delete it, tasks.nvim will not overwrite it"):format(

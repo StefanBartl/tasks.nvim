@@ -62,6 +62,7 @@ local STORE_KEY = "tasks/dashboard-filter"
 local MAX_CONFIRM_LINES = 8
 
 ---@class Tasks.DashState
+---@field refresh_error_seen? boolean  # A failed live refresh has been announced.
 ---@field errors_seen? string  # The read errors of the last reload (so the same set is not announced twice).
 ---@field notes_seen? string   # Likewise for the `--stale=refs` notes.
 ---@field root string
@@ -629,6 +630,13 @@ local function start_watch(state, picker)
     debounce_ms = M.config.watch_debounce_ms or settings().debounce_ms,
     on_refresh = function()
       M.refresh_if_changed(state, picker)
+    end,
+    on_error = function(err)
+      -- Once per picker: a refresh that keeps failing must not flood the message area.
+      if not state.refresh_error_seen then
+        state.refresh_error_seen = true
+        notify.warn(("the live refresh failed: %s (press r to rescan)"):format(tostring(err)))
+      end
     end,
   }, M.config.watch_opts or {}))
   -- A handle factory that raises must not take the open picker down with it (the caller's pcall

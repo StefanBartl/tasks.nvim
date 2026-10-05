@@ -51,6 +51,7 @@ local M = {}
 ---@field root string
 ---@field area? string|nil               # nil: every area of the vault.
 ---@field on_refresh fun()               # Called on the main loop, once per quiet period.
+---@field on_error? fun(err: any)        # Called when `on_refresh` raised (the watcher keeps running).
 ---@field debounce_ms? integer           # Quiet period over all handles (default 250).
 ---@field mute_ms? integer               # Quiet time after `hold` (default 300).
 ---@field raw_debounce_ms? integer       # Per-handle debounce of `lib.nvim.fs.watch` (default 20).
@@ -219,7 +220,7 @@ end
 ---@field gen integer
 ---@field cancel_timer? fun()
 ---@field partial? { started: integer, wanted: integer, err: string|nil }
----@field stats { events: integer, muted: integer, refreshes: integer }
+---@field stats { events: integer, muted: integer, refreshes: integer, errors: integer }
 local Watcher = {}
 Watcher.__index = Watcher
 
@@ -237,7 +238,7 @@ function M.new(opts)
     held = false,
     mute_until = 0,
     gen = 0,
-    stats = { events = 0, muted = 0, refreshes = 0 },
+    stats = { events = 0, muted = 0, refreshes = 0, errors = 0 },
   }, Watcher)
 end
 
@@ -312,7 +313,14 @@ function Watcher:fire()
     return
   end
   self.stats.refreshes = self.stats.refreshes + 1
-  pcall(self.opts.on_refresh)
+  local ran, err = pcall(self.opts.on_refresh)
+  if not ran then
+    -- A failing refresh is counted and handed to `on_error`; the watcher keeps running (the next change tries again).
+    self.stats.errors = self.stats.errors + 1
+    if self.opts.on_error then
+      pcall(self.opts.on_error, err)
+    end
+  end
   if not self.stopped then
     pcall(self.sync, self)
   end
