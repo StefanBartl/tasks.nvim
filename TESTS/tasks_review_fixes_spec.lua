@@ -1,0 +1,126 @@
+-- TESTS/tasks_review_fixes_spec.lua -- regressions of the SEC/ERR rule review of 2026-10-05: linear escaping of
+-- table cells (a backslash run in front of `|` stays escaped), no quadratic parse of a file with many opaque
+-- keys, `fsio.read` refuses what is not a small regular file, and C1 control characters never reach an asset name.
+
+return function(H)
+  local eq, ok, has = H.eq, H.ok, H.has
+  local F = dofile(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)) .. "/fixture.lua")
+  local fsio = require("tasks_nvim.fsio")
+  local model = require("tasks_nvim.model")
+  local index = require("tasks_nvim.index")
+  local mutate = require("tasks_nvim.mutate")
+  local BS = string.char(92)
+
+  ---Seconds `f` takes.
+  ---@param f fun()
+  ---@return number
+  local function timed(f)
+    local t0 = vim.uv.hrtime()
+    f()
+    return (vim.uv.hrtime() - t0) / 1e9
+  end
+
+  -- ── md_cell / double_runs ───────────────────────────────────────────────
+  eq(fsio.md_cell("a|b"), "a" .. BS .. "|b", "a pipe is escaped")
+  eq(
+    fsio.md_cell("a" .. BS .. "|b"),
+    "a" .. BS .. BS .. BS .. "|b",
+    "a backslash run in front of the pipe is doubled, so the pipe stays escaped"
+  )
+  eq(fsio.md_cell("a" .. BS .. "b"), "a" .. BS .. "b", "a backslash elsewhere is left alone")
+  eq(fsio.md_cell("a\nb\27c"), "a b c", "line breaks and control characters become spaces")
+  eq(
+    fsio.double_runs("x" .. BS, "^[%]]", true),
+    "x" .. BS .. BS,
+    "a run at the very end is doubled on request"
+  )
+  eq(fsio.double_runs("x" .. BS, "^[%]]"), "x" .. BS, "and left alone otherwise")
+
+  local task = model.parse_text(
+    '---\ntitle: "a' .. BS .. BS .. '|b"\nstatus: open\n---\nbody',
+    { path = "E:/v/a/ROADMAP/tasks/x.md", area = "a" }
+  )
+  local rendered = index.render("a", { task })
+  -- `a\|b` (a backslash, a pipe) in the title: the row has exactly the six cell borders of five columns.
+  local row
+  for line in rendered:gmatch("[^\n]+") do
+    if line:find("| open", 1, true) then
+      row = line
+    end
+  end
+  ok(row ~= nil, "the row is rendered")
+  local unescaped = 0
+  local i = 1
+  while i <= #row do
+    local c = row:sub(i, i)
+    if c == BS then
+      i = i + 2
+    else
+      if c == "|" then
+        unescaped = unescaped + 1
+      end
+      i = i + 1
+    end
+  end
+  eq(unescaped, 6, "no title character turns into a table border")
+
+  local long = string.rep(BS, 30000) .. "a"
+  ok(timed(function()
+    fsio.md_cell(long)
+  end) < 0.5, "md_cell is linear on a long backslash run")
+  local long_task = model.parse_text(
+    "---\ntitle: " .. long .. "\nstatus: open\n---\nbody",
+    { path = "E:/v/a/ROADMAP/tasks/y.md", area = "a" }
+  )
+  ok(timed(function()
+    index.render("a", { long_task })
+  end) < 1, "index.render is linear on a title of 30 000 backslashes")
+
+  -- ── many opaque keys ────────────────────────────────────────────────────
+  local lines = { "---", "title: x", "status: open" }
+  for n = 1, 6000 do
+    lines[#lines + 1] = ("k%d: {a"):format(n)
+  end
+  lines[#lines + 1] = "---"
+  lines[#lines + 1] = "body"
+  local text = table.concat(lines, "\n")
+  local parsed
+  ok(timed(function()
+    parsed = model.parse_text(text, { path = "E:/v/a/ROADMAP/tasks/z.md", area = "a" })
+  end) < 1, "6000 unsupported frontmatter values parse in linear time")
+  ok(not parsed.valid, "and the file is still reported as invalid")
+
+  -- ── fsio.read ───────────────────────────────────────────────────────────
+  local dir = H.tmpdir()
+  H.write(dir .. "/small.md", "hello")
+  eq(fsio.read(dir .. "/small.md"), "hello", "a small file reads")
+  local none, err_dir = fsio.read(dir)
+  eq(none, nil, "a directory does not read")
+  has(err_dir, "not a regular file")
+  local big = io.open(dir .. "/big.md", "wb")
+  assert(big)
+  big:write(string.rep("x", fsio.MAX_READ_BYTES + 1))
+  big:close()
+  local none2, err_big = fsio.read(dir .. "/big.md")
+  eq(none2, nil, "a file past MAX_READ_BYTES does not read")
+  has(err_big, "larger than")
+  local none3 = fsio.read(dir .. "/missing.md")
+  eq(none3, nil, "a missing file keeps answering nil, err")
+
+  local bigtask = model.from_file(dir .. "/big.md", { area = "a" })
+  ok(not bigtask.valid, "an oversized task file is an invalid task, not a stall")
+  eq(bigtask.error_codes, { "unreadable" })
+
+  -- ── asset names ─────────────────────────────────────────────────────────
+  local root = F.vault(H)
+  local o = { root = root, today = F.TODAY, checkpoint_dir = H.tmpdir() .. "/cp" }
+  local made = assert(
+    mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "Asset names", folder = true }))
+  )
+  local src = dir .. "/src.txt"
+  H.write(src, "x")
+  local _, e1 = mutate.attach(made.id, src, vim.tbl_extend("force", o, { name = "a\194\155b.txt" }))
+  has(e1, "asset name may only use", "a C1 control character (CSI) in the name is refused")
+  local good = mutate.attach(made.id, src, vim.tbl_extend("force", o, { name = "gr\195\188n.txt" }))
+  ok(good ~= nil, "a non-ASCII letter is still fine")
+end

@@ -395,14 +395,11 @@ function M.parse_text(text, ctx)
     local meta = parsed.meta
     task.meta = meta
     for _, w in ipairs(parsed.warnings) do
-      -- A key with an unsupported value is already an error below; its warning
-      -- would only say the same thing twice.
-      local repeated = false
-      for key in pairs(parsed.opaque) do
-        if w:find(("key '%s'"):format(key), 1, true) then
-          repeated = true
-        end
-      end
+      -- A key with an unsupported value is already an error below; its warning would only say the
+      -- same thing twice. The key is read out of the warning (`... key 'k' ...`) and looked up: a loop
+      -- over all opaque keys per warning is quadratic, 10 000 of them froze the editor for 7 s (SEC-32).
+      local named = w:match("key '([^']*)'")
+      local repeated = named ~= nil and parsed.opaque[named] ~= nil
       if not repeated then
         warnings[#warnings + 1] = w
       end

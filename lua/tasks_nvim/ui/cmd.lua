@@ -515,7 +515,8 @@ local function open_explorer(dir)
     return
   end
   if vim.fn.exists(":Filetree") == 2 then
-    local ok = pcall(vim.cmd, "Filetree open " .. vim.fn.fnameescape(dir))
+    -- Table form: the argument reaches the command as one word, no `fnameescape` backslashes to undo.
+    local ok = pcall(vim.cmd, { cmd = "Filetree", args = { "open", dir } })
     if ok then
       return
     end

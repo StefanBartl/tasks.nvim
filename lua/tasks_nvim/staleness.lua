@@ -198,7 +198,10 @@ end
 ---@param ts integer
 ---@return string
 local function day_of(ts)
-  return os.date("%Y-%m-%d", ts) --[[@as string]]
+  -- `os.date` answers nil (it does not raise) for a timestamp outside its range, e.g. a `%ct` of
+  -- 99999999999999999999 from a forged commit; "0000-00-00" sorts before every real day, so such a file
+  -- is never reported as changed after a task's `updated`.
+  return os.date("%Y-%m-%d", ts) or "0000-00-00"
 end
 
 ---Folders `git log` answered "not a git repository" for. Only that answer is

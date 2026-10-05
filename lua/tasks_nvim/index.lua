@@ -39,7 +39,7 @@ M.MAX_SUMMARY = 160
 ---@param s string
 ---@return string
 local function cell(s)
-  return (fsio.clean(s:gsub("[\r\n]+", " ")):gsub("|", "\\|"))
+  return fsio.md_cell(s)
 end
 
 ---The text of a link `[text](target)`. Brackets are escaped so a title cannot
@@ -51,10 +51,8 @@ end
 ---@param s string
 ---@return string
 local function link_text(s)
-  local text = cell(s):gsub("(\\*)([%[%]])", function(slashes, bracket)
-    return slashes .. slashes .. "\\" .. bracket
-  end)
-  return (text:gsub("(\\+)$", "%1%1"))
+  local text = fsio.double_runs(cell(s), "^[%[%]]", true)
+  return (text:gsub("[%[%]]", "\\%0"))
 end
 
 ---Percent-encode what would end a Markdown link target early or break the

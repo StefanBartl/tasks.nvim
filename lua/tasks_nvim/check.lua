@@ -87,12 +87,18 @@ end
 ---@param target string
 ---@return boolean
 local function asset_exists(dir, target)
-  if fsio.is_file(dir .. "/" .. target) then
-    return true
-  end
+  -- A link that climbs out of the task's folder (`assets/../../x`, also percent-encoded) names no asset of
+  -- this task: it counts as dangling without asking the file system, so a hand-edited body cannot use the
+  -- check to probe which files exist elsewhere.
   local decoded = target:gsub("%%(%x%x)", function(hex)
     return string.char(tonumber(hex, 16))
   end)
+  if target:find("..", 1, true) or decoded:find("..", 1, true) then
+    return false
+  end
+  if fsio.is_file(dir .. "/" .. target) then
+    return true
+  end
   return decoded ~= target and fsio.is_file(dir .. "/" .. decoded)
 end
 

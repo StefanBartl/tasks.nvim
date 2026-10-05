@@ -19,6 +19,7 @@
 
 local harvest = require("lib.nvim.harvest")
 local render = require("lib.nvim.harvest.render")
+local fsio = require("tasks_nvim.fsio")
 
 local M = {}
 
@@ -197,6 +198,11 @@ local function matrix(tasks, format)
     local row = {}
     for c, col in ipairs(cols) do
       local cell = or_empty(col.get(t), csv and "" or EN_DASH)
+      -- `id` and `path` come from file names: control characters (ESC, OSC, C1) never reach an export. The
+      -- other cells are already clean, and a leading tab there is what `csv_safe` defuses.
+      if col.header == "Task" or col.header == "Path" then
+        cell = fsio.clean(cell)
+      end
       row[c] = csv and csv_safe(cell) or cell
     end
     rows[i] = row

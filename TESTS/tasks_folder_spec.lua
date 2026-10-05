@@ -260,6 +260,25 @@ return function(H)
   has(res.findings[1].message, "assets/gone.png")
   ok(res.ok, "a dangling asset is only a warning")
 
+  -- a link that climbs out of the folder is dangling, even though the file it reaches exists
+  -- (`assets/../needs-shot.md` is the task file itself, `%2e%2e` the same encoded)
+  H.write(
+    tp,
+    H.read(tp) .. "\n![up](assets/../needs-shot.md)\n![enc](assets/%2e%2e/needs-shot.md)\n"
+  )
+  assert(index.write_area("lib.nvim", { root = root }))
+  res = assert(check.run({ root = root }))
+  local up = {}
+  for _, fnd in ipairs(res.findings) do
+    if fnd.code == "asset-dangling" then
+      up[#up + 1] = fnd.message
+    end
+  end
+  eq(#up, 3, "gone.png and both climbing links are dangling")
+  local all_up = table.concat(up, "\n")
+  has(all_up, "assets/../needs-shot.md")
+  has(all_up, "assets/%2e%2e/needs-shot.md")
+
   -- the same slug as file and as folder is an error
   H.write(root .. "/lib.nvim/ROADMAP/tasks/needs-shot.md", F.text(F.meta("Twin", "open")))
   res = assert(check.run({ root = root }))

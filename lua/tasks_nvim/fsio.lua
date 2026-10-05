@@ -58,10 +58,24 @@ function M.is_file(path)
   return st ~= nil and st.type == "file"
 end
 
+---Largest file `read` will load. A task file, an index or a Backlog README is a few KB (the biggest real
+---one in the author's vault is ~120 KB); anything past this is not what it claims to be, and reading it
+---whole would stall the editor on every scan (a data dump saved as `x.md`) or never return (a FIFO or a
+---`/dev/zero` symlink named `x.md` on POSIX).
+M.MAX_READ_BYTES = 2 * 1024 * 1024
+
+---Read a regular file of at most `MAX_READ_BYTES`; anything else is `nil, err`.
 ---@param path string
 ---@return string|nil content
 ---@return string|nil err
 function M.read(path)
+  local st = uv.fs_stat(path)
+  if st and st.type ~= "file" then
+    return nil, ("not a regular file (%s): %s"):format(st.type, path)
+  end
+  if st and st.size > M.MAX_READ_BYTES then
+    return nil, ("file is larger than %d bytes (%d): %s"):format(M.MAX_READ_BYTES, st.size, path)
+  end
   return read_file(path)
 end
 
@@ -106,6 +120,51 @@ function M.trim(s)
     last = last - 1
   end
   return s:sub(first, last)
+end
+
+---Double every run of backslashes that sits directly in front of a character matching `set` (a Lua
+---pattern anchored by the caller, e.g. `"^[|]"`), and, with `at_end`, a run at the very end of `s`.
+---Used before escaping that character with one more backslash: the escape would otherwise merge with
+---the run (`\|` is an escaped pipe, `\\|` an escaped backslash and a live pipe in GFM).
+---
+---Linear in the length of `s`. The one-liner `s:gsub("(\\*)|", ...)` retries a long backslash run from
+---every start position, so a title of 20 000 backslashes cost seconds on every index render (SEC-32).
+---@param s string
+---@param set string
+---@param at_end? boolean
+---@return string
+function M.double_runs(s, set, at_end)
+  local out, i, len = {}, 1, #s
+  while i <= len do
+    local j = s:find("\\", i, true)
+    if not j then
+      out[#out + 1] = s:sub(i)
+      break
+    end
+    out[#out + 1] = s:sub(i, j - 1)
+    local k = j
+    while s:byte(k + 1) == 92 do
+      k = k + 1
+    end
+    local run = s:sub(j, k)
+    local nxt = s:sub(k + 1, k + 1)
+    if (nxt ~= "" and nxt:find(set)) or (at_end and k == len) then
+      out[#out + 1] = run .. run
+    else
+      out[#out + 1] = run
+    end
+    i = k + 1
+  end
+  return table.concat(out)
+end
+
+---One Markdown table cell: line breaks become spaces, terminal control characters go, and every `|` is
+---escaped so it cannot split the cell (a backslash run in front of it is doubled first).
+---@param s string
+---@return string
+function M.md_cell(s)
+  local flat = M.clean((s:gsub("[\r\n]+", " ")))
+  return (M.double_runs(flat, "^|"):gsub("|", "\\|"))
 end
 
 ---@param path string

@@ -749,7 +749,7 @@ end
 ---@param s string
 ---@return string
 local function cell(s)
-  return (s:gsub("[\r\n]+", " "):gsub("|", "\\|"))
+  return fsio.md_cell(s)
 end
 
 ---The README row of a finished task.
@@ -1266,7 +1266,13 @@ local function asset_name(name)
   if n == "" then
     return nil, "asset name is empty"
   end
-  if n:find("..", 1, true) or not n:match("^[%w_\128-\255][%w_.%-\128-\255]*$") then
+  -- Bytes 128-255 pass (non-ASCII letters), but not the C1 controls (`\194\128`..`\194\159`: CSI and OSC for
+  -- terminals that act on them): the name goes into the Markdown link and the file system as it is.
+  if
+    n:find("..", 1, true)
+    or n:find("\194[\128-\159]")
+    or not n:match("^[%w_\128-\255][%w_.%-\128-\255]*$")
+  then
     return nil, "asset name may only use letters, digits, _ . - (got '" .. n .. "'; pass --name=)"
   end
   -- Windows drops a trailing dot, so the link would name a file that is not there.
