@@ -245,6 +245,20 @@ return function(H)
     core.cycle_prio(core.cycle_prio(core.cycle_prio(cyc.prio)))
   )
 
+  -- ── soft dependencies: missing, or present but without the function we call, both mean "not available" ──
+  local soft = require("tasks_nvim.soft")
+  eq(soft.require("no.such.plugin"), nil, "a missing module")
+  eq(
+    soft.require("tasks_nvim.fsio", { "no_such_function" }),
+    nil,
+    "a module without the field we need"
+  )
+  ok(
+    soft.require("tasks_nvim.fsio", { "read", "write_atomic" }) ~= nil,
+    "a module that has what we need"
+  )
+  ok(soft.available("tasks_nvim.fsio"), "available() is require() > nil")
+
   -- ── a TASKS.md that is not a generated index is never overwritten or removed ──
   local own = root .. "/cascade.nvim/ROADMAP/TASKS.md"
   H.write(own, "my own notes, no marker")

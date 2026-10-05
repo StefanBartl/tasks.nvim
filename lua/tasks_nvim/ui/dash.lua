@@ -35,6 +35,7 @@
 --- the delivery sinks (`tasks_view`), the rules of tasks (the engine).
 
 local confirm = require("tasks_nvim.ui.confirm")
+local soft = require("tasks_nvim.soft")
 local core = require("tasks_nvim.ui.dash_core")
 local notify = require("lib.nvim.notify").create("[tasks.dash]")
 local view = require("tasks_nvim.ui.view")
@@ -89,10 +90,10 @@ local function cmd()
 end
 
 -- "statusline" reports into the shared lib.nvim.progress registry, like picker.lua.
-local ok_progress, progress_mod = pcall(require, "lib.nvim.progress")
+local progress_mod = soft.require("lib.nvim.progress")
 ---@param title string
 local function new_progress(title)
-  if not ok_progress then
+  if not progress_mod then
     return nil
   end
   return progress_mod.create({ title = title, style = "statusline" })
@@ -103,8 +104,8 @@ local function persist(state)
   if not state.persist then
     return
   end
-  local ok, store = pcall(require, "lib.nvim.store.project")
-  if ok then
+  local store = soft.require("lib.nvim.store.project")
+  if store then
     pcall(
       store.save,
       STORE_KEY,
@@ -118,8 +119,8 @@ end
 ---@return Tasks.Filter filter
 ---@return string sort
 local function remembered(root)
-  local ok, store = pcall(require, "lib.nvim.store.project")
-  if not ok then
+  local store = soft.require("lib.nvim.store.project")
+  if not store then
     return {}, "default"
   end
   local ok_load, data = pcall(store.load, STORE_KEY, { path = root })
@@ -1025,8 +1026,8 @@ end
 function open_state(state, opts)
   opts = opts or {}
   if opts.backend ~= "select" then
-    local ok, Snacks = pcall(require, "snacks")
-    if ok and type(Snacks) == "table" and Snacks.picker then
+    local Snacks = soft.require("snacks", { "picker" })
+    if Snacks then
       local opened, err = pcall(open_snacks, Snacks, state)
       if opened then
         return

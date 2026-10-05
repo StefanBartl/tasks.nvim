@@ -33,8 +33,8 @@ end
 ---@param cb fun(accepted: boolean)
 function M.yesno(msg, yes_label, cb)
   local yes = yes_label and ("Yes, " .. yes_label) or "Yes"
-  local ok_kit, kit = pcall(require, "ui.kit")
-  if ok_kit and type(kit.confirm) == "function" then
+  local kit = require("tasks_nvim.soft").require("ui.kit", { "confirm" })
+  if kit then
     kit.confirm({
       question = msg,
       -- "No" first: the dialog starts on the first choice, and `<CR>` must not be the destructive one.

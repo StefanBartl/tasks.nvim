@@ -30,6 +30,7 @@ local staleness = require("tasks_nvim.staleness")
 local vault = require("tasks_nvim.vault")
 
 local confirm = require("tasks_nvim.ui.confirm")
+local soft = require("tasks_nvim.soft")
 local view = require("tasks_nvim.ui.view")
 
 local M = {}
@@ -462,8 +463,8 @@ function M.ask_new_fields(given, cb)
     cb(values)
   end
 
-  local ok_kit, kit = pcall(require, "ui.kit")
-  if ok_kit and type(kit.form) == "function" then
+  local kit = soft.require("ui.kit", { "form" })
+  if kit then
     kit.form({
       fields = fields,
       on_submit = finish,
@@ -959,12 +960,12 @@ end
 ---@return table|nil command  `pickers.command`
 ---@return table|nil engine
 local function pickers_backend()
-  local ok, command = pcall(require, "pickers.command")
-  if not ok or type(command.dispatch) ~= "function" then
+  local command = soft.require("pickers.command", { "dispatch" })
+  if not command then
     return nil, nil
   end
-  local ok_engines, engines = pcall(require, "pickers.engines")
-  if not ok_engines then
+  local engines = soft.require("pickers.engines", { "load" })
+  if not engines then
     return nil, nil
   end
   local engine = engines.load()

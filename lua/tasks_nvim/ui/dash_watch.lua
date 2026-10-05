@@ -204,8 +204,8 @@ end
 ---@return table|nil handle
 ---@return string|nil err
 local function default_start(path, on_change, opts)
-  local ok, watch = pcall(require, "lib.nvim.fs.watch")
-  if not ok or type(watch) ~= "table" or type(watch.start) ~= "function" then
+  local watch = require("tasks_nvim.soft").require("lib.nvim.fs.watch", { "start" })
+  if not watch then
     return nil, "lib.nvim.fs.watch is not available"
   end
   return watch.start(path, on_change, opts)
