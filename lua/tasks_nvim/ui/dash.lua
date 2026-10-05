@@ -522,32 +522,81 @@ end
 
 -- ── help ─────────────────────────────────────────────────────────────────────
 
-M.HELP = {
-  " Task dashboard ",
-  "",
-  " <CR>        open the file(s)  (counts as a visit for the frecency sort)",
-  " <Tab>       mark / unmark (marked tasks are the target of s p D e)",
-  " s           advance status of marked (else current) tasks",
-  " p           advance prio:  none -> 1 -> 2 -> 3 -> none",
-  " D           finish (asks first, moves to Backlog/)",
-  " f           set a filter chip (status prio effort kind category severity tag blocked stale-refs)",
-  " o           cycle the sort: default -> prio-effort (small first) -> severity (critical first)",
-  "             -> frecency (most opened / changed first, fades over ~2 weeks) -> default",
-  " e           export marked (else all shown) tasks (also: preview in the browser)",
-  " gp          preview the task file in the browser (mdview.nvim)",
-  " r           rescan the vault now (the list also refreshes by itself when a task",
-  "             or Backlog file changes; cursor and marks stay on the same tasks)",
-  " gb / gr     Backlog picker / ROADMAP.md of the area under the cursor",
-  " g?          this help",
-  "",
-  " Letters work in the list. In the input window use Alt:",
-  " <M-s> <M-p> <M-d> <M-f> <M-o> <M-e> <M-r> <M-b>(backlog) <M-m>(roadmap) <M-v>(preview) <M-?>",
-  " (any key closes this help)",
+---The dashboard actions, in the order the help lists them: the name in `setup({ keys.dashboard })`, the picker
+---action behind it and what it does. `help_lines` and the key binding below both read this one table.
+---@type { name: string, action: string, text: string }[]
+local ACTIONS = {
+  {
+    name = "status",
+    action = "tasks_status",
+    text = "advance the status of the marked (else current) tasks",
+  },
+  { name = "prio", action = "tasks_prio", text = "advance the prio: none -> 1 -> 2 -> 3 -> none" },
+  { name = "done", action = "tasks_done", text = "finish (asks first, moves to Backlog/)" },
+  {
+    name = "filter",
+    action = "tasks_filter",
+    text = "set a filter chip (status prio effort kind category severity tag blocked stale-refs)",
+  },
+  {
+    name = "sort",
+    action = "tasks_sort",
+    text = "cycle the sort: default -> prio-effort -> severity -> frecency -> default",
+  },
+  {
+    name = "export",
+    action = "tasks_export",
+    text = "export the marked (else all shown) tasks, or preview them",
+  },
+  {
+    name = "preview",
+    action = "tasks_preview",
+    text = "preview the task file in the browser (mdview.nvim)",
+  },
+  {
+    name = "rescan",
+    action = "tasks_rescan",
+    text = "rescan the vault now (the list also refreshes by itself when a task file changes)",
+  },
+  {
+    name = "backlog",
+    action = "tasks_backlog",
+    text = "Backlog picker of the area under the cursor",
+  },
+  { name = "roadmap", action = "tasks_roadmap", text = "ROADMAP.md of the area under the cursor" },
+  { name = "help", action = "tasks_help", text = "this help" },
 }
+
+---The help text, from the keys in force: what `setup({ keys })` bound is what is shown, a key set to `false` is
+---listed as unbound.
+---@param keys? Tasks.KeysConfig  # Default: the configured keys.
+---@return string[]
+function M.help_lines(keys)
+  keys = keys or require("tasks_nvim.config").get().keys
+  local lines = {
+    " Task dashboard ",
+    "",
+    " list key / input key    what it does",
+    " <CR>                    open the file(s)  (counts as a visit for the frecency sort)",
+    " <Tab>                   mark / unmark (marked tasks are the target of status, prio, done, export)",
+  }
+  for _, a in ipairs(ACTIONS) do
+    local list_key = keys.dashboard[a.name] or "-"
+    local input_key = keys.dashboard_input[a.name] or "-"
+    lines[#lines + 1] = (" %-23s %s"):format(list_key .. " / " .. input_key, a.text)
+  end
+  vim.list_extend(lines, {
+    "",
+    " The first key works in the list window; in the input window use the second (the first would be typed).",
+    " A count before status / prio / sort repeats it.",
+    " (any key closes this help)",
+  })
+  return lines
+end
 
 ---Float with the key help; any key closes it again (the picker keeps focus).
 local function show_help()
-  require("tasks_nvim.ui.help_float").open(M.HELP, "tasks_dash_help")
+  require("tasks_nvim.ui.help_float").open(M.help_lines(), "tasks_dash_help")
 end
 
 -- ── snacks backend ───────────────────────────────────────────────────────────
@@ -808,57 +857,20 @@ local function open_snacks(Snacks, state)
     end,
   }
 
-  -- Letters in the list window (nothing is typed there); Alt chords in the input
-  -- window, so its normal-mode edits (`s` `p` `D` `e` ...) and the search typing
-  -- in insert mode stay untouched.
-  local letters = {
-    s = { "tasks_status", "<M-s>" },
-    p = { "tasks_prio", "<M-p>" },
-    D = { "tasks_done", "<M-d>" },
-    f = { "tasks_filter", "<M-f>" },
-    o = { "tasks_sort", "<M-o>" },
-    e = { "tasks_export", "<M-e>" },
-    r = { "tasks_rescan", "<M-r>" },
-    gb = { "tasks_backlog", "<M-b>" },
-    gr = { "tasks_roadmap", "<M-m>" },
-    gp = { "tasks_preview", "<M-v>" },
-    ["g?"] = { "tasks_help", "<M-?>" },
-  }
-  -- The keys come from `setup({ keys = { dashboard = ..., dashboard_input = ... } })`; `false` switches an
-  -- action's key off. `letters` above is only the table of actions and their built-in keys.
+  -- Letters in the list window (nothing is typed there); Alt chords in the input window, so its normal-mode edits
+  -- (`s` `p` `D` `e` ...) and the search typing in insert mode stay untouched. Both come from
+  -- `setup({ keys = { dashboard = ..., dashboard_input = ... } })` (defaults in `config/DEFAULTS.lua`); `false`
+  -- switches an action's key off.
   local configured = require("tasks_nvim.config").get().keys
-  local action_of = {}
-  for key, spec in pairs(letters) do
-    action_of[spec[1]] = { default_list = key, default_input = spec[2] }
-  end
-  local names = {
-    status = "tasks_status",
-    prio = "tasks_prio",
-    done = "tasks_done",
-    filter = "tasks_filter",
-    sort = "tasks_sort",
-    export = "tasks_export",
-    rescan = "tasks_rescan",
-    backlog = "tasks_backlog",
-    roadmap = "tasks_roadmap",
-    preview = "tasks_preview",
-    help = "tasks_help",
-  }
   local list_keys, input_keys = {}, {}
-  for name, action in pairs(names) do
-    local list_key = configured.dashboard[name]
-    if list_key == nil then
-      list_key = action_of[action].default_list
-    end
+  for _, a in ipairs(ACTIONS) do
+    local list_key = configured.dashboard[a.name]
     if list_key then
-      list_keys[list_key] = action
+      list_keys[list_key] = a.action
     end
-    local input_key = configured.dashboard_input[name]
-    if input_key == nil then
-      input_key = action_of[action].default_input
-    end
+    local input_key = configured.dashboard_input[a.name]
     if input_key then
-      input_keys[input_key] = { action, mode = { "n", "i" } }
+      input_keys[input_key] = { a.action, mode = { "n", "i" } }
     end
   end
 

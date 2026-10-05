@@ -1,7 +1,7 @@
 -- TESTS/tasks_config_spec.lua -- tasks_nvim.config (validation, merge) and the health check.
 
 return function(H)
-  local eq, ok = H.eq, H.ok
+  local eq, ok, has = H.eq, H.ok, H.has
   local config = require("tasks_nvim.config")
 
   eq(config.validate(nil), {}, "nil is no options")
@@ -81,6 +81,36 @@ return function(H)
   ok(map_of("<C-s>").buffer ~= 1, "and the default key is not bound when it was replaced")
   form_ui.close(fbuf)
   config.merge({ keys = { form = { submit = "<C-s>", cancel = "q" } } })
+
+  -- the help is generated from the keys in force, so it cannot drift from what is bound (UI-20)
+  local defaults = require("tasks_nvim.config.DEFAULTS").keys
+  local form_help = table.concat(form_ui.help_lines(), "\n")
+  for name, lhs in pairs(defaults.form) do
+    ok(
+      form_help:find(lhs, 1, true) ~= nil,
+      ("form help names the default key of %s (%s)"):format(name, lhs)
+    )
+  end
+  local custom = vim.deepcopy(defaults.form)
+  custom.submit, custom.cancel = "<C-g>", false
+  local custom_help = table.concat(form_ui.help_lines(custom), "\n")
+  ok(custom_help:find("<C-g>", 1, true) ~= nil, "a rebound key is what the form help shows")
+  ok(custom_help:find("<C-s>", 1, true) == nil, "and the old one is gone")
+  has(custom_help, "- / ", "an unbound action is listed as -")
+  local dash_ui = require("tasks_nvim.ui.dash")
+  local dash_help = table.concat(dash_ui.help_lines(), "\n")
+  for _, section in ipairs({ "dashboard", "dashboard_input" }) do
+    for name, lhs in pairs(defaults[section]) do
+      ok(
+        dash_help:find(lhs, 1, true) ~= nil,
+        ("dashboard help names %s of %s (%s)"):format(name, section, lhs)
+      )
+    end
+  end
+  local dkeys = vim.deepcopy(defaults)
+  dkeys.dashboard.status, dkeys.dashboard_input.status = "X", false
+  local dcustom = table.concat(dash_ui.help_lines(dkeys), "\n")
+  has(dcustom, "X / -", "a rebound list key and an unbound input key show as such")
 
   -- the health check reads only; it must not throw with or without a vault
   local vault = require("tasks_nvim.vault")

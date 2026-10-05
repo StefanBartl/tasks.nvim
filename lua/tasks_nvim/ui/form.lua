@@ -21,18 +21,33 @@ local form = require("tasks_nvim.form")
 
 local M = {}
 
-local HELP = {
-  "Task form",
-  "",
-  "<Space> / <CR>   tick or untick the bullet under the cursor",
-  "                 (one-choice lists keep a single tick, category takes several)",
-  "<C-s>            submit (checked, then created)",
-  "q / <C-q>        cancel -- nothing is created",
-  "g?               this help",
-  "",
-  "Area and Title are required. Tags and Refs are comma separated.",
-  "Lines starting with ! are error reports; they vanish on the next submit.",
-}
+---The help text, from the keys in force (`setup({ keys = { form = ... } })`); a key set to `false` is listed as "-".
+---@param keys? table<string, string|false>  # Default: the configured form keys.
+---@return string[]
+function M.help_lines(keys)
+  keys = keys or require("tasks_nvim.config").get().keys.form
+  local function key(name)
+    return keys[name] or "-"
+  end
+  return {
+    "Task form",
+    "",
+    ("%s / %s   tick or untick the bullet under the cursor"):format(
+      key("tick_space"),
+      key("tick_enter")
+    ),
+    "                 (one-choice lists keep a single tick, category takes several)",
+    ("%s            submit (checked, then created)"):format(key("submit")),
+    ("%s / %s        cancel -- nothing is created (asks first when you typed something)"):format(
+      key("cancel"),
+      key("cancel_ctrl")
+    ),
+    ("%s               this help"):format(key("help")),
+    "",
+    "Area and Title are required. Tags and Refs are comma separated.",
+    "Lines starting with ! are error reports; they vanish on the next submit.",
+  }
+end
 
 ---Form text of a buffer.
 ---@param buf integer
@@ -223,7 +238,7 @@ function M.open(opts)
   bind("n", "cancel", cancel, "Task form: cancel")
   bind({ "n", "i" }, "cancel_ctrl", cancel, "Task form: cancel")
   bind("n", "help", function()
-    require("lib.nvim.notify").create("[tasks]").info(table.concat(HELP, "\n"))
+    require("lib.nvim.notify").create("[tasks]").info(table.concat(M.help_lines(), "\n"))
   end, "Task form: help")
 
   -- Start on the first free text line.
@@ -236,7 +251,5 @@ function M.open(opts)
   end
   return buf
 end
-
-M.HELP = HELP
 
 return M
