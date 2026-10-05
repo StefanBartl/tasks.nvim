@@ -52,6 +52,18 @@ function M.is_dir(path)
   return st ~= nil and st.type == "directory"
 end
 
+---Whether two paths name the same file: normalised, and case-insensitive where the file system is (Windows).
+---@param a string
+---@param b string
+---@return boolean
+function M.same_path(a, b)
+  a, b = M.norm(a), M.norm(b)
+  if require("lib.nvim.cross.platform.is_windows")() then
+    return a:lower() == b:lower()
+  end
+  return a == b
+end
+
 ---@param path string
 ---@return boolean
 function M.is_file(path)

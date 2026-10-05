@@ -34,8 +34,6 @@ local view = require("tasks_nvim.ui.view")
 
 local M = {}
 
-local is_windows = require("lib.nvim.cross.platform.is_windows")()
-
 ---Dashboard seam. `:Tasks list` calls it instead of delivering a table
 ---when neither `--to=` nor `--format=` was given. It receives the filtered,
 ---sorted open tasks. `nil` (the default) means the interactive dashboard
@@ -67,16 +65,7 @@ M.FOLDERS = {
 
 -- ── helpers ──────────────────────────────────────────────────────────────────
 
----@param a string
----@param b string
----@return boolean
-local function same_path(a, b)
-  a, b = fsio.norm(a), fsio.norm(b)
-  if is_windows then
-    return a:lower() == b:lower()
-  end
-  return a == b
-end
+local same_path = fsio.same_path
 
 ---@param path string
 ---@param root string

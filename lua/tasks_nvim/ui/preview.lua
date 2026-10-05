@@ -116,16 +116,7 @@ local function default_opener(path)
   return true, nil
 end
 
----@param a string
----@param b string
----@return boolean
-local function same_path(a, b)
-  a, b = fsio.norm(a), fsio.norm(b)
-  if is_windows then
-    return a:lower() == b:lower()
-  end
-  return a == b
-end
+local same_path = fsio.same_path
 
 ---@param path string
 ---@return integer|nil buf
