@@ -5,12 +5,13 @@
 ---
 ---  - `set_many`: one `mutate.set` per step without its own index write; a step that carries `expect` is
 ---    refused when the task no longer has that value (it was changed since the list was drawn, ERR-30);
----  - `done_many`: `mutate.done` one after the other (rule R6);
+---  - `done_many`: `done_flow.run` one after the other (rule R6);
 ---  - after the last task ONE index regeneration per area that changed.
 ---
 --- A failing task never stops the others. No notifications and no windows: the result says what happened and the
 --- caller decides how to tell the user.
 
+local done_flow = require("tasks_nvim.done_flow")
 local index = require("tasks_nvim.index")
 local mutate = require("tasks_nvim.mutate")
 local scan = require("tasks_nvim.scan")
@@ -159,9 +160,10 @@ function M.done_many(ids, opts)
   local res = { done = {}, already = {}, failed = {}, areas = {}, index_errors = {} }
   local moved = {}
   for _, id in ipairs(ids) do
-    local r, err =
-      mutate.done(id, { root = opts.root, index = false, today = opts.today, date = opts.date })
-    if not r then
+    local flow, err =
+      done_flow.run(id, { root = opts.root, index = false, today = opts.today, date = opts.date })
+    local r = flow and flow.done
+    if not flow or not r then
       res.failed[#res.failed + 1] = { id = id, err = tostring(err) }
     elseif r.already then
       res.already[#res.already + 1] = id

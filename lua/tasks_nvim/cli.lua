@@ -22,6 +22,7 @@
 local check = require("tasks_nvim.check")
 local index = require("tasks_nvim.index")
 local model = require("tasks_nvim.model")
+local done_flow = require("tasks_nvim.done_flow")
 local mutate = require("tasks_nvim.mutate")
 local scan = require("tasks_nvim.scan")
 local staleness = require("tasks_nvim.staleness")
@@ -484,17 +485,18 @@ function commands.done(ctx)
     ctx.warn("error: usage: done <area>/<slug> [--done-in=text] [--date=YYYY-MM-DD]")
     return 2
   end
-  local res, err = mutate.done(id, {
+  local flow, err = done_flow.run(id, {
     root = eo.root,
     today = eo.today,
     done_in = args.opt["done-in"] --[[@as string|nil]],
     date = args.opt.date --[[@as string|nil]],
     index = not args.opt["no-index"],
   })
-  if not res then
+  if not flow then
     ctx.warn("error: " .. tostring(err))
     return 1
   end
+  local res = flow.done
   if res.already then
     ctx.say(("already\t%s\t%s"):format(res.id, res.to))
     return 0
@@ -502,6 +504,9 @@ function commands.done(ctx)
   ctx.say(("done\t%s\t%s"):format(res.id, res.to))
   if res.readme == "missing" then
     ctx.warn("warn: Backlog/README.md does not exist; no index row added")
+  end
+  for _, note in ipairs(flow.notes) do
+    ctx.warn(("warn: %s: %s"):format(res.id, note))
   end
   report_index(ctx, res)
   return 0

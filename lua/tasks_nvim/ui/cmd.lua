@@ -31,6 +31,7 @@ local staleness = require("tasks_nvim.staleness")
 local vault = require("tasks_nvim.vault")
 
 local confirm = require("tasks_nvim.ui.confirm")
+local done_flow = require("tasks_nvim.done_flow")
 local soft = require("tasks_nvim.soft")
 local view = require("tasks_nvim.ui.view")
 
@@ -783,11 +784,12 @@ end
 ---@param id string
 ---@param opts { done_in?: string, date?: string }
 local function finish_task(id, opts)
-  local res, err = mutate.done(id, { done_in = opts.done_in, date = opts.date })
-  if not res then
+  local flow, err = done_flow.run(id, { done_in = opts.done_in, date = opts.date })
+  if not flow then
     notify.error(tostring(err))
     return
   end
+  local res = flow.done
   if res.already then
     notify.info(("%s is already finished (%s)"):format(id, res.to))
     return
@@ -801,6 +803,9 @@ local function finish_task(id, opts)
   end
   local root = vault.root()
   notify.info(("done %s -> %s"):format(id, root and rel(res.to, root) or res.to))
+  for _, note in ipairs(flow.notes) do
+    notify.warn(("%s: %s"):format(id, note))
+  end
 end
 
 ---`:Tasks folderize <id>`
