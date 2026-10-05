@@ -168,47 +168,15 @@ local function ensure_parent(path, err)
   return true, nil
 end
 
----Write `content` to `path` through a temp sibling and a rename, creating the
----parent directory. Bytes are written as given (no newline is appended).
----
----The temp file is flushed to disk before the rename (a crash then leaves the old
----or the new content, never an empty file under the new name) and takes over the
----mode of the file it replaces (a private `0600` file does not become `0644`).
+---Write `content` to `path` through a temp sibling and a rename, creating the parent directory. Bytes are
+---written as given (no newline is appended). The work is `lib.nvim.fs.write.atomic`: flushed before the rename
+---(a crash leaves the old or the new content, never an empty file) and taking over the mode of the file it replaces.
 ---@param path string
 ---@param content string
 ---@return boolean ok
 ---@return string|nil err
 function M.write_atomic(path, content)
-  local ok, perr = ensure_parent(path)
-  if not ok then
-    return false, perr
-  end
-  -- Unique per process and call, so concurrent writers never share a temp file.
-  local tmp = ("%s.tasks-tmp.%d.%d"):format(path, uv.os_getpid(), uv.hrtime())
-  local fd, open_err = uv.fs_open(tmp, "wx", 420) -- 0644, less the umask
-  if not fd then
-    return false, "open failed: " .. tostring(open_err or tmp)
-  end
-  local wrote, write_err = uv.fs_write(fd, content, 0)
-  if wrote then
-    local old = uv.fs_stat(path)
-    if old then
-      pcall(uv.fs_fchmod, fd, old.mode % 4096)
-    end
-    -- Best effort: a file system that cannot sync (some network shares) still gets its bytes.
-    pcall(uv.fs_fsync, fd)
-  end
-  local closed, close_err = uv.fs_close(fd)
-  if not wrote or wrote ~= #content or not closed then
-    pcall(os.remove, tmp)
-    return false, "write failed: " .. tostring(write_err or close_err or tmp)
-  end
-  local renamed, rename_err = mutate.rename_file(tmp, path)
-  if not renamed then
-    pcall(os.remove, tmp)
-    return false, "rename failed: " .. tostring(rename_err)
-  end
-  return true, nil
+  return require("lib.nvim.fs.write.atomic")(path, content, { mkdirp = true, tag = "tasks-tmp" })
 end
 
 ---The error `create_exclusive` and `copy` answer when the target was already there. Compare through
