@@ -261,9 +261,82 @@ return function(H)
       F.meta("T", "blocked", { { "blocked_by", "lib.nvim/was-blocker" } })
     )
     H.write(backlog .. "2026-02-02_was-blocker.md", F.text(F.meta("Was", "done")))
-  end, { "warn:blocked-by-done" }, function()
+  end, { "warn:blocked-by-done", "warn:blocker-freed" }, function()
     remove(tasks .. "waits.md")
     remove(backlog .. "2026-02-02_was-blocker.md")
+  end)
+
+  -- ── the blocker graph (tasks_nvim.plan) ──
+  expect("a cycle over blocked_by", function()
+    F.task(
+      H,
+      root,
+      "lib.nvim",
+      "ring-a",
+      F.meta("A", "open", { { "blocked_by", "lib.nvim/ring-b" } })
+    )
+    F.task(
+      H,
+      root,
+      "lib.nvim",
+      "ring-b",
+      F.meta("B", "open", { { "blocked_by", "lib.nvim/ring-c" } })
+    )
+    F.task(
+      H,
+      root,
+      "lib.nvim",
+      "ring-c",
+      F.meta("C", "open", { { "blocked_by", "lib.nvim/ring-a" } })
+    )
+  end, { "blocked-by-cycle" }, function()
+    remove(tasks .. "ring-a.md")
+    remove(tasks .. "ring-b.md")
+    remove(tasks .. "ring-c.md")
+  end)
+  expect("doing while a blocker is open", function()
+    F.task(
+      H,
+      root,
+      "lib.nvim",
+      "early",
+      F.meta("Early", "doing", { { "blocked_by", "lib.nvim/late" } })
+    )
+    F.task(H, root, "lib.nvim", "late", F.meta("Late", "open"))
+  end, { "warn:doing-while-blocked" }, function()
+    remove(tasks .. "early.md")
+    remove(tasks .. "late.md")
+  end)
+  expect("blocked without a blocker", function()
+    F.task(H, root, "lib.nvim", "lonely", F.meta("Lonely", "blocked"))
+  end, { "warn:blocked-without-blocker" }, function()
+    remove(tasks .. "lonely.md")
+  end)
+  expect("a parked blocker hangs the task for good", function()
+    F.task(H, root, "lib.nvim", "shelf", F.meta("Shelf", "parked"))
+    F.task(
+      H,
+      root,
+      "lib.nvim",
+      "hangs",
+      F.meta("Hangs", "blocked", { { "blocked_by", "lib.nvim/shelf" } })
+    )
+  end, { "warn:blocked-by-parked" }, function()
+    remove(tasks .. "shelf.md")
+    remove(tasks .. "hangs.md")
+  end)
+  expect("a blocked task with an open blocker is quiet", function()
+    F.task(H, root, "lib.nvim", "base", F.meta("Base", "open"))
+    F.task(
+      H,
+      root,
+      "lib.nvim",
+      "waiting",
+      F.meta("Waiting", "blocked", { { "blocked_by", "lib.nvim/base" } })
+    )
+  end, {}, function()
+    remove(tasks .. "base.md")
+    remove(tasks .. "waiting.md")
   end)
 
   -- ── the generated index ─────────────────────────────────────────────────

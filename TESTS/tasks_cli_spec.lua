@@ -218,8 +218,10 @@ return function(H)
 
   -- ── check ───────────────────────────────────────────────────────────────
   r = run({ "check" })
-  eq(r.code, 0, "clean: " .. r.out)
-  has(r.out, "check: 0 finding(s) (0 error, 0 warning) in 5 area(s), 4 task file(s) read")
+  eq(r.code, 0, "no error: " .. r.out)
+  -- the fixture's `blocked-thing` has status blocked and no blocker: a warning, never an error
+  has(r.out, "warn blocked-without-blocker")
+  has(r.out, "check: 1 finding(s) (0 error, 1 warning) in 5 area(s), 4 task file(s) read")
   F.task(H, root, "lib.nvim", "bad", F.meta("Bad", "wip"))
   r = run({ "check" })
   eq(r.code, 1)

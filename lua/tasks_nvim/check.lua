@@ -21,6 +21,9 @@
 ---  - `bad-blocked-by`, `blocked-by-self`, `blocked-by-dangling`: the blocker is
 ---    malformed, the task itself, or exists nowhere; `blocked-by-done` (warning):
 ---    the blocker is already finished
+---  - `blocked-by-cycle` (error): the hard edges form a circle, the members are named
+---  - `doing-while-blocked`, `blocked-without-blocker`, `blocker-freed`, `blocked-by-parked` (warnings): the status
+---    runs behind what the blockers say (`tasks_nvim.plan` is the one definition of "blocked")
 ---  - `bad-value`, `bad-actor`: `value` is not 1..5, `actor` is not cdx, me or pair
 ---  - `actor-cdx-waits-on-me` (warning): a task written `actor: cdx` waits on an open task that only the human
 ---    can do (`model.actor` = `me`): the AI queue holds work that cannot start
@@ -35,6 +38,7 @@
 
 local fsio = require("tasks_nvim.fsio")
 local model = require("tasks_nvim.model")
+local plan = require("tasks_nvim.plan")
 local index = require("tasks_nvim.index")
 local scan = require("tasks_nvim.scan")
 local vault = require("tasks_nvim.vault")
@@ -125,6 +129,93 @@ local function dangling_assets(task)
     end
   end
   return missing
+end
+
+---What the blocker graph says (`tasks_nvim.plan`), over every open task of the vault, reported for the checked
+---areas: a cycle is an error, a status that runs behind the blockers is a warning (a status may trail the facts for a
+---moment, a cycle may not).
+---@param findings Tasks.Finding[]
+---@param open_ids table<string, Tasks.Task>
+---@param names string[]  The areas being checked.
+---@param scan_opts { root: string }
+local function plan_findings(findings, open_ids, names, scan_opts)
+  local checked = {}
+  for _, n in ipairs(names) do
+    checked[n] = true
+  end
+  local all = {}
+  for _, t in pairs(open_ids) do
+    all[#all + 1] = t
+  end
+  local finished = {}
+  local blockers = plan.index(all, function(id)
+    local known = finished[id]
+    if known == nil then
+      known = scan.find_done(id, scan_opts) ~= nil
+      finished[id] = known
+    end
+    return known
+  end)
+  local built = plan.build(all, blockers)
+
+  for _, members in ipairs(built.cycles) do
+    -- one finding per cycle, on its first member in a checked area; a task that blocks only itself is
+    -- `blocked-by-self` already
+    for _, id in ipairs(#members > 1 and members or {}) do
+      local t = open_ids[id]
+      if t and checked[t.area] then
+        add(
+          findings,
+          "error",
+          "blocked-by-cycle",
+          t,
+          "blocked_by forms a cycle: " .. table.concat(members, " -> ")
+        )
+        break
+      end
+    end
+  end
+  for id, node in pairs(built.nodes) do
+    local t = node.task
+    if checked[t.area] then
+      local waits = {}
+      for _, b in ipairs(node.open_blockers) do
+        if open_ids[b] then
+          waits[#waits + 1] = b
+        end
+      end
+      if t.status == "doing" and #waits > 0 then
+        add(
+          findings,
+          "warn",
+          "doing-while-blocked",
+          t,
+          "status is doing but " .. table.concat(waits, ", ") .. " is still open"
+        )
+      elseif t.status == "blocked" and #(t.blocked_by or {}) == 0 then
+        add(
+          findings,
+          "warn",
+          "blocked-without-blocker",
+          t,
+          "status is blocked but blocked_by names nothing"
+        )
+      elseif t.status == "blocked" and #node.open_blockers == 0 and not node.in_cycle then
+        add(
+          findings,
+          "warn",
+          "blocker-freed",
+          t,
+          "status is blocked but every blocker is finished (set it to open)"
+        )
+      end
+      for _, w in ipairs(built.warnings) do
+        if w.code == "blocked-by-parked" and w.id == id then
+          add(findings, "warn", "blocked-by-parked", t, w.msg)
+        end
+      end
+    end
+  end
 end
 
 ---Run the checks.
@@ -309,6 +400,8 @@ function M.run(opts)
       )
     end
   end
+
+  plan_findings(findings, open_ids, names, scan_opts)
 
   table.sort(findings, finding_less)
   local errors, warnings = 0, 0
