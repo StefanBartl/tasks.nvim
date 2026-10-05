@@ -1,11 +1,11 @@
 ---@module 'tasks_nvim'
----@brief tasks.nvim: the task engine, pure Lua, no UI, no notifications.
+---@brief tasks.nvim: the task engine (pure Lua) and its front ends (`ui/`, `bindings/`).
 ---@description
 --- Open tasks live in the vault as one Markdown file each
 --- (`<area>/ROADMAP/tasks/<slug>.md`); this namespace reads, ranks, indexes,
---- creates, changes, finishes and checks them. The editor commands and the
---- headless CLI (`scripts/tasks.lua`) are front ends over these modules --
---- nothing here depends on either.
+--- creates, changes, finishes and checks them. The engine modules listed
+--- below are UI-free (no notifications, no windows); the editor commands
+--- (`ui/`, `bindings/`) and the headless CLI (`scripts/tasks.lua`) sit on top.
 ---
 --- Submodules are loaded on first access:
 ---  - `vault`  root, areas, paths, id/slug validation
@@ -27,6 +27,9 @@ local M = {}
 ---@class Tasks.SetupOpts
 ---@field vault? string          # The vault folder (one folder per area); without it `$TASKS_VAULT` is read.
 ---@field extra_areas? string[]  # Folders that are areas although they hold neither `ROADMAP/` nor `Backlog/`.
+---@field dashboard? { watch?: boolean, debounce_ms?: integer }
+---@field staleness? { git_timeout_ms?: integer, budget_ms?: integer, repo_bases?: string[] }
+---@field ci? { lint_timeout_ms?: integer }
 -- Defaults and validation: `tasks_nvim.config`.
 
 ---Tell the engine where the vault is. Safe to call twice; the last call wins per key.

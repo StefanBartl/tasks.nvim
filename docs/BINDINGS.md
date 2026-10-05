@@ -3,7 +3,7 @@
 ## Command
 
 `:Tasks <verb>` (a `lib.nvim` composer verb, `<Tab>` completes verbs, areas, task ids and values). No default
-keymaps, no autocommands. Set `vim.g.tasks_nvim_no_command = true` to register your own verb from
+keymaps and no autocommands at load time (the browser preview adds a short-lived `TasksPreviewTemp` group while a temporary file exists). Set `vim.g.tasks_nvim_no_command = true` to register your own verb from
 `tasks_nvim.ui.routes` instead.
 
 | Verb | Arguments | Does |

@@ -38,7 +38,7 @@ M.LINT_CHUNK = 40
 ---@field lint? boolean               # Run `md_lint` (default true).
 ---@field md_lint? string             # Path of `md_lint.lua` (default: `<vault>/TOOLS/scripts/md_lint.lua`).
 ---@field nvim? string                # Neovim executable for md_lint (default: the running one).
----@field timeout_ms? integer          # Per md_lint call before it is killed (default `LINT_TIMEOUT_MS`).
+---@field timeout_ms? integer          # Per md_lint call before it is killed (default `ci.lint_timeout_ms` of `setup()`).
 ---@field run_lint? fun(files: string[], md_lint: string): integer, string  # Replaces the child process (specs): exit code, output.
 
 ---@class Tasks.CiResult
@@ -47,8 +47,11 @@ M.LINT_CHUNK = 40
 ---@field failed string[]   # Names of the failed steps.
 ---@field lines string[]    # What was printed.
 
----Longest a child md_lint may run before it is killed and the step fails.
-M.LINT_TIMEOUT_MS = 120000
+---Longest a child md_lint may run before it is killed and the step fails: `ci.lint_timeout_ms` of `setup()`.
+---@return integer
+local function lint_timeout_ms()
+  return require("tasks_nvim.config").get().ci.lint_timeout_ms
+end
 
 ---Turn what `vim.system():wait()` reports into the gate's exit code and output. A child that was
 ---killed (a signal reads as exit code 0 on POSIX) or that ran into the timeout (`vim.system`
@@ -183,7 +186,7 @@ function M.run(opts, say)
             files,
             script,
             opts.nvim or vim.v.progpath,
-            opts.timeout_ms or M.LINT_TIMEOUT_MS
+            opts.timeout_ms or lint_timeout_ms()
           )
         end
       local bad_chunks, problems, linted = 0, {}, 0

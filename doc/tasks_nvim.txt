@@ -4,13 +4,20 @@
 INTRODUCTION                                                    *tasks_nvim*
 
 One Markdown file per task (flat YAML frontmatter), one generated overview
-per area. The engine is pure Lua; the CLI is `scripts/tasks.lua`.
+per area. The engine is pure Lua, `:Tasks <verb>` is the editor front end
+(dashboard, form, preview), the CLI is `scripts/tasks.lua`. Requires lib.nvim.
 
 Setup: >lua
-  require("tasks_nvim").setup({ vault = "~/vault", extra_areas = { "ALL" } })
+  require("tasks_nvim").setup({
+    vault = "~/vault",
+    extra_areas = { "ALL" },
+    dashboard = { watch = true, debounce_ms = 250 },
+    staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },
+    ci = { lint_timeout_ms = 120000 },
+  })
 <
 There is no built-in vault path; `$TASKS_VAULT` is read when `vault` is unset.
-The editor commands are not part of this stage; see docs/ENGINE.md for the
-format, the verbs and the checks.
+See docs/ENGINE.md (format, checks), docs/COMMANDS.md (verbs) and
+docs/BINDINGS.md (keys).
 
  vim:tw=78:ts=8:ft=help:norl:

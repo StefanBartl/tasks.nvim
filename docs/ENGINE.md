@@ -218,7 +218,7 @@ mtime. Uncommitted edits are not seen.
 
 Cost: one `git log` per repo and 100 paths, never one per task; a file is looked up once however
 many tasks name it; at most `staleness.MAX_REFS` (1000) distinct files are checked per run (the
-rest is reported). All git calls of a run share a time budget (`staleness.TOTAL_BUDGET_MS`, 30 s):
+rest is reported). All git calls of a run share a time budget (`staleness.budget_ms` of `setup()`, 30 s):
 once it is used up the remaining files are dated by their mtime. A missing repo, file or git only
 produces a note on stderr / a notification, never an error; a path git refuses costs only its own
 date (the call is halved until that path stands alone). A ref with `..` that leaves its repo
@@ -240,7 +240,7 @@ Three steps, exit `0` only when all pass (`1` otherwise), a short summary at the
    links, anchors, table columns; `$VAR/...` links when lsp.nvim is on `$REPOS_DIR` or in lazy's
    data folder). `--no-lint` skips it; a missing script fails the run, it is never skipped silently.
    `--md-lint=<file>` points at another copy. A linter that runs longer than 120 s
-   (`tasks.ci.LINT_TIMEOUT_MS`, `opts.timeout_ms`) is killed and the step fails with
+   (`ci.lint_timeout_ms` of `setup()`, `opts.timeout_ms`) is killed and the step fails with
    `timed out`; one killed by a signal fails as well (a signal reads as exit code 0 on POSIX).
 
 A pipeline for a vault repo runs `scripts/tasks-ci.lua` with `TASKS_VAULT` set (checkout this plugin and `lib.nvim` next to it).

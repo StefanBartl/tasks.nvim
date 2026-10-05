@@ -120,7 +120,7 @@ Without snacks.nvim a `vim.ui.select` flow lists the same tasks; picking one ope
 Backlog, ROADMAP.md) for **that one task** -- no marks, no batch. It never raises.
 
 **Live refresh.** While the dashboard is open it watches the folders its list is made of
-(`tasks_dash_watch.lua`, handles from `lib.nvim.fs.watch`): `<area>/ROADMAP/tasks` and each
+(`ui/dash_watch.lua`, handles from `lib.nvim.fs.watch`): `<area>/ROADMAP/tasks` and each
 folder-task folder in it, and `<area>/Backlog/FEATURES` and `Backlog/TASKS` where finished
 tasks land -- the shown area, or every area for `all`. When a file changes (this Neovim,
 another one, a Claude session, `git pull`) the list rescans by itself, after 250 ms of quiet
@@ -135,8 +135,8 @@ Linux), so after every refresh (and after `r`) the handles are re-aimed: a folde
 created while open is watched from then on. An area that has no `ROADMAP/tasks/` yet is
 watched at `ROADMAP/` until the folder appears (its first task is noticed, however the burst of
 events ends: `lib.nvim.fs.watch` reports only the last file name of a burst). A whole new area is only noticed by `r` or by
-reopening the dashboard (the vault root itself is not watched). Off with `require("bindings.usrcmds.plugin_repos.tasks_dash").config.watch = false`
-(or per call `open(v, { watch = false })`); the debounce is `config.watch_debounce_ms`. If no
+reopening the dashboard (the vault root itself is not watched). Off with `setup({ dashboard = { watch = false } })` (or per call `open(v, { watch = false })`); the debounce
+is `dashboard.debounce_ms` (default 250). If no
 folder can be watched (handle limit, no `lib.nvim.fs.watch`) the dashboard says so once and
 `r` stays the way to rescan. The plain `vim.ui.select` fallback has no live list.
 
@@ -151,7 +151,7 @@ is kept as `frecency.json.bad`). `o` -> `frecency` (or `:Tasks list --sort=frece
 and the rest in the default order. It is opt-in because it ignores the status/prio order the
 default list is for: a `parked` task you keep opening is above an untouched `doing` one.
 
-*Seam.* `require("bindings.usrcmds.plugin_repos.tasks_cmd").dashboard` decides what
+*Seam.* `require("tasks_nvim.ui.cmd").dashboard` decides what
 happens: `nil` (the default) opens this dashboard, a function replaces it
 (`view = { tasks, area, filter, sort, root }`), `false` gives the scratch buffer back.
 
@@ -218,8 +218,8 @@ open. Afterwards the form closes and the new file opens.
 
 With an area (`task new <area> ...`) nothing changes: that is the old behaviour below.
 
-Seams for tests and other front ends: `tasks_cmd.form_open` (replaces the form buffer,
-signature of `tasks_form.open`) and `tasks_cmd.explorer_open(dir)`.
+Seams for tests and other front ends: `ui.cmd.form_open` (replaces the form buffer,
+signature of `ui.form.open`) and `ui.cmd.explorer_open(dir)`.
 
 ### `:Tasks new <area> [title...] [kind= prio= effort= tags= status=]`
 

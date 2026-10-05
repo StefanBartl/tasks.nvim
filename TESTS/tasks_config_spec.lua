@@ -26,6 +26,31 @@ return function(H)
   eq(config.get().extra_areas, { "Z" }, "a bad value does not overwrite a good one")
   config.merge(before)
 
+  -- sections: checked key by key, merged key by key
+  eq(
+    config.validate({ dashboard = { watch = false, debounce_ms = 100 } }).dashboard,
+    { watch = false, debounce_ms = 100 },
+    "a valid section passes"
+  )
+  eq(
+    config.validate({ dashboard = { watch = "no", debounce_ms = -5, nope = 1 } }).dashboard,
+    {},
+    "wrong types, a non-positive number and unknown sub-keys are dropped, the section stays"
+  )
+  eq(config.validate({ dashboard = 5 }).dashboard, nil, "a section that is no table is dropped")
+  eq(config.validate({ ci = { lint_timeout_ms = 1.5 } }).ci, {}, "a timeout must be a whole number")
+  eq(
+    config.validate({ staleness = { repo_bases = { "/r" } } }).staleness.repo_bases,
+    { "/r" },
+    "repo_bases is a string list"
+  )
+  config.merge({ dashboard = { watch = false } })
+  eq(config.get().dashboard, { watch = false, debounce_ms = 250 }, "a section merges key by key")
+  config.merge({ dashboard = { watch = true } })
+  eq(config.get().dashboard.watch, true)
+  ok(#config.ignored() >= 1, "problems stay listed for :checkhealth")
+  eq(require("tasks_nvim.config.DEFAULTS").ci.lint_timeout_ms, 120000, "defaults are data")
+
   -- the health check reads only; it must not throw with or without a vault
   local vault = require("tasks_nvim.vault")
   vault.set_root(nil)

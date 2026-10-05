@@ -18,7 +18,7 @@
 ---
 --- Cost control: refs are de-duplicated per (base, path), at most `MAX_REFS`
 --- distinct files are looked at per run (the rest is reported in `notes`), all
---- git calls of a run share the time budget `TOTAL_BUDGET_MS`, and every failure
+--- git calls of a run share the time budget (`staleness.budget_ms` of `setup()`), and every failure
 --- (no git, not a repo, a missing repo, one path git refuses) degrades to mtime
 --- or to a skipped ref -- it never raises, and one bad ref costs only its own date.
 ---
@@ -42,12 +42,13 @@ M.GIT_CHUNK = 100
 ---Commits one `git log` may walk (only commits touching the paths count).
 M.MAX_COMMITS = 3000
 
----Milliseconds before one git call is given up.
-M.GIT_TIMEOUT_MS = 20000
-
----Milliseconds all git calls of one `compute` may take together; after that the
----remaining files are dated by their mtime.
-M.TOTAL_BUDGET_MS = 30000
+---The `staleness` section of `setup()`: `git_timeout_ms` (one git call is given up after it),
+---`budget_ms` (all git calls of one `compute` together; after that the remaining files are dated by their
+---mtime) and `repo_bases`.
+---@return Tasks.StalenessConfig
+local function settings()
+  return require("tasks_nvim.config").get().staleness
+end
 
 ---@class Tasks.RefChange
 ---@field ref string      # The ref as written in the task.
@@ -70,7 +71,7 @@ M.TOTAL_BUDGET_MS = 30000
 ---@field config_dir? string          # The nvim config checkout (default: `$NVIM_CONFIG_DIR`, else `stdpath("config")`).
 ---@field extra_bases? string[]       # More bases tried after the standard ones.
 ---@field max_refs? integer
----@field budget_ms? integer          # Time all git calls may take together (default `M.TOTAL_BUDGET_MS`).
+---@field budget_ms? integer          # Time all git calls may take together (default `staleness.budget_ms` of `setup()`).
 ---@field git_dates? fun(base: string, rels: string[], gopts?: Tasks.GitDatesOpts): table<string, { date: string, file: string }>|nil, string|nil  # Replaces the git lookup (specs).
 
 ---The last report `compute` produced, so a front end that only sees the
@@ -326,7 +327,7 @@ function M.git_dates(base, rels, gopts)
       failed = failed + #paths
       return
     end
-    local timeout = M.GIT_TIMEOUT_MS
+    local timeout = settings().git_timeout_ms
     if deadline then
       local left = math.floor((deadline - uv.hrtime()) / 1e6)
       if left <= 0 then
@@ -430,13 +431,14 @@ function M.compute(tasks, opts)
   end
   local ctx = {
     root = root,
-    repo_bases = opts.repo_bases or default_repo_bases(root),
+    repo_bases = opts.repo_bases
+      or (#settings().repo_bases > 0 and settings().repo_bases or default_repo_bases(root)),
     config_dir = default_config_dir(opts),
     extra = opts.extra_bases or {},
   }
   local cap = opts.max_refs or M.MAX_REFS
   local dater = opts.git_dates or M.git_dates
-  local budget_ms = opts.budget_ms or M.TOTAL_BUDGET_MS
+  local budget_ms = opts.budget_ms or settings().budget_ms
   ---@param text string
   local function note(text)
     report.notes[#report.notes + 1] = text

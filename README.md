@@ -1,11 +1,11 @@
 # tasks.nvim
 
 Offene Arbeit als **eine Markdown-Datei pro Task** (flaches YAML-Frontmatter), pro Projekt ("Area") ein erzeugter
-Überblick `ROADMAP/TASKS.md`. Die Engine liest, sortiert, indiziert, legt an, ändert, schließt ab und prüft diese
-Dateien; sie ist reines Lua ohne UI, dazu kommt eine Headless-CLI für Sitzungen ohne Neovim und für CI.
+Überblick `ROADMAP/TASKS.md`. Die Engine (`lua/tasks_nvim/*.lua`) liest, sortiert, indiziert, legt an, ändert,
+schließt ab und prüft diese Dateien und kommt ohne UI aus; darüber liegen der Befehl `:Tasks` mit Dashboard,
+Formular und Vorschau (`lua/tasks_nvim/ui/`) und eine Headless-CLI für Sitzungen ohne Neovim und für CI.
 
-> **Stand:** früh. Die Engine und die CLI sind aus einer privaten Neovim-Config herausgelöst und laufen
-> (13 Specs); die Editor-Befehle (`:Tasks`, Dashboard, Formular) folgen im nächsten Schritt. **Noch nicht
+> **Stand:** früh. Aus einer privaten Neovim-Config herausgelöst, Specs laufen (24). **Noch nicht
 > veröffentlicht**, kein Release, nur unter Windows getestet.
 
 ## Anforderungen
@@ -23,8 +23,15 @@ Es gibt keinen eingebauten Vault-Pfad:
 require("tasks_nvim").setup({
   vault = "~/vault",          -- ein Ordner je Area; alternativ $TASKS_VAULT
   extra_areas = { "ALL" },    -- Ordner, die Areas sind, obwohl sie weder ROADMAP/ noch Backlog/ enthalten
+  dashboard = { watch = true, debounce_ms = 250 },   -- Live-Refresh des Dashboards
+  staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },  -- --stale=refs
+  ci = { lint_timeout_ms = 120000 },                 -- md_lint im CI-Gate
 })
 ```
+
+Lazy-Laden (lazy.nvim): `{ "StefanBartl/tasks.nvim", cmd = "Tasks", dependencies = { "StefanBartl/lib.nvim" },
+opts = { vault = "~/vault" } }`. Ohne `cmd`/`event` legt `plugin/tasks_nvim.lua` den Befehl beim Start an
+(`vim.g.tasks_nvim_no_command = true` verhindert das).
 
 ## Headless
 

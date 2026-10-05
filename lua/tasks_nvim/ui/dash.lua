@@ -41,13 +41,19 @@ local view = require("tasks_nvim.ui.view")
 
 local M = {}
 
----Settings of the dashboard. Change them before opening it (`require(...).config.watch = false`).
----`watch_opts` is merged into the `tasks_dash_watch.new` options (the seam the specs use).
+---Overrides of the dashboard settings, for a script or a spec (`require(...).config.watch = false`); the
+---settings themselves are `dashboard = { watch, debounce_ms }` of `setup()`. `nil` means "from `setup()`".
+---`watch_opts` is merged into the `dash_watch.new` options (the seam the specs use).
 ---@class Plugin_repos.TasksDashConfig
----@field watch boolean               # Rescan on file changes while open (default true).
----@field watch_debounce_ms integer   # Quiet period before a rescan (default 250).
+---@field watch? boolean              # Rescan on file changes while open.
+---@field watch_debounce_ms? integer  # Quiet period before a rescan.
 ---@field watch_opts? table
-M.config = { watch = true, watch_debounce_ms = 250 }
+M.config = {}
+
+---@return Tasks.DashboardConfig
+local function settings()
+  return require("tasks_nvim.config").get().dashboard
+end
 
 ---Key under which the last filter is remembered (`lib.nvim.store.project`).
 local STORE_KEY = "tasks/dashboard-filter"
@@ -151,10 +157,13 @@ function M.new_state(v, opts)
     widths = core.widths({}),
     persist = do_persist,
     watch = (function()
-      if opts.watch == nil then
+      if opts.watch ~= nil then
+        return opts.watch
+      end
+      if M.config.watch ~= nil then
         return M.config.watch
       end
-      return opts.watch
+      return settings().watch
     end)(),
   }
 end
@@ -616,7 +625,7 @@ local function start_watch(state, picker)
   local w = require("tasks_nvim.ui.dash_watch").new(vim.tbl_extend("force", {
     root = state.root,
     area = state.area,
-    debounce_ms = M.config.watch_debounce_ms,
+    debounce_ms = M.config.watch_debounce_ms or settings().debounce_ms,
     on_refresh = function()
       M.refresh_if_changed(state, picker)
     end,
