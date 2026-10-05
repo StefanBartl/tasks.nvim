@@ -377,6 +377,8 @@ local function nested_routes()
         { key = "severity", type = "STRING", values = model.SEVERITIES },
         { key = "value", type = "STRING", values = { "1", "2", "3", "4", "5" } },
         { key = "actor", type = "STRING", values = model.ACTORS },
+        { key = "after", type = "TASK_IDS" },
+        { key = "order", type = "STRING" },
         { key = "status", type = "STRING", values = model.OPEN_STATUSES },
       },
       flags = { { name = "folder", bool = true } },

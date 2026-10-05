@@ -70,7 +70,7 @@ commands:
   index [<area>] [--check]                (re)write ROADMAP/TASKS.md; --check only reports
   migrate-actor [<area>] [--write]        propose actor=me for tasks that wait for you (status decision, tag
                                           needs-user) and leave every other task EMPTY; dry run unless --write
-  new <area> <title> [--kind=k] [--prio=1..3] [--effort=XS..XL|0.5d] [--value=1..5] [--actor=cdx|me|pair] [--tags=a,b]
+  new <area> <title> [--kind=k] [--prio=1..3] [--effort=XS..XL|0.5d] [--value=1..5] [--actor=cdx|me|pair] [--after=id,id] [--order=2.5] [--tags=a,b]
        [--category=c,d] [--severity=low|medium|high|critical] [--refs=path,repo@sha]
        [--summary=text] [--slug=slug] [--status=s]
        [--lang=de|en] [--folder]             create a task file (--lang: body headings;
@@ -163,6 +163,8 @@ local SPECS = {
       "severity",
       "value",
       "actor",
+      "after",
+      "order",
       "refs",
       "lang",
       "summary",
@@ -647,6 +649,8 @@ function commands.new(ctx)
     severity = opt.severity --[[@as string|nil]],
     value = opt.value --[[@as string|nil]],
     actor = opt.actor --[[@as string|nil]],
+    after = opt.after --[[@as string|nil]],
+    order = opt.order --[[@as string|nil]],
     refs = opt.refs --[[@as string|nil]],
     lang = opt.lang --[[@as "de"|"en"|nil]],
     summary = opt.summary --[[@as string|nil]],

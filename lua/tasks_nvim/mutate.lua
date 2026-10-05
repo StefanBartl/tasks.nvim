@@ -213,7 +213,7 @@ local function check_lang(lang)
 end
 
 ---Frontmatter keys in the order concept section 3 shows them.
----@param meta { title: string, status: string, kind?: string, prio?: integer|string, effort?: string, value?: integer|string, actor?: string, tags?: string[], category?: string[], severity?: string, refs?: string[], created: string, updated: string }
+---@param meta { title: string, status: string, kind?: string, prio?: integer|string, effort?: string, value?: integer|string, actor?: string, after?: string[], order?: number|string, tags?: string[], category?: string[], severity?: string, refs?: string[], created: string, updated: string }
 ---@return table[] pairs
 local function meta_pairs(meta)
   local pairs_ = {
@@ -234,6 +234,12 @@ local function meta_pairs(meta)
   end
   if meta.actor then
     pairs_[#pairs_ + 1] = { "actor", meta.actor }
+  end
+  if meta.after then
+    pairs_[#pairs_ + 1] = { "after", meta.after }
+  end
+  if meta.order then
+    pairs_[#pairs_ + 1] = { "order", tostring(meta.order) }
   end
   if meta.tags then
     pairs_[#pairs_ + 1] = { "tags", meta.tags }
@@ -337,15 +343,16 @@ end
 ---@param value any
 ---@return string[]|nil ids
 ---@return string|nil err
-local function id_list(value)
-  local list, err = string_list(value, "blocked_by")
+local function id_list(value, what)
+  what = what or "blocked_by"
+  local list, err = string_list(value, what)
   if not list then
     return nil, err
   end
   for _, id in ipairs(list) do
     local _, slug, id_err = vault.parse_id(id)
     if id_err or not slug then
-      return nil, "blocked_by: " .. (id_err or ("expected <area>/<slug>, got " .. id))
+      return nil, what .. ": " .. (id_err or ("expected <area>/<slug>, got " .. id))
     end
   end
   return list, nil
@@ -385,6 +392,8 @@ local SETTABLE = {
   "actor",
   "summary",
   "blocked_by",
+  "after",
+  "order",
   "refs",
   "rules",
   "done_in",
@@ -523,8 +532,8 @@ local function normalize_patch(patch, opts)
       else
         result[#result + 1] = { key, list }
       end
-    elseif key == "blocked_by" then
-      local ids, err = id_list(value)
+    elseif key == "blocked_by" or key == "after" then
+      local ids, err = id_list(value, key)
       if not ids then
         return nil, err
       end
@@ -535,6 +544,13 @@ local function normalize_patch(patch, opts)
       else
         result[#result + 1] = { key, ids }
       end
+    elseif key == "order" then
+      local n = tonumber(value)
+      if not n or n ~= n or n == math.huge or n == -math.huge then
+        return nil,
+          "order must be a number (2.5 slots a task between 2 and 3), got " .. tostring(value)
+      end
+      result[#result + 1] = { key, vim.trim(tostring(value)) }
     else
       -- summary, or an allowed unknown field: a single-line text.
       local t, err = one_line(value, key)
@@ -610,6 +626,22 @@ function M.new(area, opts)
         table.concat(model.ACTORS, ", ")
       )
   end
+  local after
+  if opts.after ~= nil then
+    local ids, aerr = id_list(opts.after, "after")
+    if not ids then
+      return nil, aerr
+    end
+    after = #ids > 0 and ids or nil
+  end
+  local order
+  if opts.order ~= nil then
+    order = tonumber(opts.order)
+    if not order or order ~= order or order == math.huge or order == -math.huge then
+      return nil,
+        "order must be a number (2.5 slots a task between 2 and 3), got " .. tostring(opts.order)
+    end
+  end
   local tags
   if opts.tags ~= nil then
     local list, lerr = string_list(opts.tags, "tags", true)
@@ -676,6 +708,8 @@ function M.new(area, opts)
       effort = opts.effort,
       value = value,
       actor = opts.actor,
+      after = after,
+      order = order,
       tags = tags,
       category = category,
       severity = opts.severity,

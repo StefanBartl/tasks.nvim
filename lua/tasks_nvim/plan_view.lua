@@ -52,6 +52,9 @@ local function hint(node)
   if #node.external > 0 then
     parts[#parts + 1] = "external: " .. table.concat(node.external, ", ")
   end
+  if #node.same_file > 0 then
+    parts[#parts + 1] = "same-file with " .. table.concat(node.same_file, ", ")
+  end
   if node.state == "stuck" and not node.in_cycle and not node.behind_cycle then
     parts[#parts + 1] = "stuck"
   elseif node.state == "freed" then
@@ -184,6 +187,15 @@ function M.markdown(plan, opts)
   for i, stage in ipairs(plan.stages) do
     lines[#lines + 1] = ("## Stage %d"):format(i - 1)
     lines[#lines + 1] = ""
+    for _, conflict in ipairs(plan.conflicts) do
+      if conflict.stage == i - 1 then
+        lines[#lines + 1] = ("_Not parallel: `%s` is named by %s -- the order below says which first._"):format(
+          fsio.clean(conflict.file),
+          fsio.clean(table.concat(conflict.ids, ", "))
+        )
+        lines[#lines + 1] = ""
+      end
+    end
     lines[#lines + 1] = "| Task | Status | Effort | Waits on | Note |"
     lines[#lines + 1] = "| --- | --- | --- | --- | --- |"
     for _, id in ipairs(stage) do

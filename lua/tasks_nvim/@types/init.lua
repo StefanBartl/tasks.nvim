@@ -30,7 +30,9 @@
 ---@field severity? string             # `low|medium|high|critical`, as written (meant for bug/security tasks; may be an unknown word, see `errors`).
 ---@field created? string             # `YYYY-MM-DD`
 ---@field updated? string             # `YYYY-MM-DD`
----@field blocked_by string[]         # Task ids.
+---@field blocked_by string[]         # Task ids (hard edges: the task cannot begin before they are finished).
+---@field after string[]              # Task ids (soft edges: "should come after", never an error).
+---@field order? number               # Sort hint inside a stage (a fraction like 2.5 slots a task in between).
 ---@field refs string[]
 ---@field done_in? string
 ---@field summary string              # Frontmatter `summary`, else the first body paragraph; "" when neither.
@@ -94,6 +96,8 @@
 ---@field category? string[]|string   # Concerns (`model.CATEGORIES`); a string is split at commas.
 ---@field severity? string            # `model.SEVERITIES`; meant for bug/security tasks (a warning from `check` otherwise).
 ---@field value? integer|string       # 1..5, the expected benefit.
+---@field after? string[]|string     # Task ids that should come first (soft).
+---@field order? number|string        # Sort hint inside a stage.
 ---@field actor? string               # `cdx`, `me` or `pair`.
 ---@field folder? boolean             # Create a folder task (`<slug>/<slug>.md`) so assets can be attached.
 ---@field refs? string[]|string       # Paths or `repo@commit`; a string is split at commas.

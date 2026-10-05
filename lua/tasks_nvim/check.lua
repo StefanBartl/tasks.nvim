@@ -24,6 +24,7 @@
 ---  - `blocked-by-cycle` (error): the hard edges form a circle, the members are named
 ---  - `doing-while-blocked`, `blocked-without-blocker`, `blocker-freed`, `blocked-by-parked` (warnings): the status
 ---    runs behind what the blockers say (`tasks_nvim.plan` is the one definition of "blocked")
+---  - `bad-after`, `bad-order`, `after-self`, `after-dangling` (errors): the soft edge `after` and the sort hint `order`
 ---  - `bad-value`, `bad-actor`: `value` is not 1..5, `actor` is not cdx, me or pair
 ---  - `actor-cdx-waits-on-me` (warning): a task written `actor: cdx` waits on an open task that only the human
 ---    can do (`model.actor` = `me`): the AI queue holds work that cannot start
@@ -362,6 +363,21 @@ function M.run(opts)
                 "blocked_by " .. ref .. " does not exist"
               )
             end
+          end
+        end
+      end
+    end
+
+    for _, t in ipairs(open) do
+      -- `after` is a soft edge: it never blocks and a finished target is fine, but a name that exists nowhere is
+      -- a typo and the task naming itself is a mistake.
+      for _, ref in ipairs(t.after or {}) do
+        local _, ref_slug = vault.parse_id(ref)
+        if ref_slug then
+          if ref == t.id then
+            add(findings, "error", "after-self", t, "after names the task itself")
+          elseif not open_ids[ref] and not scan.find_done(ref, scan_opts) then
+            add(findings, "error", "after-dangling", t, "after " .. ref .. " does not exist")
           end
         end
       end

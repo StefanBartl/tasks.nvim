@@ -432,6 +432,7 @@ function M.parse_text(text, ctx)
     tags = {},
     category = {},
     blocked_by = {},
+    after = {},
     refs = {},
     summary = "",
     meta = {},
@@ -609,6 +610,26 @@ function M.parse_text(text, ctx)
       local _, ref_slug, id_err = vault.parse_id(ref)
       if id_err or not ref_slug then
         bad("bad-blocked-by", "blocked_by: " .. (id_err or ("expected <area>/<slug>, got " .. ref)))
+      end
+    end
+
+    task.after = as_list(meta.after, "after", bad)
+    for _, ref in ipairs(task.after) do
+      local _, ref_slug, id_err = vault.parse_id(ref)
+      if id_err or not ref_slug then
+        bad("bad-after", "after: " .. (id_err or ("expected <area>/<slug>, got " .. ref)))
+      end
+    end
+    if meta.order ~= nil then
+      local n = tonumber(meta.order)
+      if n and n == n and n > -math.huge and n < math.huge then
+        task.order = n
+      else
+        bad(
+          "bad-order",
+          "order must be a number (2.5 slots a task between 2 and 3), got "
+            .. vim.inspect(meta.order)
+        )
       end
     end
 

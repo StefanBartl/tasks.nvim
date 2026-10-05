@@ -10,7 +10,7 @@ return function(H)
   local plan = require("tasks_nvim.plan")
 
   ---@param id string  `<area>/<slug>`
-  ---@param opts? { status?: string, prio?: string, effort?: string, blocked_by?: string[] }
+  ---@param opts? { status?: string, prio?: string, effort?: string, blocked_by?: string[], after?: string[], order?: string, refs?: string[] }
   ---@return Tasks.Task
   local function T(id, opts)
     opts = opts or {}
@@ -24,6 +24,15 @@ return function(H)
     end
     if opts.blocked_by then
       meta[#meta + 1] = { "blocked_by", "[" .. table.concat(opts.blocked_by, ", ") .. "]" }
+    end
+    if opts.after then
+      meta[#meta + 1] = { "after", "[" .. table.concat(opts.after, ", ") .. "]" }
+    end
+    if opts.order then
+      meta[#meta + 1] = { "order", opts.order }
+    end
+    if opts.refs then
+      meta[#meta + 1] = { "refs", "[" .. table.concat(opts.refs, ", ") .. "]" }
     end
     local lines = { "---" }
     for _, kv in ipairs(meta) do
@@ -242,6 +251,97 @@ return function(H)
   lp = plan.build(long, index_of(long))
   eq(#lp.cycles, 1)
   eq(#lp.cycles[1], n)
+
+  -- ── soft edges: `after` moves a task to a later stage, never blocks, never errors ──
+  local soft = {
+    T("s/first"),
+    T("s/second", { after = { "s/first" } }),
+    T("s/free"),
+    T("s/third", { after = { "s/second" }, blocked_by = { "s/free" } }),
+  }
+  local sp = plan.build(soft, index_of(soft))
+  eq(sp.nodes["s/second"].stage, 1, "after puts it behind its target")
+  eq(
+    sp.nodes["s/third"].stage,
+    2,
+    "behind the soft target and the hard blocker, whichever is later"
+  )
+  eq(
+    sp.nodes["s/second"].state,
+    "ready",
+    "a soft edge never makes a task wait: it is still startable"
+  )
+  ok(plan.ready(soft[2], index_of(soft)), "readiness is hard edges only")
+  eq(sp.nodes["s/first"].leverage, 0, "and a soft edge adds no leverage")
+  eq(sp.critical.path, { "s/free", "s/third" }, "nor does it lengthen the critical path")
+
+  -- an `after` that would close a cycle is dropped, with a warning
+  local loop = {
+    T("l2/a", { after = { "l2/b" } }),
+    T("l2/b", { after = { "l2/a" } }),
+  }
+  local lp2 = plan.build(loop, index_of(loop))
+  local drops = 0
+  for _, w in ipairs(lp2.warnings) do
+    if w.code == "after-cycle" then
+      drops = drops + 1
+    end
+  end
+  eq(drops, 1, "one of the two soft edges is dropped, the other stays")
+  eq(#lp2.cycles, 0, "a soft loop is not a cycle")
+  eq(lp2.nodes["l2/a"].stage + lp2.nodes["l2/b"].stage, 1)
+
+  -- after over a hard edge that already says the same, a finished or unknown target, itself, or out of scope
+  local quiet = {
+    T("q/base"),
+    T(
+      "q/next",
+      { blocked_by = { "q/base" }, after = { "q/base", "q/gone", "q/next", "q/elsewhere" } }
+    ),
+  }
+  local qp = plan.build(quiet, index_of(quiet, { "q/gone" }))
+  eq(qp.nodes["q/next"].stage, 1)
+  eq(
+    qp.warnings,
+    {},
+    "nothing to say about a redundant, finished, unknown, self or foreign soft target"
+  )
+
+  -- ── order: a tie-breaker inside a stage, behind status and prio ──
+  local ordered = {
+    T("o/c", { order = "3" }),
+    T("o/a", { order = "1" }),
+    T("o/b", { order = "2.5" }),
+    T("o/none"),
+    T("o/prio", { prio = "1", order = "9" }),
+  }
+  local op = plan.build(ordered, index_of(ordered))
+  eq(
+    op.stages[1],
+    { "o/prio", "o/a", "o/b", "o/c", "o/none" },
+    "prio first, then order (2.5 slots in), no order last"
+  )
+
+  -- ── same-file: tasks of one stage that name the same file are not parallel ──
+  local files = {
+    T("f/one", { refs = { "lua/a/init.lua", "lib.nvim@803de65" } }),
+    T("f/two", { refs = { "lua/a/init.lua:42", "docs/x.md" } }),
+    T("f/three", { refs = { "docs/x.md#anchor" } }),
+    T("f/other", { refs = { "lua/b.lua" } }),
+    T("f/later", { blocked_by = { "f/one" }, refs = { "lua/a/init.lua" } }),
+  }
+  local fp = plan.build(files, index_of(files))
+  eq(fp.nodes["f/one"].same_file, { "f/two" })
+  eq(fp.nodes["f/two"].same_file, { "f/one", "f/three" })
+  eq(fp.nodes["f/other"].same_file, {})
+  eq(fp.nodes["f/later"].same_file, {}, "another stage: not a conflict")
+  eq(#fp.conflicts, 2)
+  eq(
+    fp.conflicts[1],
+    { stage = 0, file = "docs/x.md", ids = { "f/three", "f/two" } },
+    "in plan order"
+  )
+  eq(fp.conflicts[2].file, "lua/a/init.lua")
 
   -- ── an empty scope ──
   local empty = plan.build({}, index_of({}))

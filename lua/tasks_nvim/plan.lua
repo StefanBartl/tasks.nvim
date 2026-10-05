@@ -17,13 +17,19 @@
 --- whose blocker is `parked`, or sits in a cycle, is `stuck`: it waits without end. `decision` is ready too -- it is
 --- the thing that waits for the human, not for another task.
 ---
---- Only hard edges (`blocked_by`) exist here. A cycle over them is reported (members named) and taken out of the
---- calculation; every other task is still ordered, a cycle never swallows the whole plan.
+--- Hard edges (`blocked_by`) decide readiness, leverage and the critical path. A cycle over them is reported
+--- (members named) and taken out of the calculation; every other task is still ordered, a cycle never swallows the
+--- whole plan. Soft edges (`after`, "should come after") only move a task to a later stage: never an error, and one
+--- that would close a cycle is dropped with a warning. `order` is a tie-breaker inside a stage, nothing more.
+---
+--- Tasks of one stage that name the same file in `refs` are marked `same-file`: they are not parallel work, the order
+--- says which to do first (a note, not a rule).
 ---
 --- Not its job: reading files (`scan`), rendering (`plan_view`), the estimate sums (`estimate`), what to start next
 --- (`next_pick`).
 
 local model = require("tasks_nvim.model")
+local staleness = require("tasks_nvim.staleness")
 
 local M = {}
 
@@ -52,6 +58,7 @@ local M = {}
 ---@field eff_prio? integer           # Own prio or the best prio of the tasks that depend on it.
 ---@field inversion? { from: integer|nil, to: integer, because: string }
 ---@field in_cycle boolean
+---@field same_file string[]          # Tasks of the same stage that name the same file in `refs`.
 ---@field behind_cycle boolean        # Waits (transitively) on a cycle: in no stage, like the cycle itself.
 
 ---@class Tasks.PlanCritical
@@ -66,6 +73,7 @@ local M = {}
 ---@field ready string[]              # Ready tasks (state `ready` or `decision`), best first.
 ---@field decisions string[]          # Ready decisions by leverage, highest first.
 ---@field cycles string[][]           # Members of every cycle over hard edges.
+---@field conflicts { stage: integer, file: string, ids: string[] }[]  # Same-stage tasks that touch the same file.
 ---@field critical Tasks.PlanCritical
 ---@field warnings { code: string, id?: string, msg: string }[]
 
@@ -268,6 +276,7 @@ function M.build(tasks, index)
     ready = {},
     decisions = {},
     cycles = {},
+    conflicts = {},
     critical = { days = 0, path = {}, unknown = 0 },
     warnings = {},
   }
@@ -306,6 +315,7 @@ function M.build(tasks, index)
       unknown_blockers = unknown,
       leverage = 0,
       in_cycle = false,
+      same_file = {},
       behind_cycle = false,
     }
     local seen = {}
@@ -414,6 +424,96 @@ function M.build(tasks, index)
     end
   end
 
+  -- Soft edges (`after`): they only push a task into a later stage. One that would close a cycle over what is
+  -- already accepted is dropped and reported; the order of the tasks (sorted ids) makes that choice stable.
+  ---@param adj table<string, string[]>
+  ---@param from string
+  ---@param to string
+  ---@return boolean
+  local function reaches(adj, from, to)
+    local seen, stack = { [from] = true }, { from }
+    while #stack > 0 do
+      local v = table.remove(stack)
+      if v == to then
+        return true
+      end
+      for _, w in ipairs(adj[v] or {}) do
+        if not seen[w] then
+          seen[w] = true
+          stack[#stack + 1] = w
+        end
+      end
+    end
+    return false
+  end
+  local combined, soft_in, has_soft = {}, {}, false
+  for _, id in ipairs(ids) do
+    combined[id] = vim.list_slice(dependents[id], 1, #dependents[id])
+    soft_in[id] = {}
+  end
+  for _, id in ipairs(ids) do
+    if not cyclic[id] and not behind[id] then
+      local seen_after = {}
+      for _, b in ipairs(by_id[id].after or {}) do
+        if b ~= id and in_scope[b] and not cyclic[b] and not behind[b] and not seen_after[b] then
+          seen_after[b] = true
+          if reaches(combined, id, b) then
+            plan.warnings[#plan.warnings + 1] = {
+              code = "after-cycle",
+              id = id,
+              msg = ("%s: after %s would close a cycle and is ignored"):format(id, b),
+            }
+          else
+            combined[b][#combined[b] + 1] = id
+            soft_in[id][#soft_in[id] + 1] = b
+            has_soft = true
+          end
+        end
+      end
+    end
+  end
+  if has_soft then
+    -- Layer again over hard + accepted soft edges (longest path, so a task lands after everything it follows).
+    local eligible = function(x)
+      return not cyclic[x] and not behind[x]
+    end
+    local need, layer, queue = {}, {}, {}
+    for _, id in ipairs(ids) do
+      if eligible(id) then
+        local n = #soft_in[id]
+        for _, b in ipairs(blockers_in[id]) do
+          if eligible(b) then
+            n = n + 1
+          end
+        end
+        need[id], layer[id] = n, 0
+        if n == 0 then
+          queue[#queue + 1] = id
+        end
+      end
+    end
+    local at = 1
+    while at <= #queue do
+      local id = queue[at]
+      at = at + 1
+      for _, d in ipairs(combined[id]) do
+        if eligible(d) then
+          layer[d] = math.max(layer[d], layer[id] + 1)
+          need[d] = need[d] - 1
+          if need[d] == 0 then
+            queue[#queue + 1] = d
+          end
+        end
+      end
+    end
+    for id, l in pairs(layer) do
+      if need[id] == 0 then
+        stage[id] = l
+        plan.nodes[id].stage = l
+      end
+    end
+  end
+
   -- Leverage and effective prio: walk the stages backwards, a task sees all that depend on it.
   ---@type table<string, table<string, boolean>>
   local reach = {}
@@ -473,6 +573,10 @@ function M.build(tasks, index)
     if pa ~= pb then
       return pa < pb
     end
+    local oa, ob = na.task.order or math.huge, nb.task.order or math.huge
+    if oa ~= ob then
+      return oa < ob
+    end
     if na.leverage ~= nb.leverage then
       return na.leverage > nb.leverage
     end
@@ -497,6 +601,44 @@ function M.build(tasks, index)
       plan.ids[#plan.ids + 1] = id
     end
   end
+  -- Same-file: tasks of one stage that name the same file are not parallel work.
+  for i, members in ipairs(plan.stages) do
+    local by_file = {}
+    for _, id in ipairs(members) do
+      local seen_files = {}
+      for _, ref in ipairs(by_id[id].refs or {}) do
+        local kind, rel = staleness.classify(ref)
+        if kind == "path" and rel and not seen_files[rel] then
+          seen_files[rel] = true
+          by_file[rel] = by_file[rel] or {}
+          table.insert(by_file[rel], id)
+        end
+      end
+    end
+    local files = {}
+    for file, list in pairs(by_file) do
+      if #list > 1 then
+        files[#files + 1] = file
+      end
+    end
+    table.sort(files)
+    for _, file in ipairs(files) do
+      local list = by_file[file]
+      plan.conflicts[#plan.conflicts + 1] = { stage = i - 1, file = file, ids = list }
+      for _, id in ipairs(list) do
+        for _, other in ipairs(list) do
+          if other ~= id and not vim.tbl_contains(plan.nodes[id].same_file, other) then
+            table.insert(plan.nodes[id].same_file, other)
+          end
+        end
+      end
+    end
+  end
+
+  for _, id in ipairs(ids) do
+    table.sort(plan.nodes[id].same_file)
+  end
+
   for _, members in ipairs(plan.cycles) do
     for _, id in ipairs(members) do
       plan.ids[#plan.ids + 1] = id
