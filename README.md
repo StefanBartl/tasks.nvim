@@ -43,6 +43,9 @@ sessions that run without an editor. Nothing is stored anywhere but in the files
 - **Capture in one call**: `:Tasks new my-area "Title"`, or a Markdown form. No required field, no question.
 - **A vault of areas**: `<area>/ROADMAP/tasks/<slug>.md` for open tasks, `<area>/Backlog/` for finished ones,
   `<area>/ROADMAP/TASKS.md` generated (never edited, never overwritten when it is your own file).
+- **Plan and next**: stages, what is ready, which decision unlocks most, the critical path (`:Tasks plan`); the best
+  next task with the reason and an honest empty answer (`:Tasks next`, and a dialog after `done`); sums that say what
+  is missing (`:Tasks estimate`)
 - **Rank and filter**: status, priority, effort, value (and a derived return on effort), who can do it (`cdx` / `me` / `pair`), kind, category, severity, tags, blockers, staleness
   (`--stale=60`, or `--stale=refs`: files a task names that changed since it was last updated).
 - **Finish safely**: `:Tasks done` moves the file to `Backlog/`, adds a row to its README, regenerates the index,
@@ -111,6 +114,7 @@ require("tasks_nvim").setup({
   dashboard = { watch = true, debounce_ms = 250 },                              -- live refresh
   staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },   -- --stale=refs
   ci = { lint_timeout_ms = 120000 },                                            -- md_lint in the CI gate
+  next = { popup = true, cdx_hint = true },                                     -- the dialog after done
 })
 ```
 

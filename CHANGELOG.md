@@ -15,6 +15,17 @@ the version is not tagged yet (the repository is not published).
 - `setup()` with a validated config (`vault`, `extra_areas`, `dashboard`, `staleness`, `ci`, `keys`); every key of
   the dashboard and the form is rebindable or can be switched off.
 - `:'<,'>Tasks new`: a task about the selected lines (a `refs:` entry for them, the first line as the title).
+- `:Tasks plan`, `:Tasks next`, `:Tasks estimate [--walk]` and the headless `plan`, `next`, `estimate`: one definition of
+  "ready" (`tasks_nvim.plan`), `list --ready|--waiting|--unestimated`, stages / leverage / critical path / effective
+  prio / cycles from `blocked_by` alone, sums that name what is missing, the best next task with the reason and honest
+  empty answers.
+- After `done`: the tasks it freed and the next task, as a small dialog (`next.popup`), as `freed:` / `next:` lines in
+  the CLI (`--no-next`), once for a whole stack in the dashboard; a task that waited only on the finished one and still
+  says `blocked` is offered to be set to open (`done --unblock` in the CLI).
+- `check`: `blocked-by-cycle` (error), `doing-while-blocked`, `blocked-without-blocker`, `blocker-freed`,
+  `blocked-by-parked` (warnings).
+- Dashboard: counts by the open blockers, the number of ready tasks, the sum of the shown tasks, a hint that names
+  open blockers only, an `unestimated` filter.
 - Fields `value` (1-5, expected benefit) and `actor` (`cdx` / `me` / `pair`): `new`/`set`, `--value=` and `--actor=`
   filters (`--actor=me` also finds decisions and `needs-user` tasks without migrating), `--sort=roi`, dashboard row,
   chips and filter menu, CSV columns `Value`, `ROI`, `Actor` (appended), `check` codes `bad-value`, `bad-actor`,

@@ -44,6 +44,7 @@ blockers, plan or estimate is valid and stays visible everywhere.
     dashboard = { watch = true, debounce_ms = 250 },
     staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },
     ci = { lint_timeout_ms = 120000 },
+    next = { popup = true, cdx_hint = true },
   })
 <
 
@@ -59,6 +60,8 @@ blockers, plan or estimate is valid and stays visible everywhere.
   staleness.repo_bases     Folders holding the repos by name (`<base>/<area>`).
   ci.lint_timeout_ms       The vault's `md_lint.lua` is killed after this long.
   ci.trust_vault_lint      Allow `ci` to run the vault's own `md_lint.lua`.
+  next.popup               After `done`: a dialog with the next task (else a message).
+  next.cdx_hint            Name ready tasks written `cdx` apart, never as your next task.
   keys.dashboard           Dashboard list keys: action = key, or false.
   keys.dashboard_input     Dashboard input-window keys (normal and insert).
   keys.form                Keys of the `:Tasks new` form.
@@ -87,7 +90,16 @@ A wrong key or value is ignored with a message and listed in
   :Tasks set {id} {key}={value} ...      Change frontmatter; an empty value
                                          removes the key.
   :Tasks done {id} [done_in= date=] [--yes]
-                                         Finish and move to `Backlog/`.
+                                         Finish and move to `Backlog/`; names
+                                         what it freed and offers the next task.
+  :Tasks plan [{area}|all] [--for={id}] [filters] [--ready] [--format=] [--to=]
+                                         Ready now, decisions by leverage,
+                                         stages, critical path.
+  :Tasks next [{area}|all] [--n=] [--actor=]
+                                         The best ready task, with the reason.
+  :Tasks estimate [{area}|all] [--for={id}] [filters] [--walk]
+                                         Sums of effort and value, what is
+                                         missing; `--walk` asks for them.
   :Tasks attach {id} {file} [name=]      Copy a file into `assets/`.
   :Tasks folderize {id}                  Make a plain task a folder task.
   :Tasks template [--to=]                The task file template.

@@ -37,6 +37,8 @@ lowercase word `all` is the keyword; `ALL` with capitals is the area of that nam
 | `--stale=<days>` | not updated for at least that many days (no date counts as stale) |
 | `--stale=refs` | a file named in the task's `refs:` changed on a later day than `updated` (git commit date, mtime as fallback); the heading names the changed files. Details in [ENGINE.md](ENGINE.md#--stalerefs----tasks-whose-referenced-files-changed) (section `--stale=refs`) |
 | `--blocked` | status `blocked`, or a non-empty `blocked_by` |
+| `--ready` / `--waiting` | the tasks that can be started now (nothing open blocks them; a `decision` counts: it waits for you, not for a task) / the tasks that wait on an open blocker. One definition for the plan, the dashboard, `next` and these flags, judged against every open task of the vault (a blocker in another area counts). The two exclude each other |
+| `--unestimated` | missing the effort or the value |
 | `--sort=default` / `prio-effort` / `severity` / `frecency` / `roi` | the order (`roi`: highest `value / effort` first, tasks without both numbers after the ones with a figure, each group in the default order): `default` is status, prio, area, slug; `prio-effort` is status, prio, then effort ascending (important and small first, no effort last of its prio); `severity` is `critical` first, then `high`, `medium`, `low`, no severity last, each group in the default order; `frecency` is what the dashboard opened or changed most first (see below), the rest in the default order |
 | `--to=` | where the list goes: `buffer` (default), `clipboard`, `qf`, `file:<path>`, `echo`, `mdview` (Markdown written to a temp file and shown in the browser by [mdview.nvim](https://github.com/StefanBartl/mdview.nvim); see [Browser preview](#browser-preview-mdview)) |
 | `--format=md` / `--format=csv` | table (default) or CSV with the extra columns tags, blocked by, summary, path, severity, value, roi, actor; a `file:` target ending in `.csv` implies `csv`. A CSV cell that starts with `=`, `+`, `-`, `@` or a tab gets a leading `'`, so a title like `=HYPERLINK(...)` is text, not a formula, when the file is opened in a spreadsheet |
@@ -262,6 +264,34 @@ leaves the task as it was (no half-made folder task). `folderize` converts a tas
 attaching anything. Windows showing
 the old task file follow it. `task new ... --folder` creates a folder task from the start.
 
+### `:Tasks plan [<area>|all] [--for=<id>] [filters] [--ready] [--format=md|tsv|ids] [--to=] [--force]`
+
+The plan of the open tasks, computed from `blocked_by` alone (nothing new to write): what is **ready now**, the
+**decisions by leverage** (how many tasks depend on each, transitively: the one that unlocks most comes first),
+**stages** (every task in the earliest stage it can be in), the **critical path** (the longest chain, weighted by the
+effort), an estimate line, and warnings (a cycle, a parked or unknown blocker). `--for=<id>` plans one task and
+everything that has to be finished before it, across areas. The filters are those of `list`; `--ready` keeps only the
+"ready now" part. A task that blocks a better one is ranked by that one's prio (`prio 3 -> 1 because of ...`); the
+written prio is never changed. A cycle over `blocked_by` is reported with its members and left out of the stages, the
+rest is still ordered. `--to=` is `buffer` (default), `clipboard`, `file:<path>`, `echo` or `mdview`.
+
+### `:Tasks next [<area>|all] [--n=3] [--actor=cdx|me|pair|none]`
+
+What to start next: the best **ready** task and why, with a small dialog (`Not now` first, `Open <id>`, `Show another`).
+The order is fixed: freed by the task you just finished, then the same area, then the vault; `doing` before `open`
+before `decision`; the effective prio; the return on effort; the smaller effort; the id. Tasks written `cdx` are not
+"your next task": they are listed apart ("an AI session could take ..."); `--actor=cdx` asks for that queue instead.
+When there is nothing, the answer says which kind of nothing: **never** "all done" while work is only waiting
+("Nothing can be started. Still open: 4 for you, 6 blocked, 3 parked.").
+
+### `:Tasks estimate [<area>|all] [--for=<id>] [filters] [--walk]`
+
+Sums of effort and value, always saying what they are made of: "22 d from 17 of 20 (range 14-31 d) · value 61 ·
+roi 2.8 · me 8.5 d / cdx 13.5 d / unclear 3 -- estimate from the scale, not a promise". The range puts every size at
+its low and its high end (a T-shirt size is not a number). The return on effort counts only the tasks that have both
+numbers. Quick wins (value 4 or more, effort S or less) are named. `--walk` goes through the tasks that miss an effort
+or a value, asks for them one by one (`Skip` first, `Stop` keeps what was given) and writes everything in one batch.
+
 ### `:Tasks done <id> [done_in=...] [date=YYYY-MM-DD] [--yes]`
 
 Rule R6, after a confirmation (`--yes` skips it): `status: done`, `done_in`; the file moves
@@ -271,6 +301,11 @@ the index is regenerated. On any failure the files involved are restored byte fo
 Windows showing the open file follow it to the new path (an unchanged buffer is replaced,
 one with unsaved changes is left alone and reported). Running it for an already finished
 task says so and changes nothing.
+
+After the finish a small dialog names the tasks it freed and the next task to start (see `:Tasks next`); with
+`setup({ next = { popup = false } })`, or without a UI, the same text is a plain message. A task that waited only on
+this one and still says `status: blocked` is offered to be set to open (a question, never silently). In the
+dashboard, `D` on several marked tasks shows ONE dialog after the whole stack.
 
 ### `:Tasks template [--to=clipboard|buffer|file:<path>]`
 

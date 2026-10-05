@@ -80,7 +80,7 @@ quiet moment, read the list and add structure where it matters:
 
 The first command is "what is in flight and what waits for me". The second is "important and small first".
 `--sort=prio-effort` knows nothing about dependencies, so it can show a task that waits for another one (see 4);
-the dashboard shows the blocker next to such a task (`←`). A command that answers "what is *ready*" is planned.
+the dashboard shows the open blocker next to such a task (`←`). What is *ready* is answered by `:Tasks list --ready` and the plan (14a).
 
 ### 4. One task must not start before another — works today
 
@@ -198,6 +198,49 @@ Three steps: `check` (errors fail), `index --check` (no outdated or missing over
 worst open thing, anywhere", `--effort=<=S --prio=<=2` answers "what is small and important". An area is any folder
 that holds `ROADMAP/` or `Backlog/`; names listed in `extra_areas` count even when empty.
 
+### 14a. Who is startable, and in what order -- works today
+
+```vim
+:Tasks list --ready --sort=prio-effort
+:Tasks plan my-area
+:Tasks plan --for=my-area/send-via-gateway
+```
+
+`blocked_by` is all it reads: nothing new to write. The plan answers "what can I start" (**ready now**), "which
+decision is worth deciding first" (**decisions by leverage**: how many tasks depend on it, transitively), "in what
+order" (**stages**, every task in the earliest stage it can be in) and "how long is the longest chain" (**critical
+path**, weighted by the effort; a task without an effort counts as a day and the plan says how many did). A task that
+blocks a better one is ranked by that one's prio. `--for=<id>` is "what do I need so that X works", across areas.
+A cycle over `blocked_by` is named, left out of the stages and reported by `check` as an error.
+
+### 14b. What do I do next -- works today
+
+```vim
+:Tasks next
+:Tasks next my-area --n=5
+:Tasks next --actor=cdx
+```
+
+The best **ready** task with the reason: freed by the task you just finished, then your area, then the vault. Tasks
+written `cdx` are not offered as your next task, they are listed apart; `--actor=cdx` is the queue for an AI session.
+The same answer comes in a small dialog after every `:Tasks done` (`Not now` is the first choice, so a stray <CR> opens
+nothing), once after a whole stack finished in the dashboard, and as `next:` lines from the headless `done`. When
+there is nothing, it says which kind of nothing: "Nothing can be started. Still open: 4 for you, 6 blocked, 3 parked."
+-- never "all done" while work is only waiting.
+
+### 14c. How big is this -- works today
+
+```vim
+:Tasks estimate my-area
+:Tasks estimate --for=my-area/big-thing
+:Tasks estimate my-area --walk
+```
+
+"22 d from 17 of 20 (range 14-31 d) · value 61 · roi 2.8 · me 8.5 d / cdx 13.5 d / unclear 3 -- estimate from the scale,
+not a promise." The sum says how many tasks it is made of, the range puts every T-shirt size at both ends, the roi uses
+only tasks with both numbers, and quick wins (value 4+, effort S-) are named. `--walk` asks for the missing efforts and
+values one task at a time (`Skip` is the first choice, `Stop` keeps what you gave) and writes them in one batch.
+
 ### 14. What is worth the effort — works today
 
 ```vim
@@ -240,11 +283,8 @@ These are designed and sized; until they exist, the "instead" column is what to 
 
 | Scenario | What it will do | Instead, today |
 | --- | --- | --- |
-| **Next task after `done`** | Finishing a task opens a small non-blocking popup: the best ready task (freed by this one first, then same plan, same area, whole vault) with a key to jump to it; when nothing is startable it says what waits for you instead of "all done" | `:Tasks list --status=doing,decision`, then 3 |
 | **Plans close themselves** | A task's plan steps are ticked when it is done, a plan file closes when its last member is done, generated plan blocks in documents are refreshed | tick the steps by hand |
-| **Sums and quick wins** | sums of effort and value per area or plan, quick wins, always saying how many tasks have no estimate, and a helper that walks the unestimated tasks | `--sort=roi`, 14 |
-| **The AI queue** | `next --actor=cdx`: what an AI session may start now (not blocked, not waiting on you), ranked | `list --actor=cdx --sort=roi`, 15 |
-| **Plans** | `blocked_by` and a soft `after` become waves, a critical path, "what is ready", "which decision unlocks most" (`tasks plan`, `tasks next`) | 3 and 4 by hand |
+| **Soft edges and plan files** | a soft `after` ("should come after X", never an error), an `order` hint, `same-file` marks for tasks that touch the same file, plan files (`plan: <id>`) and a `## Plan` section per task | 14a with `blocked_by` only |
 | **Triage** | after a brain dump an AI proposes edges and groups, with one sentence of reasoning each; you accept one by one | 2 by hand |
 
 The design lives with the author's notes; the tasks for it are ordinary tasks in the author's vault.
@@ -260,6 +300,9 @@ The design lives with the author's notes; the tasks for it are ordinary tasks in
 | see the work | `:Tasks list [area] [filters] [--sort=]` |
 | see what is stale | `:Tasks list --stale=60`, `--stale=refs` |
 | finish | `:Tasks done <id> [done_in=...]` |
+| see what can be started, in what order | `:Tasks plan [area]`, `:Tasks list --ready` |
+| decide what to start next | `:Tasks next [area]` |
+| see how big something is | `:Tasks estimate [area]`, `--walk` to fill the gaps |
 | attach a file | `:Tasks attach <id> <file>` |
 | open or preview | `:Tasks open <id>`, `:Tasks preview <id>` |
 | regenerate / verify overviews | `:Tasks index [--check]` |
@@ -275,5 +318,8 @@ The design lives with the author's notes; the tasks for it are ordinary tasks in
 | an export would replace a file | "already exists (pass --force ...)" | choose another path or pass `--force` |
 | `TASKS.md` is your own file | "not a generated index": it is never overwritten | move it; the generated one gets the name |
 | a `blocked_by` id does not exist | `check`: `blocked-by-dangling` | correct the id (ids are `<area>/<slug>`) |
+| two tasks wait on each other | `check`: `blocked-by-cycle` (an error) naming the members; the plan leaves them out of the stages | remove one `blocked_by` |
+| a task waits on a `parked` task | `check` warns `blocked-by-parked`; the plan marks it stuck and `next` never offers it | un-park the blocker or drop the edge |
+| `next` says nothing can be started | "Still open: 4 for you, 6 blocked, 3 parked" -- not "all done" | decide what waits for you (`:Tasks list --actor=me`) |
 | no vault configured | "vault not found" | `setup({ vault = ... })` or `$TASKS_VAULT` |
 | `--stale=refs` is slow | it runs `git log` per repo, synchronously | narrow with `--status=` first |
