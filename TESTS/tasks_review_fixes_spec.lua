@@ -198,4 +198,36 @@ return function(H)
     "blocked",
     "the other session's change stays"
   )
+
+  -- ── file exports never replace an existing file without --force ─────────
+  local view = require("tasks_nvim.ui.view")
+  local precious = dir .. "/precious.md"
+  H.write(precious, "PRECIOUS")
+  local export_target = { kind = "file", path = precious }
+  has(view.overwrite_guard(export_target, false), "already exists")
+  eq(view.overwrite_guard(export_target, true), nil, "--force lifts the guard")
+  eq(
+    view.overwrite_guard({ kind = "file", path = dir .. "/new-export.md" }, false),
+    nil,
+    "a new file is fine"
+  )
+  eq(view.overwrite_guard({ kind = "buffer" }, false), nil, "other targets are never blocked")
+  local snap = assert(scan.find(shown.id, { root = root }))
+  local dok, dwhy = view.deliver({ snap }, export_target, { format = "md" })
+  eq(dok, false, "deliver refuses the existing file")
+  has(dwhy, "--force")
+  eq(H.read(precious), "PRECIOUS", "and leaves it as it was")
+  local dok2 = view.deliver({ snap }, export_target, { format = "md", force = true })
+  ok(dok2, "with force it writes")
+  ok(H.read(precious) ~= "PRECIOUS", "and the file changed")
+
+  -- ── confirm.shorten ─────────────────────────────────────────────────────
+  local confirm = require("tasks_nvim.ui.confirm")
+  eq(confirm.shorten("short", 10), "short")
+  eq(
+    vim.fn.strchars(confirm.shorten(string.rep("x", 400), 70)),
+    70,
+    "a long title is cut to the width"
+  )
+  ok(vim.endswith(confirm.shorten(string.rep("x", 400), 70), "…"), "and says so")
 end
