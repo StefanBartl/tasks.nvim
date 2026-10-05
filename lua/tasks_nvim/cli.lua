@@ -67,7 +67,9 @@ commands:
   check [<area>]                          rule check; exit 1 on any error
   template [--title=t] [--kind=k] [--prio=n] [--effort=e] [--tags=a,b] [--lang=de|en]
   ci [--strict] [--no-lint] [--md-lint=<file>]   CI gate: check + index --check + md_lint of the
-                                          generated indexes; exit 0/1 (--strict: warnings fail too)
+                                          generated indexes; exit 0/1 (--strict: warnings fail too).
+                                          md_lint is a script RUN from the vault (TOOLS/scripts/md_lint.lua): only on a vault you trust,
+                                          else --md-lint=<own copy> or --no-lint
   areas                                  list the vault's areas
   export [--top=N] [--no-links]           all-areas overview as Markdown on stdout (never written)
 

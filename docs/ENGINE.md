@@ -245,6 +245,12 @@ Three steps, exit `0` only when all pass (`1` otherwise), a short summary at the
 
 A pipeline for a vault repo runs `scripts/tasks-ci.lua` with `TASKS_VAULT` set (checkout this plugin and `lib.nvim` next to it).
 
+**Trust.** Step 3 *runs* `md_lint.lua` as Lua (`nvim --headless -u NONE -l <script> <files>`) with the rights of
+whoever runs the pipeline. With the default path that script comes out of the vault itself, so a pipeline that
+checks out a vault from a pull request or a fork runs the contributor's code. Run `ci` only on a vault whose
+`TOOLS/scripts/md_lint.lua` you trust, or point `--md-lint=<file>` at a copy outside the vault (and use
+`--no-lint` where neither holds).
+
 ## Headless CLI -- `scripts/tasks.lua`
 
 For sessions without a running Neovim (rule R12) and for CI. One

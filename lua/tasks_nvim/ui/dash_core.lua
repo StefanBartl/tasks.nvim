@@ -589,6 +589,7 @@ end
 ---@field field "status"|"prio"
 ---@field from string|integer|nil
 ---@field to string|integer|nil   # nil: the key is removed.
+---@field checked? boolean         # Planned from a displayed value: `apply_set` re-reads it before writing.
 ---@field patch table<string, any>
 
 ---Plan an `s` / `p` press: every task advances from ITS OWN current value, so
@@ -613,6 +614,7 @@ function M.plan_cycle(tasks, field)
       field = field,
       from = from,
       to = to,
+      checked = true,
       patch = { [field] = to == nil and mutate.REMOVE or to },
     }
   end
@@ -669,8 +671,25 @@ function M.apply_set(plan, opts)
   local res = { changed = {}, unchanged = {}, failed = {}, areas = {}, index_errors = {} }
   local changed_ids = {}
   for _, step in ipairs(plan) do
-    local r, err =
-      mutate.set(step.id, step.patch, { root = opts.root, index = false, today = opts.today })
+    -- The step was planned from the list on screen. Someone else (a Claude session, a `git pull`) may have
+    -- changed the task since: advancing the OLD value would overwrite their change with the wrong successor
+    -- (ERR-30). The current value is read again right before the write; a difference is a failure, not a write.
+    local current = scan.find(step.id, { root = opts.root })
+    local stale = step.checked == true
+      and current ~= nil
+      and tostring(current[step.field]) ~= tostring(step.from)
+    local r, err
+    if stale then
+      err = ("%s changed since the list was read (%s is now %s, not %s); press r to rescan"):format(
+        step.id,
+        step.field,
+        tostring(current[step.field]),
+        tostring(step.from)
+      )
+    else
+      r, err =
+        mutate.set(step.id, step.patch, { root = opts.root, index = false, today = opts.today })
+    end
     if not r then
       res.failed[#res.failed + 1] = { id = step.id, err = tostring(err) }
     elseif r.changed then

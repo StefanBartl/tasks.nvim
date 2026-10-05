@@ -9,6 +9,7 @@ return function(H)
   local model = require("tasks_nvim.model")
   local index = require("tasks_nvim.index")
   local mutate = require("tasks_nvim.mutate")
+  local scan = require("tasks_nvim.scan")
   local BS = string.char(92)
 
   ---Seconds `f` takes.
@@ -180,4 +181,21 @@ return function(H)
     vim.cmd("enew")
     ok(rok, "no E1513 escapes retarget_buffers: " .. tostring(rerr2))
   end
+
+  -- ── dashboard `s`: a step planned from a stale list does not overwrite a newer change ──
+  local core = require("tasks_nvim.ui.dash_core")
+  local shown = assert(mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "Stale step" })))
+  local snapshot = assert(scan.find(shown.id, { root = root }))
+  eq(snapshot.status, "open")
+  local plan = core.plan_cycle({ snapshot }, "status")
+  -- Meanwhile another session blocks the task.
+  assert(mutate.set(shown.id, { status = "blocked" }, o))
+  local applied = core.apply_set(plan, { root = root, today = F.TODAY })
+  eq(#applied.failed, 1, "the stale step is a failure")
+  has(applied.failed[1].err, "changed since the list was read")
+  eq(
+    assert(scan.find(shown.id, { root = root })).status,
+    "blocked",
+    "the other session's change stays"
+  )
 end

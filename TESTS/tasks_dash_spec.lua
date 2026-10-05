@@ -232,6 +232,7 @@ return function(H)
     field = "status",
     from = "doing",
     to = "decision",
+    checked = true,
     patch = { status = "decision" },
   })
   eq(plan[2].to, "parked", "each task advances from its own value")
