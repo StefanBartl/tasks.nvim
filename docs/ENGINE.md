@@ -293,6 +293,20 @@ The vault is `--vault=<dir>`, else `$TASKS_VAULT` (no built-in default path); `$
 extra areas. lib.nvim is looked up in `$LIB_NVIM_DIR`, `$LIB_NVIM_PATH`, `$REPOS_DIR/lib.nvim`,
 `.deps/lib.nvim`, a sibling checkout, then lazy.nvim's data folder.
 
+## Limits and what is refused
+
+A vault is data that other people and tools write, so the engine is strict about what it will load:
+
+- `fsio.read` loads a regular file of at most `fsio.MAX_READ_BYTES` (2 MiB); a directory, a FIFO, a
+  `/dev/zero` symlink or a bigger file is `nil, err`. A task file like that is an invalid task (`unreadable`),
+  not a stall. A Backlog README that cannot be read stops `done` instead of being treated as missing.
+- A frontmatter line, a title or a summary is never matched with a pattern that backtracks on whitespace or
+  backslashes; table cells are escaped in one linear pass (`fsio.md_cell`).
+- Filter options with no value (`--status=`) and a `--today` that is no date are usage errors, not filters
+  that match nothing.
+- `done` never removes a finished copy it did not create, and re-reads the task right before removing the
+  original; the dashboard re-reads a task before advancing `s` / `p`.
+
 ## Tests
 
 Specs live in `TESTS/` and run against a temporary fixture vault, never
