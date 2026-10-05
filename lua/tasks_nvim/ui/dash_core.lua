@@ -24,8 +24,11 @@
 --- Not its job: windows, keys, prompts, notifications (`tasks_dash`), the
 --- delivery itself (`tasks_view`), the rules (the engine).
 
+local estimate = require("tasks_nvim.estimate")
 local filter_opts = require("tasks_nvim.filter_opts")
 local model = require("tasks_nvim.model")
+local plan = require("tasks_nvim.plan")
+local plan_scope = require("tasks_nvim.plan_scope")
 local scan = require("tasks_nvim.scan")
 
 local M = {}
@@ -57,6 +60,7 @@ M.FILTER_DIMS = {
   "actor",
   "tag",
   "blocked",
+  "unestimated",
   "stale-refs",
 }
 
@@ -137,9 +141,36 @@ end
 ---joined into one string. Two loads with the same signature render the same
 ---list, so the dashboard skips the redraw (and keeps its preview) when a
 ---file-watcher rescan found nothing new.
+---What the dashboard knows about the list beyond the files: where every task stands (`plan.classify`, judged
+---against every open task of the vault), its OPEN blockers, and the sums of the list.
+---@class Tasks.DashReadiness
+---@field states table<string, Tasks.PlanState>
+---@field open_blockers table<string, string[]>
+---@field sums Tasks.Rollup
+
+---Work it out for the shown tasks. Fail-open: when the vault cannot be read the list simply shows no readiness
+---(the counts fall back to what the files say), it never breaks the dashboard.
 ---@param tasks Tasks.Task[]
+---@param root? string
+---@return Tasks.DashReadiness|nil
+function M.readiness(tasks, root)
+  local ok, index = pcall(plan_scope.index, root)
+  if not ok or not index then
+    return nil
+  end
+  local out = { states = {}, open_blockers = {}, sums = estimate.rollup(tasks) }
+  for _, t in ipairs(tasks) do
+    local state, open = plan.classify(t, index)
+    out.states[t.id] = state
+    out.open_blockers[t.id] = open
+  end
+  return out
+end
+
+---@param tasks Tasks.Task[]
+---@param ready? Tasks.DashReadiness
 ---@return string
-function M.signature(tasks)
+function M.signature(tasks, ready)
   local uv = vim.uv or vim.loop
   local out = {}
   for _, t in ipairs(tasks) do
@@ -147,7 +178,8 @@ function M.signature(tasks)
     out[#out + 1] = table.concat({
       t.path,
       M.search_text(t),
-      M.blocked_hint(t) or "",
+      M.blocked_hint(t, ready and ready.open_blockers[t.id]) or "",
+      ready and ready.states[t.id] or "",
       st and ("%d.%d"):format(st.mtime.sec, st.mtime.nsec) or "?",
     }, "\t")
   end
@@ -193,23 +225,27 @@ function M.widths(tasks)
   return w
 end
 
----The `<- blocked_by` hint of a task: the first blocker, `(+n)` for more.
+---The `<- blocked_by` hint of a task: the first blocker, `(+n)` for more. With `open` (the blockers that are still
+---open) only those count: a blocker that is finished is no reason to wait.
 ---@param t Tasks.Task
+---@param open? string[]
 ---@return string|nil
-function M.blocked_hint(t)
-  if #t.blocked_by == 0 then
+function M.blocked_hint(t, open)
+  local blockers = open or t.blocked_by
+  if #blockers == 0 then
     return nil
   end
-  local more = #t.blocked_by > 1 and (" (+%d)"):format(#t.blocked_by - 1) or ""
-  return "\226\134\144 " .. t.blocked_by[1] .. more -- "←"
+  local more = #blockers > 1 and (" (+%d)"):format(#blockers - 1) or ""
+  return "\226\134\144 " .. blockers[1] .. more -- "←"
 end
 
 ---One list line as `{ text, highlight }` chunks: prio, status, effort, area,
 ---title, blocker hint. The same shape `Snacks.picker` formats return.
 ---@param t Tasks.Task
 ---@param w { area: integer, effort: integer, status: integer }
+---@param ready? Tasks.DashReadiness
 ---@return { [1]: string, [2]?: string }[] parts
-function M.parts(t, w)
+function M.parts(t, w, ready)
   local parts = {
     { t.prio and ("P%d"):format(t.prio) or "--", M.PRIO_HL[t.prio or 0] or "Comment" },
     { " " },
@@ -231,7 +267,7 @@ function M.parts(t, w)
   if actor then
     parts[#parts + 1] = { "  [" .. actor .. "]", M.ACTOR_HL[actor] or "Comment" }
   end
-  local hint = M.blocked_hint(t)
+  local hint = M.blocked_hint(t, ready and ready.open_blockers[t.id])
   if hint then
     parts[#parts + 1] = { "  " .. hint, "Comment" }
   end
@@ -241,10 +277,11 @@ end
 ---The plain text of `parts`.
 ---@param t Tasks.Task
 ---@param w { area: integer, effort: integer, status: integer }
+---@param ready? Tasks.DashReadiness
 ---@return string
-function M.line(t, w)
+function M.line(t, w, ready)
   local out = {}
-  for _, p in ipairs(M.parts(t, w)) do
+  for _, p in ipairs(M.parts(t, w, ready)) do
     out[#out + 1] = p[1]
   end
   return table.concat(out)
@@ -273,13 +310,30 @@ end
 
 ---@param tasks Tasks.Task[]
 ---@return { open: integer, decision: integer, blocked: integer }
-function M.counts(tasks)
-  local c = { open = #tasks, decision = 0, blocked = 0 }
+function M.counts(tasks, ready)
+  local c = { open = #tasks, decision = 0, blocked = 0, ready = nil }
+  if ready then
+    c.ready = 0
+  end
   for _, t in ipairs(tasks) do
     if t.status == "decision" then
       c.decision = c.decision + 1
     end
-    if t.status == "blocked" or #t.blocked_by > 0 then
+    local state = ready and ready.states[t.id]
+    if state then
+      -- Judged by the open blockers, not by the field: a task whose blockers are all finished is not blocked
+      -- (a status that still says `blocked` is one `check` reports); a `blocked` task with no blocker named is.
+      if
+        state == "waiting"
+        or state == "stuck"
+        or (t.status == "blocked" and #t.blocked_by == 0)
+      then
+        c.blocked = c.blocked + 1
+      end
+      if state == "ready" or state == "decision" then
+        c.ready = (c.ready or 0) + 1
+      end
+    elseif t.status == "blocked" or #t.blocked_by > 0 then
       c.blocked = c.blocked + 1
     end
   end
@@ -378,6 +432,9 @@ function M.chips(f)
   if f.blocked then
     chips[#chips + 1] = "blocked"
   end
+  if f.unestimated then
+    chips[#chips + 1] = "unestimated"
+  end
   return chips
 end
 
@@ -392,15 +449,28 @@ end
 ---@param f Tasks.Filter|nil
 ---@param area string|nil
 ---@param sort string|nil  a non-default order adds a chip
+---@param ready? Tasks.DashReadiness  adds the number of tasks that can be started and the sums of the list
 ---@return string
-function M.header(tasks, f, area, sort)
-  local c = M.counts(tasks)
+function M.header(tasks, f, area, sort, ready)
+  local c = M.counts(tasks, ready)
   local head = ("Tasks%s \194\183 %d open \194\183 %d decision \194\183 %d blocked"):format(
     area and (" (" .. area .. ")") or "",
     c.open,
     c.decision,
     c.blocked
   )
+  if c.ready then
+    head = head .. (" \194\183 %d ready"):format(c.ready)
+  end
+  if ready and ready.sums.n_with_effort > 0 then
+    -- the sum of the SHOWN tasks, always with how many of them it is made of
+    head = head
+      .. (" \194\183 %s d (%d/%d)"):format(
+        estimate.fmt_days(ready.sums.days),
+        ready.sums.n_with_effort,
+        ready.sums.n
+      )
+  end
   local chips = M.chips(f)
   local sort_chip = M.sort_chip(sort)
   if sort_chip then
@@ -457,6 +527,8 @@ function M.set_dim(f, dim, value)
     end
   elseif dim == "blocked" then
     out.blocked = value and true or nil
+  elseif dim == "unestimated" then
+    out.unestimated = value and true or nil
   elseif dim == "stale-refs" then
     out.stale_refs = value and true or nil
   elseif
@@ -558,6 +630,9 @@ function M.filter_to_options(f)
   if f.blocked then
     o.blocked = true
   end
+  if f.unestimated then
+    o.unestimated = true
+  end
   return o
 end
 
@@ -582,6 +657,7 @@ function M.filter_from_stored(opts)
     stale = (type(opts.stale) == "string" or type(opts.stale) == "number") and opts.stale or nil,
     stale_refs = opts.stale_refs == true,
     blocked = opts.blocked == true,
+    unestimated = opts.unestimated == true,
   })
   return f or {}
 end
@@ -611,11 +687,11 @@ end
 ---Run a plan through the engine's batch (`tasks_nvim.batch.set_many`): one write per task, ONE index
 ---regeneration per area that changed, a failing task does not stop the others. A step planned from a displayed
 ---value is refused when the task no longer has it.
----@param plan Tasks.BatchSetStep[]
+---@param steps Tasks.BatchSetStep[]
 ---@param opts { root: string, today?: string }
 ---@return Tasks.DashSetResult
-function M.apply_set(plan, opts)
-  return require("tasks_nvim.batch").set_many(plan, opts)
+function M.apply_set(steps, opts)
+  return require("tasks_nvim.batch").set_many(steps, opts)
 end
 
 ---One summary for the whole batch: the level and the text (first line the

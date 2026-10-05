@@ -211,6 +211,55 @@ return function(H)
     has(shown[1].msg, "Done: " .. base.id)
     has(shown[1].msg, "freed: ")
 
+    -- ── dashboard core: counts by the open blockers, the header, the hint ──
+    local core = require("tasks_nvim.ui.dash_core")
+    local gate = assert(
+      mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "Dash gate", effort = "S" }))
+    )
+    local behind = assert(
+      mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "Dash behind", effort = "M" }))
+    )
+    local freed_one =
+      assert(mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "Dash freed" })))
+    local old_gate =
+      assert(mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "Dash old gate" })))
+    assert(mutate.set(behind.id, { blocked_by = "[" .. gate.id .. "]" }, o))
+    assert(mutate.set(freed_one.id, { blocked_by = "[" .. old_gate.id .. "]" }, o))
+    assert(
+      require("tasks_nvim.done_flow").run(
+        old_gate.id,
+        vim.tbl_extend("force", o, { pick_next = false })
+      )
+    )
+    local open_now = assert(scan.open_tasks({ root = root, area = "lib.nvim" }))
+    local ready = assert(core.readiness(open_now, root))
+    eq(ready.states[gate.id], "ready")
+    eq(ready.states[behind.id], "waiting")
+    eq(ready.states[freed_one.id], "ready", "its only blocker is finished: no longer blocked")
+    eq(ready.open_blockers[freed_one.id], {}, "and no hint about a blocker that is finished")
+    eq(core.blocked_hint(open_now[1], {}), nil)
+    local counts = core.counts(open_now, ready)
+    ok(counts.blocked >= 1 and counts.ready >= 2)
+    local plain_counts = core.counts(open_now)
+    ok(
+      plain_counts.blocked >= counts.blocked,
+      "without readiness the old field-based count stays (a finished blocker still counts)"
+    )
+    eq(plain_counts.ready, nil)
+    local header = core.header(open_now, {}, "lib.nvim", nil, ready)
+    has(header, " ready")
+    has(header, " d (", "the sum of the shown tasks, with how many of them it is made of")
+    lacks(core.header(open_now, {}, "lib.nvim", nil), " ready", "no readiness, no ready count")
+    has(core.line(open_now[1], { area = 10, effort = 3, status = 6 }, ready), "Cmd")
+    ok(vim.tbl_contains(core.FILTER_DIMS, "unestimated"))
+    eq(core.chips(core.set_dim({}, "unestimated", true)), { "unestimated" })
+    eq(core.filter_to_options(core.set_dim({}, "unestimated", true)), { unestimated = true })
+    eq(core.filter_from_stored({ unestimated = true }).unestimated, true)
+    ok(
+      core.signature(open_now, ready) ~= core.signature(open_now),
+      "readiness is part of what a refresh compares"
+    )
+
     -- headless / popup off: the same text as a plain message
     local quiet =
       assert(mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "Cmd quiet" })))

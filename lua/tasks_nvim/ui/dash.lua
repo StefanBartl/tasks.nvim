@@ -74,6 +74,7 @@ local MAX_CONFIRM_LINES = 8
 ---@field widths { area: integer, effort: integer, status: integer }
 ---@field persist boolean
 ---@field signature? string                          # `core.signature` of `shown`.
+---@field readiness? Tasks.DashReadiness              # Where each shown task stands, and the sums (nil when the vault could not be read).
 ---@field preload? Tasks.DashLoad        # A load the next `reload` uses instead of scanning again.
 ---@field watch? boolean                             # Live refresh for this dashboard.
 
@@ -223,7 +224,8 @@ local function reload(state)
     end
   end
   state.widths = core.widths(state.shown)
-  state.signature = core.signature(state.shown)
+  state.readiness = core.readiness(state.shown, state.root)
+  state.signature = core.signature(state.shown, state.readiness)
   return state.shown
 end
 
@@ -249,7 +251,7 @@ end
 ---@param state Tasks.DashState
 ---@return string
 local function title_of(state)
-  return core.header(state.shown, state.filter, state.area, state.sort)
+  return core.header(state.shown, state.filter, state.area, state.sort, state.readiness)
 end
 
 ---@param tasks Tasks.Task[]
@@ -384,6 +386,12 @@ local function set_filter(state, after)
     end
     if dim == "blocked" then
       state.filter = core.set_dim(state.filter, "blocked", not state.filter.blocked or nil)
+      persist(state)
+      after()
+      return
+    end
+    if dim == "unestimated" then
+      state.filter = core.set_dim(state.filter, "unestimated", not state.filter.unestimated or nil)
       persist(state)
       after()
       return
@@ -670,7 +678,9 @@ function M.refresh_if_changed(state, picker)
     return false
   end
   local res = load_state(state)
-  if not res or core.signature(res.tasks) == state.signature then
+  if
+    not res or core.signature(res.tasks, core.readiness(res.tasks, state.root)) == state.signature
+  then
     return false
   end
   state.preload = res
@@ -903,7 +913,7 @@ local function open_snacks(Snacks, state)
       return items
     end,
     format = function(item)
-      return core.parts(item.task, state.widths)
+      return core.parts(item.task, state.widths, state.readiness)
     end,
     preview = "file",
     confirm = "tasks_open",
@@ -947,7 +957,7 @@ local function open_select(state)
   vim.ui.select(shown, {
     prompt = title_of(state),
     format_item = function(t)
-      return core.line(t, state.widths)
+      return core.line(t, state.widths, state.readiness)
     end,
   }, function(task)
     if not task then
