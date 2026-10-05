@@ -181,11 +181,28 @@ function M.open(opts)
     end
   end
   map({ "n", "i" }, "<C-s>", submit, "Task form: submit")
-  local function cancel()
+  local function leave()
     M.close(buf)
     if opts.on_cancel then
       opts.on_cancel()
     end
+  end
+  -- A form with typed text is not thrown away by one `q`: it asks first (the buffer is marked unmodified
+  -- when the template is set, so `modified` means the user changed something).
+  local function cancel()
+    if not (vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].modified) then
+      leave()
+      return
+    end
+    require("tasks_nvim.ui.confirm").yesno(
+      "Discard what you typed in the task form?",
+      "discard",
+      function(yes)
+        if yes then
+          leave()
+        end
+      end
+    )
   end
   map("n", "q", cancel, "Task form: cancel")
   map({ "n", "i" }, "<C-q>", cancel, "Task form: cancel")

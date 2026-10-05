@@ -38,7 +38,10 @@ Details of every verb: [COMMANDS.md](COMMANDS.md).
 | `gb` / `gr` | Backlog picker / ROADMAP of the area under the cursor |
 | `g?` | help |
 
-In the input window the same actions are on Alt: `<M-s> <M-p> <M-d> <M-f> <M-o> <M-e> <M-r> <M-b> <M-m> <M-v> <M-?>`.
+Counts are not used: `s`, `p` and `o` advance one step per press (mark several tasks with `<Tab>` instead).
+
+In the input window the same actions are on Alt (these shadow snacks.nvim's own `<M-d>` inspect, `<M-f>` follow,
+`<M-r>` regex, `<M-m>` maximize and `<M-p>` preview toggles there; the keys are not configurable yet): `<M-s> <M-p> <M-d> <M-f> <M-o> <M-e> <M-r> <M-b> <M-m> <M-v> <M-?>`.
 
 ## Form (`:Tasks new` without arguments)
 
