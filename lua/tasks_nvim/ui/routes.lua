@@ -132,15 +132,13 @@ function M.register_types()
       if id_cache.ids and id_cache.root == root and now - id_cache.at < COMPLETE_TTL * 1000 then
         return prefix_ci(id_cache.ids, arg_lead)
       end
-      local ok, tasks = pcall(scan.all, { ttl_seconds = COMPLETE_TTL })
-      if not ok or not tasks then
+      local ok, open = pcall(scan.open_tasks, { ttl_seconds = COMPLETE_TTL })
+      if not ok or not open then
         return {}
       end
       local ids = {}
-      for _, t in ipairs(tasks) do
-        if model.is_open_status(t.status) then
-          ids[#ids + 1] = t.id
-        end
+      for _, t in ipairs(open) do
+        ids[#ids + 1] = t.id
       end
       table.sort(ids)
       id_cache = { ids = ids, root = root, at = now }

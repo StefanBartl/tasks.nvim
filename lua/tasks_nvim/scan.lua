@@ -207,6 +207,34 @@ function M.all(opts)
   return all, all_errors
 end
 
+---The open tasks, the one list every front end starts from: one area (`opts.area`) or all of them, with
+---the tasks whose status is not an open one (a `done` file that is still in `ROADMAP/`) counted, not listed.
+---@param opts? Tasks.ScanOpts & { area?: string }
+---@return Tasks.Task[]|nil open
+---@return integer|string skipped_or_err  the number of tasks left out, or the error when `open` is nil
+---@return string[]|nil errors  directories that could not be listed (the result is then incomplete)
+function M.open_tasks(opts)
+  opts = opts or {}
+  local tasks, errors
+  if opts.area then
+    tasks, errors = M.area(opts.area, opts)
+  else
+    tasks, errors = M.all(opts)
+  end
+  if not tasks then
+    return nil, tostring(errors), nil
+  end
+  local open, skipped = {}, 0
+  for _, t in ipairs(tasks) do
+    if model.is_open_status(t.status) then
+      open[#open + 1] = t
+    else
+      skipped = skipped + 1
+    end
+  end
+  return open, skipped, type(errors) == "table" and errors or {}
+end
+
 ---Backlog files of one area that are task files (frontmatter with `status`).
 ---@param area string
 ---@param opts? Tasks.ScanOpts

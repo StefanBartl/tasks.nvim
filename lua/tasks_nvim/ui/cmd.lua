@@ -280,27 +280,13 @@ function M.list(ctx)
   if area == "all" then
     area = nil
   end
-  local tasks, errors
-  if area then
-    tasks, errors = scan.area(area, { root = root })
-  else
-    tasks, errors = scan.all({ root = root })
-  end
-  if not tasks then
-    notify.error(tostring(errors))
+  local open, skipped, errors = scan.open_tasks({ root = root, area = area })
+  if not open then
+    notify.error(tostring(skipped))
     return
   end
-  if type(errors) == "table" and #errors > 0 then
+  if #errors > 0 then
     notify.warn("cannot read directory " .. table.concat(errors, ", "))
-  end
-
-  local open, skipped = {}, 0
-  for _, t in ipairs(tasks) do
-    if model.is_open_status(t.status) then
-      open[#open + 1] = t
-    else
-      skipped = skipped + 1
-    end
   end
   local filtered, stale_report = model.filter(open, filter)
   local shown = model.sort(filtered, order)

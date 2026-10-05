@@ -283,7 +283,7 @@ function commands.list(ctx)
     return 2
   end
 
-  local tasks, errors
+  local area
   if args.pos[1] and not args.opt.all then
     local root, rerr = vault.root(eo)
     if not root then
@@ -294,22 +294,12 @@ function commands.list(ctx)
       ctx.warn("error: unknown area: " .. args.pos[1])
       return 1
     end
-    tasks, errors = scan.area(args.pos[1], eo)
-  else
-    tasks, errors = scan.all(eo)
+    area = args.pos[1]
   end
-  if not tasks then
-    ctx.warn("error: " .. tostring(errors))
+  local open, skipped, errors = scan.open_tasks(vim.tbl_extend("force", eo, { area = area }))
+  if not open then
+    ctx.warn("error: " .. tostring(skipped))
     return 1
-  end
-
-  local open, skipped = {}, 0
-  for _, t in ipairs(tasks) do
-    if model.is_open_status(t.status) then
-      open[#open + 1] = t
-    else
-      skipped = skipped + 1
-    end
   end
   -- `--stale=refs`: the second result of `model.filter` is the report that names the changed files.
   local filtered, report = model.filter(open, filter)

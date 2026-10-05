@@ -24,11 +24,9 @@
 --- Not its job: windows, keys, prompts, notifications (`tasks_dash`), the
 --- delivery itself (`tasks_view`), the rules (the engine).
 
-local index = require("tasks_nvim.index")
 local model = require("tasks_nvim.model")
 local mutate = require("tasks_nvim.mutate")
 local scan = require("tasks_nvim.scan")
-local vault = require("tasks_nvim.vault")
 
 local M = {}
 
@@ -110,29 +108,16 @@ end
 ---@return Tasks.DashLoad|nil result
 ---@return string|nil err
 function M.load(opts)
-  local tasks, errors
-  if opts.area then
-    tasks, errors = scan.area(opts.area, { root = opts.root })
-  else
-    tasks, errors = scan.all({ root = opts.root })
-  end
-  if not tasks then
-    return nil, tostring(errors)
-  end
-  local open, skipped = {}, 0
-  for _, t in ipairs(tasks) do
-    if model.is_open_status(t.status) then
-      open[#open + 1] = t
-    else
-      skipped = skipped + 1
-    end
+  local open, skipped, errors = scan.open_tasks({ root = opts.root, area = opts.area })
+  if not open then
+    return nil, tostring(skipped)
   end
   local filtered, stale_report = model.filter(open, M.with_root(opts.filter, opts.root))
   return {
     tasks = model.sort(filtered, opts.sort, { scores = opts.scores }),
     open = #open,
     skipped = skipped,
-    errors = type(errors) == "table" and errors or {},
+    errors = errors,
     stale_report = stale_report,
   },
     nil
@@ -621,85 +606,24 @@ end
 
 -- ── applying ─────────────────────────────────────────────────────────────────
 
----@param ids string[]
----@return string[] areas  sorted, distinct
-local function areas_of(ids)
-  local seen, out = {}, {}
-  for _, id in ipairs(ids) do
-    local area = vault.parse_id(id)
-    if area and not seen[area] then
-      seen[area] = true
-      out[#out + 1] = area
-    end
-  end
-  table.sort(out)
-  return out
-end
+---@alias Tasks.DashSetResult Tasks.BatchSetResult
 
----Regenerate the index of each area once.
----@param areas string[]
----@param root string
----@return string[] errors
-local function reindex(areas, root)
-  local errors = {}
-  for _, area in ipairs(areas) do
-    local res, err = index.write_area(area, { root = root })
-    if not res then
-      errors[#errors + 1] = ("%s: %s"):format(area, tostring(err))
-    end
-  end
-  return errors
-end
-
----@class Tasks.DashSetResult
----@field changed { id: string, path: string }[]
----@field unchanged string[]
----@field failed { id: string, err: string }[]
----@field areas string[]            # Areas whose index was regenerated (those with a change).
----@field index_errors string[]
-
----Run a cycle plan: one `mutate.set` per task without its own index write,
----then ONE index regeneration per area that changed. A failing task does not
----stop the others.
+---Run a cycle plan through the engine's batch (`tasks_nvim.batch.set_many`): one write per task, ONE index
+---regeneration per area that changed, a failing task does not stop the others. A step planned from a displayed
+---value is refused when the task no longer has it.
 ---@param plan Tasks.DashStep[]
 ---@param opts { root: string, today?: string }
 ---@return Tasks.DashSetResult
 function M.apply_set(plan, opts)
-  ---@type Tasks.DashSetResult
-  local res = { changed = {}, unchanged = {}, failed = {}, areas = {}, index_errors = {} }
-  local changed_ids = {}
+  local steps = {}
   for _, step in ipairs(plan) do
-    -- The step was planned from the list on screen. Someone else (a Claude session, a `git pull`) may have
-    -- changed the task since: advancing the OLD value would overwrite their change with the wrong successor
-    -- (ERR-30). The current value is read again right before the write; a difference is a failure, not a write.
-    local current = scan.find(step.id, { root = opts.root })
-    local stale = step.checked == true
-      and current ~= nil
-      and tostring(current[step.field]) ~= tostring(step.from)
-    local r, err
-    if stale and current then
-      err = ("%s changed since the list was read (%s is now %s, not %s); press r to rescan"):format(
-        step.id,
-        step.field,
-        tostring(current[step.field]),
-        tostring(step.from)
-      )
-    else
-      r, err =
-        mutate.set(step.id, step.patch, { root = opts.root, index = false, today = opts.today })
-    end
-    if not r then
-      res.failed[#res.failed + 1] = { id = step.id, err = tostring(err) }
-    elseif r.changed then
-      res.changed[#res.changed + 1] = { id = r.id, path = r.path }
-      changed_ids[#changed_ids + 1] = r.id
-    else
-      res.unchanged[#res.unchanged + 1] = r.id
-    end
+    steps[#steps + 1] = {
+      id = step.id,
+      patch = step.patch,
+      expect = step.checked and { key = step.field, value = step.from } or nil,
+    }
   end
-  res.areas = areas_of(changed_ids)
-  res.index_errors = reindex(res.areas, opts.root)
-  return res
+  return require("tasks_nvim.batch").set_many(steps, opts)
 end
 
 ---One summary for the whole batch: the level and the text (first line the
@@ -732,37 +656,14 @@ function M.describe_set(field, res)
   return level, table.concat(lines, "\n")
 end
 
----@class Tasks.DashDoneResult
----@field done { id: string, from: string, to: string, readme?: string }[]
----@field already string[]
----@field failed { id: string, err: string }[]
----@field areas string[]
----@field index_errors string[]
+---@alias Tasks.DashDoneResult Tasks.BatchDoneResult
 
----Finish tasks (rule R6) one after the other, index regenerated once per area
----at the end.
+---Finish tasks (rule R6) through the engine's batch (`tasks_nvim.batch.done_many`).
 ---@param ids string[]
 ---@param opts { root: string, today?: string, date?: string }
 ---@return Tasks.DashDoneResult
 function M.apply_done(ids, opts)
-  ---@type Tasks.DashDoneResult
-  local res = { done = {}, already = {}, failed = {}, areas = {}, index_errors = {} }
-  local moved = {}
-  for _, id in ipairs(ids) do
-    local r, err =
-      mutate.done(id, { root = opts.root, index = false, today = opts.today, date = opts.date })
-    if not r then
-      res.failed[#res.failed + 1] = { id = id, err = tostring(err) }
-    elseif r.already then
-      res.already[#res.already + 1] = id
-    else
-      res.done[#res.done + 1] = { id = id, from = r.from, to = r.to, readme = r.readme }
-      moved[#moved + 1] = id
-    end
-  end
-  res.areas = areas_of(moved)
-  res.index_errors = reindex(res.areas, opts.root)
-  return res
+  return require("tasks_nvim.batch").done_many(ids, opts)
 end
 
 ---@param res Tasks.DashDoneResult

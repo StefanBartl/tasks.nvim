@@ -17,6 +17,7 @@
 ---  - `staleness`  `--stale=refs`: tasks whose referenced files changed since `updated`
 ---  - `frecency`  the visit score behind `--sort=frecency` (pure scoring, small state file)
 ---  - `ci`     the vault gate for pipelines (check + index --check + md_lint)
+---  - `batch`  several `set` / `done` in one go, the index regenerated once per area
 ---  - `cli`    the command-line front end
 ---
 --- Not its job: prompts, pickers, notifications, key bindings.
@@ -54,6 +55,7 @@ local SUBMODULES = {
   frecency = true,
   ci = true,
   cli = true,
+  batch = true,
 }
 
 return setmetatable(M, {
