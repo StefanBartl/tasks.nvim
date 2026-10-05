@@ -10,6 +10,9 @@
 
 local model = require("tasks_nvim.model")
 local plan = require("tasks_nvim.plan")
+local plan_view = require("tasks_nvim.plan_view")
+local fsio = require("tasks_nvim.fsio")
+local vault = require("tasks_nvim.vault")
 local plans = require("tasks_nvim.plans")
 local scan = require("tasks_nvim.scan")
 
@@ -77,6 +80,101 @@ function M.filter_readiness(tasks, which, root)
     end
   end
   return kept, nil
+end
+
+---What a block name stands for: an area, an open plan's slug, `all`, or `for-<slug>` (the open task of that slug).
+---`nil, reason, finished` when it names nothing that is open; `finished` is true when it names something that was
+---finished (a closed plan's block is history: it is left as it is, and nothing is said about it).
+---@param key string
+---@param root string
+---@return Tasks.PlanScopeOpts|nil opts
+---@return string|nil reason
+---@return boolean|nil finished
+function M.resolve_block(key, root)
+  if key == "all" then
+    return { root = root }, nil
+  end
+  if vault.has_area(root, key) then
+    return { root = root, area = key }, nil
+  end
+  for _, file in ipairs(plans.all({ root = root }) or {}) do
+    if file.slug == key then
+      return { root = root, plan_id = file.id }, nil
+    end
+  end
+  local slug = key:match("^for%-(.+)$")
+  if slug then
+    for _, t in ipairs(scan.open_tasks({ root = root }) or {}) do
+      if t.slug == slug then
+        return { root = root, for_id = t.id }, nil
+      end
+    end
+  end
+  for _, area in ipairs(vault.areas(root)) do
+    if scan.find_done(area.name .. "/" .. (slug or key), { root = root }) then
+      return nil, ("the block `%s` names something that is finished"):format(key), true
+    end
+  end
+  return nil, ("the block `%s` names no area, open plan or open task"):format(key), false
+end
+
+---Refresh every marker block of a document: only the blocks change, the rest of the file (and its line endings)
+---stays. Nothing is written when nothing changed.
+---`closed` names plans finished a moment ago (block name -> text): their block gets that text as its last state
+---instead of being left showing tasks that are done.
+---@param path string
+---@param root string
+---@param closed? table<string, string>
+---@return { changed: boolean, refreshed: string[], skipped: { scope: string, reason: string }[] }|nil result
+---@return string|nil err
+function M.refresh_document(path, root, closed)
+  local text, err = fsio.read(path)
+  if not text then
+    return nil, ("cannot read %s: %s"):format(path, tostring(err))
+  end
+  local result = { changed = false, refreshed = {}, skipped = {} }
+  local fresh = text
+  for _, key in ipairs(plan_view.block_scopes(text)) do
+    local scope_opts, reason, finished = M.resolve_block(key, root)
+    local scope = scope_opts and M.load(scope_opts)
+    if closed and closed[key] then
+      local replaced, _, changed = plan_view.replace_block(fresh, key, closed[key])
+      if replaced then
+        fresh = replaced
+        if changed then
+          result.refreshed[#result.refreshed + 1] = key
+        end
+      end
+    elseif finished then
+      -- history: left exactly as it is
+    elseif not scope then
+      result.skipped[#result.skipped + 1] = { scope = key, reason = reason or "could not be read" }
+    else
+      local body = plan_view.markdown(scope.plan, {
+        title = scope.title,
+        done = scope.done,
+        plan_file = scope.plan_file,
+        block = true,
+      })
+      local replaced, rerr, changed = plan_view.replace_block(fresh, key, body)
+      if not replaced then
+        result.skipped[#result.skipped + 1] = { scope = key, reason = tostring(rerr) }
+      else
+        fresh = replaced
+        if changed then
+          result.refreshed[#result.refreshed + 1] = key
+        end
+      end
+    end
+  end
+  if fresh ~= text then
+    local ok, werr = fsio.write_atomic(path, fresh)
+    if not ok then
+      return nil, ("cannot write %s: %s"):format(path, tostring(werr))
+    end
+    result.changed = true
+  end
+  return result, nil
 end
 
 ---@param opts Tasks.PlanScopeOpts

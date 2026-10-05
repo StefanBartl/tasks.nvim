@@ -1219,7 +1219,7 @@ end
 ---What a finish leaves to say: the tasks that still read `blocked` although this was their last blocker (offered to be
 ---set to open, with a question, never silently), then the next task. Needs somebody to answer; a headless session
 ---only gets the next-task message.
----@param flow Tasks.DoneFlow
+---@param flow { next?: Tasks.NextPick, plans_closed?: string[], plan_summaries?: table<string, table> }
 ---@param id string
 function M.after_finish(flow, id)
   local nxt = flow.next
@@ -1227,7 +1227,7 @@ function M.after_finish(flow, id)
     return
   end
   local show = function()
-    require("tasks_nvim.ui.next_popup").show(nxt, id)
+    require("tasks_nvim.ui.next_popup").show(nxt, id, flow)
   end
   if #nxt.freed_blocked > 0 and #vim.api.nvim_list_uis() > 0 then
     local names = table.concat(nxt.freed_blocked, "\n")
@@ -1277,6 +1277,14 @@ local function finish_task(id, opts)
   end
   local root = vault.root()
   notify.info(("done %s -> %s"):format(id, root and rel(res.to, root) or res.to))
+  if flow.steps_ticked > 0 then
+    notify.info(
+      ("%d plan step%s ticked off"):format(flow.steps_ticked, flow.steps_ticked == 1 and "" or "s")
+    )
+  end
+  for _, doc in ipairs(flow.docs_refreshed) do
+    notify.info("plan block refreshed in " .. doc)
+  end
   for _, note in ipairs(flow.notes) do
     notify.warn(("%s: %s"):format(id, note))
   end

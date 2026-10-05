@@ -23,6 +23,7 @@ local SCHEMA = {
   staleness = { git_timeout_ms = "posint", budget_ms = "posint", repo_bases = "string_list" },
   ci = { lint_timeout_ms = "posint", trust_vault_lint = "boolean" },
   next = { popup = "boolean", cdx_hint = "boolean" },
+  chain = { marker_docs = "string_list" },
   keys = { dashboard = "keymap", dashboard_input = "keymap", form = "keymap" },
 }
 

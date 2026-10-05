@@ -42,10 +42,11 @@ end
 ---Show the answer. Returns whether a dialog was opened (otherwise a message was shown).
 ---@param pick Tasks.NextPick
 ---@param done_id? string   # The finished task (a heading line); nil for a plain "what next?".
+---@param flow? { plans_closed?: string[], plan_summaries?: table<string, table> }  # Plans the finish closed: a line each.
 ---@return boolean dialog
-function M.show(pick, done_id)
+function M.show(pick, done_id, flow)
   local cfg = require("tasks_nvim.config").get().next
-  local lines = plan_view.next_message(pick, done_id)
+  local lines = plan_view.next_message(pick, done_id, flow)
   if not cfg.cdx_hint then
     local kept = {}
     for _, l in ipairs(lines) do

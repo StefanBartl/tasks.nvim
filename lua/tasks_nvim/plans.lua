@@ -254,6 +254,51 @@ function M.members(plan_id, tasks)
   return out
 end
 
+---@class Tasks.PlanSummary
+---@field title? string
+---@field tasks integer
+---@field days number
+---@field n_without_effort integer
+---@field days_taken? integer
+
+---What a finished plan amounted to, for the message: its finished member tasks (across the areas it lists, else every
+---area), their effort on the scale and the days from `created` to `date`.
+---@param file Tasks.PlanFile
+---@param opts? { root?: string, date?: string }
+---@return Tasks.PlanSummary
+function M.summary(file, opts)
+  opts = opts or {}
+  local root = vault.root(opts)
+  local areas = {}
+  if #file.areas > 0 then
+    areas = vim.list_extend({ file.area }, file.areas)
+  elseif root then
+    for _, a in ipairs(vault.areas(root)) do
+      areas[#areas + 1] = a.name
+    end
+  end
+  local seen, out = {}, { tasks = 0, days = 0, n_without_effort = 0 }
+  for _, area in ipairs(areas) do
+    if not seen[area] then
+      seen[area] = true
+      for _, t in ipairs(scan.backlog(area, { root = root }) or {}) do
+        if t.plan == file.id then
+          out.tasks = out.tasks + 1
+          local days = model.effort_days(t.effort)
+          if days then
+            out.days = out.days + days
+          else
+            out.n_without_effort = out.n_without_effort + 1
+          end
+        end
+      end
+    end
+  end
+  local from = file.created and model.days_between(file.created, opts.date or model.today())
+  out.days_taken = from
+  return out
+end
+
 ---@class Tasks.NewPlanOpts
 ---@field root? string
 ---@field title string

@@ -407,6 +407,11 @@ return function(H)
           areas = {},
           index_errors = {},
           freed = {},
+          steps_ticked = 0,
+          plans_closed = {},
+          plan_summaries = {},
+          docs_refreshed = {},
+          notes = {},
         })
       ),
       "error"

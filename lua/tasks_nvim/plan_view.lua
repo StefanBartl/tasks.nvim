@@ -478,11 +478,38 @@ function M.empty_text(empty)
     .. "."
 end
 
+---The sentence for a plan that was just finished.
+---@param id string
+---@param summary? Tasks.PlanSummary
+---@return string
+function M.plan_closed_text(id, summary)
+  local text = "Plan " .. fsio.clean(id) .. " is done"
+  if summary then
+    local facts = { ("%d task%s"):format(summary.tasks, summary.tasks == 1 and "" or "s") }
+    if summary.days > 0 then
+      local days = "estimate " .. estimate.fmt_days(summary.days) .. " d"
+      if summary.n_without_effort > 0 then
+        days = days .. (" (%d without effort)"):format(summary.n_without_effort)
+      end
+      facts[#facts + 1] = days
+    end
+    if summary.days_taken and summary.days_taken >= 0 then
+      facts[#facts + 1] = ("finished in %d day%s"):format(
+        summary.days_taken,
+        summary.days_taken == 1 and "" or "s"
+      )
+    end
+    text = text .. ": " .. table.concat(facts, ", ")
+  end
+  return text
+end
+
 ---A short plain-language description of the next-task answer (a popup, a message).
 ---@param pick Tasks.NextPick
 ---@param done_id? string
+---@param flow? { plans_closed?: string[], plan_summaries?: table<string, table> }  # What the finish did besides: plans closed.
 ---@return string[] lines
-function M.next_message(pick, done_id)
+function M.next_message(pick, done_id, flow)
   local lines = {}
   if done_id then
     local head = "Done: " .. fsio.clean(done_id)
@@ -490,6 +517,10 @@ function M.next_message(pick, done_id)
       head = head .. " \194\183 freed: " .. fsio.clean(table.concat(pick.freed, ", "))
     end
     lines[#lines + 1] = head
+  end
+  for _, plan_id in ipairs(flow and flow.plans_closed or {}) do
+    lines[#lines + 1] =
+      M.plan_closed_text(plan_id, flow and flow.plan_summaries and flow.plan_summaries[plan_id])
   end
   local t = pick.task
   if t then

@@ -358,7 +358,10 @@ function M.finish(state, tasks, after)
     local last = res.done[#res.done]
     if last and res.next then
       vim.schedule(function()
-        cmd().after_finish({ next = res.next }, last.id)
+        cmd().after_finish(
+          { next = res.next, plans_closed = res.plans_closed, plan_summaries = res.plan_summaries },
+          last.id
+        )
       end)
     end
   end)

@@ -29,6 +29,7 @@ local fsio = require("tasks_nvim.fsio")
 local index = require("tasks_nvim.index")
 local model = require("tasks_nvim.model")
 local scan = require("tasks_nvim.scan")
+local steps = require("tasks_nvim.steps")
 local vault = require("tasks_nvim.vault")
 
 local M = {}
@@ -1017,6 +1018,7 @@ end
 ---@field today? string              # Sets `updated` (default: today).
 ---@field index? boolean             # Regenerate the area index (default true).
 ---@field checkpoint_dir? string     # Where the safety snapshot goes.
+---@field tick_steps? boolean        # Tick the open steps of the task's `## Plan` section in the finished copy (default false).
 
 ---Everything `done` decides before it touches a file (so the part that writes has nothing left to validate).
 ---@class Tasks.DonePlan
@@ -1037,6 +1039,7 @@ end
 ---@field readme_old? string
 ---@field readme_new? string
 ---@field readme_state "missing"|"updated"|"unchanged"
+---@field steps_ticked integer        # Plan steps ticked in the finished copy.
 ---@field index boolean              # Regenerate the area index afterwards.
 
 ---What `done` did so far, for the rollback.
@@ -1103,6 +1106,12 @@ local function plan_done(id, opts)
   if not new_text then
     return nil, "cannot update " .. task.path .. ": " .. tostring(uerr)
   end
+  -- The steps of the task's own plan are ticked in the text that is written as the finished copy, so the snapshot
+  -- and the rollback cover them like everything else `done` writes (a dropped step stays open).
+  local steps_ticked = 0
+  if opts.tick_steps then
+    new_text, steps_ticked = steps.tick_all(new_text)
+  end
 
   local stem = date .. "_" .. slug
   local filename = stem .. ".md"
@@ -1161,6 +1170,7 @@ local function plan_done(id, opts)
     resume = resume,
     old_text = old_text,
     new_text = new_text,
+    steps_ticked = steps_ticked,
     readme_path = readme_path,
     readme_old = readme_old,
     readme_new = readme_new,
@@ -1412,6 +1422,8 @@ function M.done(id, opts)
     to = plan.target,
     bucket = plan.bucket,
     resumed = plan.resume,
+    steps_ticked = plan.steps_ticked,
+    plan_id = plan.task.plan,
     readme = plan.readme_state,
     index = type(res) == "table" and res or nil,
   },

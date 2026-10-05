@@ -203,6 +203,11 @@ end
 ---@field index_errors string[]
 ---@field next? Tasks.NextPick          # What to start next, worked out ONCE after the last finished task.
 ---@field freed string[]                # Tasks that the last finished task freed.
+---@field steps_ticked integer           # Plan steps ticked in the finished copies.
+---@field plans_closed string[]          # Plan files finished because their last member was among these.
+---@field plan_summaries table<string, Tasks.PlanSummary>
+---@field docs_refreshed string[]        # Documents whose generated blocks changed.
+---@field notes string[]                 # Follow-up steps that did not work (the finishes stand).
 
 ---Finish tasks (rule R6) one after the other, the index regenerated once per area at the end.
 ---@param ids string[]
@@ -210,7 +215,19 @@ end
 ---@return Tasks.BatchDoneResult
 function M.done_many(ids, opts)
   ---@type Tasks.BatchDoneResult
-  local res = { done = {}, already = {}, failed = {}, areas = {}, index_errors = {}, freed = {} }
+  local res = {
+    done = {},
+    already = {},
+    failed = {},
+    areas = {},
+    index_errors = {},
+    freed = {},
+    steps_ticked = 0,
+    plans_closed = {},
+    plan_summaries = {},
+    docs_refreshed = {},
+    notes = {},
+  }
   local moved = {}
   for _, id in ipairs(ids) do
     local flow, err = done_flow.run(id, {
@@ -219,6 +236,7 @@ function M.done_many(ids, opts)
       today = opts.today,
       date = opts.date,
       pick_next = false,
+      refresh_docs = false,
     })
     local r = flow and flow.done
     if not flow or not r then
@@ -228,10 +246,23 @@ function M.done_many(ids, opts)
     else
       res.done[#res.done + 1] = { id = id, from = r.from, to = r.to, readme = r.readme }
       moved[#moved + 1] = id
+      res.steps_ticked = res.steps_ticked + flow.steps_ticked
+      vim.list_extend(res.plans_closed, flow.plans_closed)
+      for plan_id, summary in pairs(flow.plan_summaries) do
+        res.plan_summaries[plan_id] = summary
+      end
+      vim.list_extend(res.notes, flow.notes)
     end
   end
   res.areas = areas_of(moved)
   res.index_errors = reindex(res.areas, opts.root)
+  if #res.done > 0 then
+    -- The generated blocks of the configured documents: once for the whole stack, after everything is finished.
+    local refreshed, notes =
+      done_flow.refresh_marker_docs({ root = opts.root, closed = res.plan_summaries })
+    res.docs_refreshed = refreshed
+    vim.list_extend(res.notes, notes)
+  end
   -- One answer for the whole batch, from the last finished task and after the indexes are written: a stack of
   -- finished tasks gets one "what next", not one per task.
   local last = res.done[#res.done]

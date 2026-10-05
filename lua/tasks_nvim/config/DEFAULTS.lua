@@ -17,6 +17,9 @@
 ---@field popup boolean     After finishing a task: offer the next one to open (a small dialog; headless sessions get a message).
 ---@field cdx_hint boolean  Name the ready tasks written `cdx` apart ("an AI session could take ..."), never as your next task.
 
+---@class Tasks.ChainConfig
+---@field marker_docs string[]  Documents whose `<!-- GENERATED:plan scope=... -->` blocks are refreshed after a task is finished. Only these files are ever touched (nothing is scanned); empty by default.
+
 ---@class Tasks.CiConfig
 ---@field lint_timeout_ms integer  The vault's `md_lint.lua` is killed after this long (`ci`).
 ---@field trust_vault_lint boolean  Allow `ci` to run `<vault>/TOOLS/scripts/md_lint.lua` (code from the vault itself).
@@ -37,6 +40,7 @@
 ---@field staleness Tasks.StalenessConfig
 ---@field ci Tasks.CiConfig
 ---@field next Tasks.NextConfig
+---@field chain Tasks.ChainConfig
 ---@field keys Tasks.KeysConfig
 
 ---@type Tasks.Opts
@@ -47,6 +51,7 @@ return {
   staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },
   ci = { lint_timeout_ms = 120000, trust_vault_lint = false },
   next = { popup = true, cdx_hint = true },
+  chain = { marker_docs = {} },
   keys = {
     dashboard = {
       status = "s",

@@ -887,6 +887,20 @@ function commands.done(ctx)
   if res.readme == "missing" then
     ctx.warn("warn: Backlog/README.md does not exist; no index row added")
   end
+  if flow.steps_ticked > 0 then
+    ctx.say(("steps\t%s\t%d"):format(res.id, flow.steps_ticked))
+  end
+  for _, plan_id in ipairs(flow.plans_closed) do
+    ctx.say(
+      ("plan-closed\t%s\t%s"):format(
+        plan_id,
+        plan_view.plan_closed_text(plan_id, flow.plan_summaries[plan_id])
+      )
+    )
+  end
+  for _, doc in ipairs(flow.docs_refreshed) do
+    ctx.say(("refreshed\t%s"):format(doc))
+  end
   for _, note in ipairs(flow.notes) do
     ctx.warn(("warn: %s: %s"):format(res.id, note))
   end
