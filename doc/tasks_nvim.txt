@@ -1,13 +1,43 @@
-*tasks_nvim.txt*  Task files in a Markdown vault: engine and headless CLI
+*tasks_nvim.txt*  Task files in a Markdown vault: engine, :Tasks, headless CLI
+
+Author:  Stefan Bartl
+License: MIT
 
 ==============================================================================
-INTRODUCTION                                                    *tasks_nvim*
+CONTENTS                                                   *tasks_nvim-contents*
 
-One Markdown file per task (flat YAML frontmatter), one generated overview
-per area. The engine is pure Lua, `:Tasks <verb>` is the editor front end
-(dashboard, form, preview), the CLI is `scripts/tasks.lua`. Requires lib.nvim.
+  1. Introduction ........................................ |tasks_nvim|
+  2. Requirements ........................................ |tasks_nvim-requirements|
+  3. Setup and configuration ............................. |tasks_nvim-setup|
+  4. Commands ............................................ |:Tasks|
+  5. Dashboard and form keys ............................. |tasks_nvim-keys|
+  6. Task file format .................................... |tasks_nvim-format|
+  7. Headless CLI ........................................ |tasks_nvim-cli|
+  8. Health .............................................. |tasks_nvim-health|
 
-Setup: >lua
+==============================================================================
+1. INTRODUCTION                                                    *tasks_nvim*
+
+One Markdown file per task (flat YAML frontmatter), one generated overview per
+area (`<area>/ROADMAP/TASKS.md`), finished tasks in `<area>/Backlog/`. The
+engine is pure Lua; |:Tasks| is the editor front end (dashboard, form,
+preview); `scripts/tasks.lua` is the headless CLI. Both use the same engine.
+
+Capturing is one call with a title and never asks for more. A task without
+blockers, plan or estimate is valid and stays visible everywhere.
+
+==============================================================================
+2. REQUIREMENTS                                         *tasks_nvim-requirements*
+
+  Neovim 0.10+ and lib.nvim (required).
+  Optional: snacks.nvim (dashboard), mdview.nvim (browser preview), ui.nvim
+  (themed confirmations), pickers.nvim (`:Tasks folder`), cascade.nvim (form),
+  git (dates for `--stale=refs`).
+
+==============================================================================
+3. SETUP AND CONFIGURATION                                    *tasks_nvim-setup*
+
+>lua
   require("tasks_nvim").setup({
     vault = "~/vault",
     extra_areas = { "ALL" },
@@ -16,8 +46,112 @@ Setup: >lua
     ci = { lint_timeout_ms = 120000 },
   })
 <
-There is no built-in vault path; `$TASKS_VAULT` is read when `vault` is unset.
-See docs/ENGINE.md (format, checks), docs/COMMANDS.md (verbs) and
-docs/BINDINGS.md (keys).
+
+  vault                    The vault folder (one folder per area). When unset
+                           `$TASKS_VAULT` is read. There is no built-in path.
+  extra_areas              Folders that are areas although they hold neither
+                           `ROADMAP/` nor `Backlog/`. The headless CLI reads
+                           `$TASKS_EXTRA_AREAS` (comma separated) for the same.
+  dashboard.watch          Refresh the dashboard when task files change.
+  dashboard.debounce_ms    Quiet period before a refresh (default 250).
+  staleness.git_timeout_ms One `git log` call is killed after this long.
+  staleness.budget_ms      All git calls of one `--stale=refs` run together.
+  staleness.repo_bases     Folders holding the repos by name (`<base>/<area>`).
+  ci.lint_timeout_ms       The vault's `md_lint.lua` is killed after this long.
+
+A wrong key or value is ignored with a message and listed in
+`:checkhealth tasks_nvim`; the default stays.
+
+`vim.g.tasks_nvim_no_command = true` keeps the plugin from registering |:Tasks|.
+
+==============================================================================
+4. COMMANDS                                                             *:Tasks*
+
+  :Tasks list [{area}|all] [filters] [--sort=] [--to=] [--format=] [--force]
+      Open tasks: a dashboard, or a table to a buffer, the clipboard, the
+      quickfix list, a file, a browser preview. An existing file is only
+      overwritten with `--force`.
+      Filters: --status= --prio= --effort= --kind= --category= --severity=
+               --tag= --stale=<days>|refs --blocked
+
+  :Tasks new [{area} [{title}...]] [kind= prio= effort= tags= category=
+              severity= status=] [--folder]
+      Without arguments a Markdown form (`<C-s>` submits).
+
+  :Tasks set {id} {key}={value} ...      Change frontmatter; an empty value
+                                         removes the key.
+  :Tasks done {id} [done_in= date=] [--yes]
+                                         Finish and move to `Backlog/`.
+  :Tasks attach {id} {file} [name=]      Copy a file into `assets/`.
+  :Tasks folderize {id}                  Make a plain task a folder task.
+  :Tasks template [--to=]                The task file template.
+  :Tasks open {id}                       Open the task file.
+  :Tasks preview {id}                    Browser preview (mdview.nvim).
+  :Tasks index [{area}] [--all] [--check]
+                                         (Re)write the generated overviews;
+                                         `--check` writes nothing.
+  :Tasks folder {area} [folder] [--action=] [--list] [--to=]
+                                         Picker over a folder of an area.
+
+An id is `<area>/<slug>`. `<Tab>` completes verbs, areas, ids, values and the
+settable keys. Details: docs/COMMANDS.md. Scenarios: docs/WORKFLOWS.md.
+
+==============================================================================
+5. DASHBOARD AND FORM KEYS                                       *tasks_nvim-keys*
+
+No global key is mapped. In the dashboard list (`g?` shows this):
+
+  <CR> open   <Tab> mark   s status   p prio   D finish   f filter chip
+  o sort      e export     gp preview  r rescan  gb backlog  gr roadmap
+
+In the input window the same actions are on `<M-s> <M-p> <M-d> <M-f> <M-o>
+<M-e> <M-r> <M-b> <M-m> <M-v> <M-?>` (they shadow some snacks defaults).
+
+In the task form: `<Space>`/`<CR>` tick a line, `<C-s>` submit, `q`/`<C-q>`
+cancel (asks when text was typed), `g?` help.
+
+==============================================================================
+6. TASK FILE FORMAT                                            *tasks_nvim-format*
+
+>markdown
+  ---
+  title: Fix the thing
+  status: open          # doing | decision | blocked | open | parked
+  kind: bug             # feature | task | bug | idea | research
+  prio: 2               # 1 (highest) .. 3
+  effort: S             # XS S M L XL, or 0.5d, 3d
+  tags: [ui]
+  category: [bug]       # bug security performance docs ruleset
+  blocked_by: [other-area/other-task]
+  refs: [lua/foo/init.lua]
+  created: 2026-10-05
+  updated: 2026-10-05
+  ---
+  One summary paragraph, then free Markdown.
+<
+
+Only `title` and `status` are required. Unknown keys are kept when a file is
+rewritten. Full reference: docs/ENGINE.md.
+
+==============================================================================
+7. HEADLESS CLI                                                 *tasks_nvim-cli*
+
+>sh
+  nvim --headless -u NONE -l scripts/tasks.lua list --status=doing
+  nvim --headless -u NONE -l scripts/tasks.lua done my-area/slug --done-in=repo@abc
+  nvim --headless -u NONE -l scripts/tasks-ci.lua
+<
+
+The vault is `--vault=<dir>` or `$TASKS_VAULT`. Exit codes: 0 success, 1 a
+finding or failed operation, 2 a usage error. `scripts/tasks-ci.lua` runs
+`check`, `index --check` and the vault's `md_lint.lua` (a script that is RUN:
+only on a vault you trust).
+
+==============================================================================
+8. HEALTH                                                     *tasks_nvim-health*
+
+`:checkhealth tasks_nvim` reports Neovim and lib.nvim, the resolved vault and
+its areas, options that `setup()` ignored, whether |:Tasks| is registered, and
+which optional pieces are present.
 
  vim:tw=78:ts=8:ft=help:norl:

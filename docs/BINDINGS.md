@@ -45,7 +45,14 @@ In the input window the same actions are on Alt (these shadow snacks.nvim's own 
 
 ## Form (`:Tasks new` without arguments)
 
-`<C-s>` submits; ticking a `- [ ]` line chooses a value (single-choice lists keep one tick, `category` takes several).
+Buffer-local keys of the form buffer:
+
+| Key | Does |
+| --- | --- |
+| `<Space>` / `<CR>` on a `- [ ]` line | tick or untick (single-choice lists keep one tick, `category` takes several) |
+| `<C-s>` (normal and insert) | submit |
+| `q` (normal) / `<C-q>` | cancel; asks first when text was typed |
+| `g?` | help |
 
 ## Headless
 

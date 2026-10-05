@@ -1,37 +1,121 @@
+> **Alpha, not released yet.** The engine, the `:Tasks` command, the dashboard, the form and the headless CLI are
+> built and covered by specs (24). Only tested on Windows so far; the CI for Linux and macOS has not run yet.
+> Pin a commit if you depend on this.
+
 # tasks.nvim
 
-Offene Arbeit als **eine Markdown-Datei pro Task** (flaches YAML-Frontmatter), pro Projekt ("Area") ein erzeugter
-Überblick `ROADMAP/TASKS.md`. Die Engine (`lua/tasks_nvim/*.lua`) liest, sortiert, indiziert, legt an, ändert,
-schließt ab und prüft diese Dateien und kommt ohne UI aus; darüber liegen der Befehl `:Tasks` mit Dashboard,
-Formular und Vorschau (`lua/tasks_nvim/ui/`) und eine Headless-CLI für Sitzungen ohne Neovim und für CI.
+```
+  _            _                         _
+ | |_ __ _ ___| | _____   _ ____   _(_)_ __ ___
+ | __/ _` / __| |/ / __| | '_ \ \ / / | '_ ` _ \
+ | || (_| \__ \   <\__ \_| | | \ V /| | | | | | |
+  \__\__,_|___/_|\_\___(_)_| |_|\_/ |_|_| |_| |_|
+```
 
-> **Stand:** früh. Aus einer privaten Neovim-Config herausgelöst, Specs laufen (24). **Noch nicht
-> veröffentlicht**, kein Release, nur unter Windows getestet.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Neovim](https://img.shields.io/badge/Neovim-0.10%2B-57A143?logo=neovim&logoColor=white)](https://neovim.io)
+[![Lua](https://img.shields.io/badge/Lua-5.1%2FLuaJIT-2C2D72?logo=lua&logoColor=white)](https://www.lua.org)
+![Status](https://img.shields.io/badge/status-alpha-red)
 
-## Anforderungen
+> Part of the [wkd](https://stefanbartl.github.io/wkd/) family of plugins. It pairs with
+> [rules.nvim](https://github.com/StefanBartl/rules.nvim) (findings of a rule check become tasks; planned) and
+> builds on [lib.nvim](https://github.com/StefanBartl/lib.nvim).
+
+Open work as **one Markdown file per task**, with a few lines of flat YAML frontmatter, and a generated overview
+per project. The engine reads, ranks, indexes, creates, changes, finishes and checks those files; on top sit the
+`:Tasks` command with a dashboard, a form and a browser preview, and a headless CLI for scripts, CI and AI
+sessions that run without an editor. Nothing is stored anywhere but in the files.
+
+## Table of contents
+
+- [What it does](#what-it-does)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quickstart](#quickstart)
+- [Configuration](#configuration)
+- [Headless](#headless)
+- [Documentation](#documentation)
+- [Tests](#tests)
+- [License](#license)
+
+## What it does
+
+- **Capture in one call**: `:Tasks new my-area "Title"`, or a Markdown form. No required field, no question.
+- **A vault of areas**: `<area>/ROADMAP/tasks/<slug>.md` for open tasks, `<area>/Backlog/` for finished ones,
+  `<area>/ROADMAP/TASKS.md` generated (never edited, never overwritten when it is your own file).
+- **Rank and filter**: status, priority, effort, kind, category, severity, tags, blockers, staleness
+  (`--stale=60`, or `--stale=refs`: files a task names that changed since it was last updated).
+- **Finish safely**: `:Tasks done` moves the file to `Backlog/`, adds a row to its README, regenerates the index,
+  and restores everything byte for byte if a step fails.
+- **Dashboard** (needs [snacks.nvim](https://github.com/folke/snacks.nvim); a plain list without it): filter chips,
+  marks, bulk status/priority/finish, export, live refresh when files change.
+- **Folder tasks** with an `assets/` folder for screenshots and logs.
+- **Export** to a buffer, the clipboard, the quickfix list, a file (CSV or Markdown) or a browser preview.
+- **Headless CLI** with the same rules and a CI gate (`check`, `index --check`, `md_lint`).
+
+How it is meant to be used, scenario by scenario: [docs/WORKFLOWS.md](docs/WORKFLOWS.md).
+
+## Requirements
 
 | | |
 | --- | --- |
 | Neovim | 0.10+ |
-| [lib.nvim](https://github.com/StefanBartl/lib.nvim) | erforderlich (Dateien, Frontmatter, Checkpoint) |
+| [lib.nvim](https://github.com/StefanBartl/lib.nvim) | required (files, frontmatter, checkpoints, the command composer) |
+| [snacks.nvim](https://github.com/folke/snacks.nvim) | optional: the interactive dashboard |
+| [mdview.nvim](https://github.com/StefanBartl/mdview.nvim) | optional: browser preview |
+| [ui.nvim](https://github.com/StefanBartl/ui.nvim) | optional: themed confirmation dialogs |
+| [pickers.nvim](https://github.com/StefanBartl/pickers.nvim) | optional: `:Tasks folder` |
+| [cascade.nvim](https://github.com/StefanBartl/cascade.nvim) | optional: cycle values in the form |
+| `git` | optional: dates for `--stale=refs` (file times otherwise) |
 
-## Einrichten
+`:checkhealth tasks_nvim` shows what is present.
 
-Es gibt keinen eingebauten Vault-Pfad:
+## Installation
+
+lazy.nvim:
+
+```lua
+{
+  "StefanBartl/tasks.nvim",
+  dependencies = { "StefanBartl/lib.nvim" },
+  cmd = "Tasks",
+  opts = {
+    vault = "~/vault", -- one folder per area; or set $TASKS_VAULT
+  },
+}
+```
+
+Without `cmd` or `event` the plugin registers `:Tasks` at startup; set `vim.g.tasks_nvim_no_command = true` to
+register your own verb from `tasks_nvim.ui.routes` instead. There is no built-in vault path.
+
+## Quickstart
+
+```vim
+:Tasks new my-area "Fix the thing"          " capture
+:Tasks list my-area                          " the dashboard
+:Tasks set my-area/fix-the-thing status=doing prio=2
+:Tasks done my-area/fix-the-thing done_in=my-repo@abc1234
+```
+
+An area is any folder in the vault that holds `ROADMAP/` or `Backlog/`; create the folders once (or name the area
+in `extra_areas`). Every verb, flag and filter: [docs/COMMANDS.md](docs/COMMANDS.md).
+
+## Configuration
+
+Every key is optional.
 
 ```lua
 require("tasks_nvim").setup({
-  vault = "~/vault",          -- ein Ordner je Area; alternativ $TASKS_VAULT
-  extra_areas = { "ALL" },    -- Ordner, die Areas sind, obwohl sie weder ROADMAP/ noch Backlog/ enthalten
-  dashboard = { watch = true, debounce_ms = 250 },   -- Live-Refresh des Dashboards
-  staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },  -- --stale=refs
-  ci = { lint_timeout_ms = 120000 },                 -- md_lint im CI-Gate
+  vault = "~/vault",         -- one folder per area; $TASKS_VAULT when unset
+  extra_areas = { "ALL" },   -- folders that are areas although they hold neither ROADMAP/ nor Backlog/
+  dashboard = { watch = true, debounce_ms = 250 },                              -- live refresh
+  staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },   -- --stale=refs
+  ci = { lint_timeout_ms = 120000 },                                            -- md_lint in the CI gate
 })
 ```
 
-Lazy-Laden (lazy.nvim): `{ "StefanBartl/tasks.nvim", cmd = "Tasks", dependencies = { "StefanBartl/lib.nvim" },
-opts = { vault = "~/vault" } }`. Ohne `cmd`/`event` legt `plugin/tasks_nvim.lua` den Befehl beim Start an
-(`vim.g.tasks_nvim_no_command = true` verhindert das).
+A wrong key or value is reported (and listed in `:checkhealth`) and the default stays. Keys of the dashboard and
+the form are not configurable yet ([docs/BINDINGS.md](docs/BINDINGS.md)).
 
 ## Headless
 
@@ -40,22 +124,33 @@ export TASKS_VAULT=~/vault
 nvim --headless -u NONE -l scripts/tasks.lua list --status=doing
 nvim --headless -u NONE -l scripts/tasks.lua new my-project "Fix the thing" --kind=bug --prio=2
 nvim --headless -u NONE -l scripts/tasks.lua done my-project/fix-the-thing
-nvim --headless -u NONE -l scripts/tasks-ci.lua          # check + index --check + md_lint, Exit 0/1
+nvim --headless -u NONE -l scripts/tasks-ci.lua    # check + index --check + md_lint, exit 0/1
 ```
 
-Format, Regeln, Verben und Prüfungen: [docs/ENGINE.md](docs/ENGINE.md).
-Wie man damit arbeitet, an Szenarien (was heute geht, was geplant ist): [docs/WORKFLOWS.md](docs/WORKFLOWS.md).
-Befehle: [docs/COMMANDS.md](docs/COMMANDS.md), Tasten: [docs/BINDINGS.md](docs/BINDINGS.md).
+The CI gate *runs* `<vault>/TOOLS/scripts/md_lint.lua`: use it only on a vault whose script you trust
+([docs/ENGINE.md](docs/ENGINE.md)). A finished task needs `<area>/Backlog/README.md` to get its row; without
+the file `done` says so and moves the task anyway.
+
+## Documentation
+
+| | |
+| --- | --- |
+| [docs/WORKFLOWS.md](docs/WORKFLOWS.md) | scenarios: what to do when, what works today, what is planned |
+| [docs/COMMANDS.md](docs/COMMANDS.md) | every `:Tasks` verb, flag and the dashboard |
+| [docs/BINDINGS.md](docs/BINDINGS.md) | commands, dashboard and form keys, autocommands |
+| [docs/ENGINE.md](docs/ENGINE.md) | file format, rules, checks, the CLI, limits |
+| `:help tasks_nvim` | the same in short |
 
 ## Tests
 
 ```sh
-nvim -n -i NONE --headless -u NONE -l TESTS/run.lua            # alle
-nvim -n -i NONE --headless -u NONE -l TESTS/run.lua tasks_mutate
+scripts/test.sh                  # all specs
+scripts/test.sh tasks_mutate     # specs whose name contains the argument
 ```
 
-Die Specs laufen gegen einen temporären Fixture-Vault, nie gegen einen echten.
+The specs run against a temporary fixture vault, never a real one. lib.nvim is looked up in `$LIB_NVIM_DIR`,
+`$REPOS_DIR/lib.nvim`, `.deps/lib.nvim`, next to this repository and in lazy.nvim's data folder.
 
-## Lizenz
+## License
 
-MIT
+[MIT](LICENSE)

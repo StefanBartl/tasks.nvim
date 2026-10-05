@@ -38,6 +38,10 @@ function M.check()
     { "lib.nvim.cross.fs.mutate", "moving and removing files" },
     { "lib.nvim.ui.list", "quickfix delivery (--to=qf)" },
     { "lib.nvim.harvest.render", "Markdown and CSV tables" },
+    { "lib.nvim.cross.fs.expand_path", "`--to=file:` paths" },
+    { "lib.nvim.cross.fs.separators.unify_slashes", "path normalisation" },
+    { "lib.nvim.cross.platform.is_windows", "platform checks" },
+    { "lib.nvim.system.env", "the repos folder for `--stale=refs`" },
   }
   local lib_ok = true
   for _, req in ipairs(required) do
@@ -109,6 +113,28 @@ function M.check()
     ok("ui.nvim -- themed confirmations")
   else
     info("ui.nvim not found -- confirmations use vim.ui.select")
+  end
+  if pcall(require, "cascade") then
+    ok("cascade.nvim -- cycling values in the task form")
+  else
+    info("cascade.nvim not found -- the form has no value cycling")
+  end
+  if pcall(require, "pickers.command") then
+    ok("pickers.nvim -- `:Tasks folder`")
+  else
+    info("pickers.nvim not found -- `:Tasks folder` uses a plain vim.ui.select list")
+  end
+  local soft = {
+    { "lib.nvim.progress", "a progress entry while the dashboard writes" },
+    { "lib.nvim.store.project", "remembering the dashboard filter and sort" },
+    { "lib.nvim.fs.watch", "live refresh of the dashboard" },
+  }
+  for _, req in ipairs(soft) do
+    if pcall(require, req[1]) then
+      ok(("%s -- %s"):format(req[1], req[2]))
+    else
+      info(("%s not found (older lib.nvim?) -- no %s"):format(req[1], req[2]))
+    end
   end
 end
 
