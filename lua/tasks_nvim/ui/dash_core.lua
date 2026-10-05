@@ -309,7 +309,8 @@ end
 -- ── header and filter chips ──────────────────────────────────────────────────
 
 ---@param tasks Tasks.Task[]
----@return { open: integer, decision: integer, blocked: integer }
+---@param ready? Tasks.DashReadiness  Count by the open blockers (and add `ready`); without it by the fields alone.
+---@return { open: integer, decision: integer, blocked: integer, ready?: integer }
 function M.counts(tasks, ready)
   local c = { open = #tasks, decision = 0, blocked = 0, ready = nil }
   if ready then
