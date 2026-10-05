@@ -49,6 +49,12 @@ function M.setup(opts)
       end
     end)
   end
+  -- The one autocommand of the plugin is opt-in: in a task buffer, ticking the last step asks to finish the task.
+  if config.get().steps.ask_finish then
+    vim.schedule(function()
+      require("tasks_nvim.ui.steps_watch").enable()
+    end)
+  end
   -- `:Tasks` is registered by `plugin/tasks_nvim.lua` (which a plugin manager sources when it loads the
   -- plugin); the engine facade does not reach into the front end.
 end

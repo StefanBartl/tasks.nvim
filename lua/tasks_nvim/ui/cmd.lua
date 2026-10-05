@@ -1291,6 +1291,13 @@ local function finish_task(id, opts)
   M.after_finish(flow, id)
 end
 
+---Finish a task with the messages and the dialog of `:Tasks done` (without the confirmation: the caller asked).
+---@param id string
+---@param opts? { done_in?: string, date?: string }
+function M.finish(id, opts)
+  finish_task(id, opts or {})
+end
+
 ---`:Tasks folderize <id>`
 ---@param ctx table
 function M.task_folderize(ctx)

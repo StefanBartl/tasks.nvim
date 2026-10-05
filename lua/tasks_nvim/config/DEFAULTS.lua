@@ -17,6 +17,9 @@
 ---@field popup boolean     After finishing a task: offer the next one to open (a small dialog; headless sessions get a message).
 ---@field cdx_hint boolean  Name the ready tasks written `cdx` apart ("an AI session could take ..."), never as your next task.
 
+---@class Tasks.StepsConfig
+---@field ask_finish boolean  In a task buffer: when the LAST open step of `## Plan` is ticked, ask whether to finish the task (off by default: it adds an autocommand on task buffers).
+
 ---@class Tasks.ChainConfig
 ---@field marker_docs string[]  Documents whose `<!-- GENERATED:plan scope=... -->` blocks are refreshed after a task is finished. Only these files are ever touched (nothing is scanned); empty by default.
 
@@ -41,6 +44,7 @@
 ---@field ci Tasks.CiConfig
 ---@field next Tasks.NextConfig
 ---@field chain Tasks.ChainConfig
+---@field steps Tasks.StepsConfig
 ---@field keys Tasks.KeysConfig
 
 ---@type Tasks.Opts
@@ -52,6 +56,7 @@ return {
   ci = { lint_timeout_ms = 120000, trust_vault_lint = false },
   next = { popup = true, cdx_hint = true },
   chain = { marker_docs = {} },
+  steps = { ask_finish = false },
   keys = {
     dashboard = {
       status = "s",
