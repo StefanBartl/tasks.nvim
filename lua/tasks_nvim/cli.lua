@@ -62,7 +62,7 @@ commands:
         --actor=me also finds status=decision and the tag needs-user; none = nobody classified it;
         --sort=frecency: what the dashboard opened or changed most, from the frecency file)
        (--ready: nothing open blocks it; --waiting: an open blocker; --unestimated: no effort or no value)
-  plan [<area>] [--for=<id>] [filters as for list] [--ready] [--format=md|tsv|ids]
+  plan [<area>] [--for=<id>] [filters as for list] [--ready] [--with-steps] [--format=md|tsv|ids]
                                           stages, ready tasks, decisions by leverage, critical path
                                           (--for: the task and everything that has to be finished before it)
   next [<area>] [--n=3] [--actor=cdx|me|pair|none]   the best ready tasks, with the reason
@@ -83,7 +83,7 @@ commands:
                                           folder task) and print the Markdown link
   folderize <area>/<slug>                 turn a plain task file into a folder task
   check [<area>]                          rule check; exit 1 on any error
-  template [--title=t] [--kind=k] [--prio=n] [--effort=e] [--tags=a,b] [--lang=de|en]
+  template [--title=t] [--kind=k] [--prio=n] [--effort=e] [--tags=a,b] [--lang=de|en] [--with-plan]
   ci [--strict] [--no-lint] [--md-lint=<file>] [--trust-vault-lint]   CI gate: check + index --check + md_lint of the
                                           generated indexes; exit 0/1 (--strict: warnings fail too).
                                           md_lint is a script RUN from the vault (TOOLS/scripts/md_lint.lua): it runs only with
@@ -133,7 +133,7 @@ local SPECS = {
       "stale",
       "format",
     },
-    flag = { "blocked", "stale-refs", "ready", "unestimated" },
+    flag = { "blocked", "stale-refs", "ready", "unestimated", "with-steps" },
   },
   estimate = {
     value = {
@@ -181,7 +181,10 @@ local SPECS = {
   folderize = { value = {}, flag = { "no-index" } },
   check = { value = {}, flag = { "all" } },
   ci = { value = { "md-lint" }, flag = { "strict", "no-lint", "trust-vault-lint" } },
-  template = { value = { "title", "kind", "prio", "effort", "tags", "lang" }, flag = {} },
+  template = {
+    value = { "title", "kind", "prio", "effort", "tags", "lang" },
+    flag = { "with-plan" },
+  },
   areas = { value = {}, flag = {} },
   export = { value = { "top", "link-prefix" }, flag = { "no-links" } },
 }
@@ -511,6 +514,7 @@ function commands.plan(ctx)
       today = ctx.eo.today or model.today(),
       done = scope.done,
       ready_only = ready_only,
+      with_steps = ctx.args.opt["with-steps"] == true,
     }))
   end
   return #scope.errors > 0 and 1 or 0
@@ -921,6 +925,7 @@ function commands.template(ctx)
     effort = opt.effort --[[@as string|nil]],
     tags = opt.tags and split_commas(opt.tags --[[@as string]]) or nil,
     today = eo.today,
+    with_plan = opt["with-plan"] == true,
   }))
   return 0
 end

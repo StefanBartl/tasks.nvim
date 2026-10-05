@@ -19,6 +19,7 @@
 
 local fm = require("lib.nvim.markdown.frontmatter")
 local fsio = require("tasks_nvim.fsio")
+local steps = require("tasks_nvim.steps")
 local vault = require("tasks_nvim.vault")
 
 local M = {}
@@ -640,6 +641,20 @@ function M.parse_text(text, ctx)
     end
 
     task.summary = as_text(meta.summary, "summary", bad) or M.first_paragraph(parsed.body)
+
+    -- The optional `## Plan` section: progress only. A task without it is complete, nothing is said about it.
+    task.plan_steps = steps.parse(parsed.body)
+    if task.plan_steps then
+      local uncovered = steps.uncovered_acceptance(parsed.body)
+      if #uncovered > 0 then
+        hints[#hints + 1] = {
+          code = "plan-acceptance-uncovered",
+          msg = ("acceptance point(s) %s are covered by no step of the plan (-- Acceptance n)"):format(
+            table.concat(uncovered, ", ")
+          ),
+        }
+      end
+    end
   end
 
   task.valid = #errors == 0

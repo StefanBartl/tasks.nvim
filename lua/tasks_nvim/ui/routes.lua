@@ -440,8 +440,9 @@ local function nested_routes()
       flags = {
         { name = "to", type = "TASK_TARGET", values = { "clipboard", "buffer", "file:" } },
         { name = "force", bool = true },
+        { name = "with-plan", bool = true },
       },
-      desc = "Copy the task file template to the + register (--to=buffer|file:<path> for the other targets)",
+      desc = "Copy the task file template to the + register (--to=buffer|file:<path> for the other targets; --with-plan adds the optional ## Plan section)",
       run = function(ctx)
         cmd().task_template(ctx)
       end,
@@ -453,6 +454,7 @@ local function nested_routes()
       flags = filter_flags({
         { name = "for", type = "TASK_ID" },
         { name = "ready", bool = true },
+        { name = "with-steps", bool = true },
         { name = "format", type = "STRING", enum = { "md", "tsv", "ids" } },
         {
           name = "to",

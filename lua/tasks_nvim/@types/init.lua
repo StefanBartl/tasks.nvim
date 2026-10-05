@@ -34,6 +34,7 @@
 ---@field after string[]              # Task ids (soft edges: "should come after", never an error).
 ---@field order? number               # Sort hint inside a stage (a fraction like 2.5 slots a task in between).
 ---@field refs string[]
+---@field plan_steps? Tasks.StepsSummary  # The optional `## Plan` section: steps, how many are ticked (nil without the section).
 ---@field done_in? string
 ---@field summary string              # Frontmatter `summary`, else the first body paragraph; "" when neither.
 ---@field meta table<string, any>     # Every frontmatter key as parsed (unknown keys included).

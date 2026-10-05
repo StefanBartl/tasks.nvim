@@ -21,6 +21,7 @@ local M = {}
 ---@field today? string
 ---@field done? Tasks.Task[]   # Finished tasks of the same scope (for the progress figure).
 ---@field ready_only? boolean  # Only the "ready now" part.
+---@field with_steps? boolean  # Under each stage: the `## Plan` steps of its tasks and their progress.
 
 ---@param plan Tasks.Plan
 ---@return Tasks.Task[]
@@ -209,6 +210,26 @@ function M.markdown(plan, opts)
       })
     end
     lines[#lines + 1] = ""
+    if opts.with_steps then
+      for _, id in ipairs(stage) do
+        local steps = plan.nodes[id].task.plan_steps
+        if steps then
+          lines[#lines + 1] = ("**%s** -- %d/%d steps"):format(
+            fsio.clean(id),
+            steps.ticked,
+            steps.total
+          )
+          lines[#lines + 1] = ""
+          for _, item in ipairs(steps.items) do
+            lines[#lines + 1] = ("- [%s] %s"):format(
+              item.done and "x" or " ",
+              fsio.clean(item.text)
+            )
+          end
+          lines[#lines + 1] = ""
+        end
+      end
+    end
   end
 
   if #plan.critical.path > 0 then

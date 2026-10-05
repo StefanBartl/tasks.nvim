@@ -330,6 +330,7 @@ function M.plan(ctx)
       today = model.today(),
       done = scope.done,
       ready_only = flags.ready == true,
+      with_steps = flags["with-steps"] == true,
     })
   elseif format == "tsv" then
     text = table.concat(plan_view.tsv(scope.plan, { ready_only = flags.ready == true }), "\n")
@@ -1313,7 +1314,7 @@ function M.task_template(ctx)
     notify.error(blocked .. " (pass --force to overwrite it)")
     return
   end
-  local text = mutate.template({})
+  local text = mutate.template({ with_plan = ctx.flags["with-plan"] == true })
   local ok, err = harvest.emit(text, target.kind, {
     path = target.path,
     title = "tasks://task-template",

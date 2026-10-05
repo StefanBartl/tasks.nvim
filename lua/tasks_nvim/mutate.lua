@@ -260,13 +260,21 @@ end
 
 ---The task template as text, with every field present and visible placeholders.
 ---An unknown `lang` falls back to German (the CLI validates it before).
----@param opts? { title?: string, kind?: string, prio?: integer, effort?: string, tags?: string[], today?: string, lang?: Tasks.Lang }
+---@param opts? { title?: string, kind?: string, prio?: integer, effort?: string, tags?: string[], today?: string, lang?: Tasks.Lang, with_plan?: boolean }
 ---@return string text
 function M.template(opts)
   opts = opts or {}
   local today = opts.today or model.today()
+  local body = TEMPLATE_BODY[opts.lang or "de"] or TEMPLATE_BODY.de
+  if opts.with_plan then
+    -- the section goes before the last one (Notizen / Notes), where the acceptance list is already above it
+    local at = body:find("\n## Notizen", 1, true) or body:find("\n## Notes", 1, true)
+    if at then
+      body = body:sub(1, at) .. require("tasks_nvim.steps").template_section() .. body:sub(at + 1)
+    end
+  end
   local text = fm.update_text(
-    TEMPLATE_BODY[opts.lang or "de"] or TEMPLATE_BODY.de,
+    body,
     meta_pairs({
       title = opts.title or "Titel",
       status = "open",
