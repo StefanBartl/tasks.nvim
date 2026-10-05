@@ -37,9 +37,12 @@ local M = {}
 ---repeatedly must not rescan 40 folders each time).
 local COMPLETE_TTL = 3
 
----The id list of the last `TASK_ID` completion, for `COMPLETE_TTL` seconds.
----@type { ids: string[]|nil, root: string|nil, at: integer }
-local id_cache = { at = 0 }
+---What the completions read, kept for `COMPLETE_TTL` seconds per vault: the open tasks (parsing 466 files is
+---96 ms, too slow for every `<Tab>`), their sorted ids and tags, and the ids of the finished ones.
+---@type { at: integer, root: string|nil, open: Tasks.Task[]|nil, ids: string[]|nil, tags: string[]|nil }
+local list_cache = { at = 0 }
+---@type { at: integer, root: string|nil, ids: string[]|nil }
+local done_cache = { at = 0 }
 
 ---@return table
 local function cmd()
@@ -56,6 +59,102 @@ local function prefix_ci(candidates, lead)
     if c:lower():sub(1, #low) == low then
       out[#out + 1] = c
     end
+  end
+  return out
+end
+
+---@return integer
+local function now_ms()
+  return (vim.uv or vim.loop).now()
+end
+
+---@return Tasks.Task[]
+local function cached_open()
+  local root = vault.root()
+  if
+    list_cache.open
+    and list_cache.root == root
+    and now_ms() - list_cache.at < COMPLETE_TTL * 1000
+  then
+    return list_cache.open
+  end
+  local ok, open = pcall(scan.open_tasks, { ttl_seconds = COMPLETE_TTL })
+  if not ok or not open then
+    return {}
+  end
+  list_cache = { at = now_ms(), root = root, open = open }
+  return open
+end
+
+---@return string[]
+local function open_ids()
+  local open = cached_open()
+  if not list_cache.ids or list_cache.open ~= open then
+    local ids = {}
+    for _, t in ipairs(open) do
+      ids[#ids + 1] = t.id
+    end
+    table.sort(ids)
+    list_cache.ids = ids
+  end
+  return list_cache.ids or {}
+end
+
+---@return string[]
+local function open_tags()
+  local open = cached_open()
+  if not list_cache.tags or list_cache.open ~= open then
+    local seen, tags = {}, {}
+    for _, t in ipairs(open) do
+      for _, tag in ipairs(t.tags or {}) do
+        if not seen[tag] then
+          seen[tag] = true
+          tags[#tags + 1] = tag
+        end
+      end
+    end
+    table.sort(tags)
+    list_cache.tags = tags
+  end
+  return list_cache.tags or {}
+end
+
+---The ids of the finished tasks (`open` and `preview` take one too).
+---@return string[]
+local function done_ids()
+  local root = vault.root()
+  if
+    done_cache.ids
+    and done_cache.root == root
+    and now_ms() - done_cache.at < COMPLETE_TTL * 1000
+  then
+    return done_cache.ids
+  end
+  local ids = {}
+  if root then
+    for _, a in ipairs(vault.areas(root)) do
+      local ok, finished = pcall(scan.backlog, a.name, { root = root })
+      for _, t in ipairs(ok and finished or {}) do
+        ids[#ids + 1] = t.id
+      end
+    end
+  end
+  table.sort(ids)
+  done_cache = { at = now_ms(), root = root, ids = ids }
+  return ids
+end
+
+---Complete the item under the cursor of a comma list (`ui,do` -> `ui,docs`); what is before it stays, a leading
+---`[` of a `blocked_by=[a, b]` value too.
+---@param lead string
+---@param candidates string[]
+---@return string[]
+local function complete_list(lead, candidates)
+  local head = lead:match("^(.*[,%[])") or ""
+  local item = vim.trim(lead:sub(#head + 1))
+  local out = {}
+  for _, c in ipairs(prefix_ci(candidates, item)) do
+    out[#out + 1] = head .. c
   end
   return out
 end
@@ -124,25 +223,53 @@ function M.register_types()
       -- `find_err` is "no such open task" or the more useful "exists as file and as folder".
       return false, nil, find_err or ("no such open task: " .. raw)
     end,
+    complete = function(arg_lead, spec)
+      if spec and spec.allow_done then
+        local both = vim.list_extend({}, open_ids())
+        vim.list_extend(both, done_ids())
+        table.sort(both)
+        return prefix_ci(both, arg_lead)
+      end
+      return prefix_ci(open_ids(), arg_lead)
+    end,
+  })
+
+  -- `--to=`: the target words, and after `file:` a path completed like a file name (the prefix stays).
+  composer.register_type("TASK_TARGET", {
+    validate = function(raw)
+      -- Whether the target is usable is `view.parse_target`'s answer at run time.
+      return true, raw, nil
+    end,
+    complete = function(arg_lead, spec)
+      if arg_lead:sub(1, 5) == "file:" then
+        local ok, found = pcall(vim.fn.getcompletion, arg_lead:sub(6), "file")
+        local out = {}
+        for _, p in ipairs(ok and found or {}) do
+          out[#out + 1] = "file:" .. p
+        end
+        return out
+      end
+      local words = (spec and spec.values)
+        or { "buffer", "clipboard", "qf", "file:", "echo", "mdview" }
+      return prefix_ci(words, arg_lead)
+    end,
+  })
+
+  composer.register_type("TASK_TAGS", {
+    validate = function(raw)
+      return true, raw, nil
+    end,
     complete = function(arg_lead)
-      -- The directory walk is cached by `scan.all`, but parsing 466 task files (96 ms) happened on every
-      -- `<Tab>` anyway; the finished, sorted id list is what is worth keeping for a moment.
-      local root = vault.root()
-      local now = (vim.uv or vim.loop).now()
-      if id_cache.ids and id_cache.root == root and now - id_cache.at < COMPLETE_TTL * 1000 then
-        return prefix_ci(id_cache.ids, arg_lead)
-      end
-      local ok, open = pcall(scan.open_tasks, { ttl_seconds = COMPLETE_TTL })
-      if not ok or not open then
-        return {}
-      end
-      local ids = {}
-      for _, t in ipairs(open) do
-        ids[#ids + 1] = t.id
-      end
-      table.sort(ids)
-      id_cache = { ids = ids, root = root, at = now }
-      return prefix_ci(ids, arg_lead)
+      return complete_list(arg_lead, open_tags())
+    end,
+  })
+
+  composer.register_type("TASK_IDS", {
+    validate = function(raw)
+      return true, raw, nil
+    end,
+    complete = function(arg_lead)
+      return complete_list(arg_lead, open_ids())
     end,
   })
 end
@@ -155,13 +282,13 @@ local LIST_FLAGS = {
   { name = "kind", type = "STRING", values = model.KINDS },
   { name = "category", type = "STRING", values = model.CATEGORIES },
   { name = "severity", type = "STRING", values = model.SEVERITIES },
-  { name = "tag", type = "STRING" },
+  { name = "tag", type = "TASK_TAGS" },
   { name = "stale", type = "STRING", values = { "7", "30", "90", "refs" } },
   { name = "blocked", bool = true },
   { name = "sort", type = "STRING", enum = model.SORTS },
   {
     name = "to",
-    type = "STRING",
+    type = "TASK_TARGET",
     values = { "buffer", "clipboard", "qf", "file:", "echo", "mdview" },
   },
   { name = "format", type = "STRING", enum = { "md", "csv" } },
@@ -181,7 +308,13 @@ local function set_kv()
   }
   local out = {}
   for _, key in ipairs(mutate.SETTABLE) do
-    out[#out + 1] = { key = key, type = "STRING", values = hints[key] }
+    local kind = "STRING"
+    if key == "tags" then
+      kind = "TASK_TAGS"
+    elseif key == "blocked_by" then
+      kind = "TASK_IDS"
+    end
+    out[#out + 1] = { key = key, type = kind, values = hints[key] }
   end
   return out
 end
@@ -217,7 +350,7 @@ local function nested_routes()
         { key = "kind", type = "STRING", values = model.KINDS },
         { key = "prio", type = "STRING", values = { "1", "2", "3" } },
         { key = "effort", type = "STRING", values = model.EFFORTS },
-        { key = "tags", type = "STRING" },
+        { key = "tags", type = "TASK_TAGS" },
         { key = "category", type = "STRING", values = model.CATEGORIES },
         { key = "severity", type = "STRING", values = model.SEVERITIES },
         { key = "status", type = "STRING", values = model.OPEN_STATUSES },
@@ -278,7 +411,7 @@ local function nested_routes()
     {
       path = { "task", "template" },
       flags = {
-        { name = "to", type = "STRING", values = { "clipboard", "buffer", "file:" } },
+        { name = "to", type = "TASK_TARGET", values = { "clipboard", "buffer", "file:" } },
         { name = "force", bool = true },
       },
       desc = "Copy the task file template to the + register (--to=buffer|file:<path> for the other targets)",
@@ -319,7 +452,7 @@ local function nested_routes()
       flags = {
         { name = "action", type = "STRING", enum = { "files", "grep", "smart" } },
         { name = "list", bool = true },
-        { name = "to", type = "STRING", values = { "buffer", "clipboard", "file:", "echo" } },
+        { name = "to", type = "TASK_TARGET", values = { "buffer", "clipboard", "file:", "echo" } },
         { name = "force", bool = true },
       },
       desc = "Picker over the files of one folder of an area (tasks|roadmap|backlog|handover|notes|all, default all) through pickers.nvim; --action=grep|smart searches content, --list or --to= delivers the file list",
