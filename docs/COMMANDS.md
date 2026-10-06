@@ -82,7 +82,9 @@ counts, the active filter chips and, when it is not the default, the sort order:
 | `s` | advance the status of the marked (else the current) tasks: `doing` -> `decision` -> `blocked` -> `open` -> `parked` -> `doing` |
 | `p` | advance the prio: none -> 1 -> 2 -> 3 -> none (3 -> none removes the key) |
 | `D` | finish after **one** confirmation naming every task (engine `done`, moved to `Backlog/`) |
-| `f` | set a filter chip: pick `status`, `prio`, `effort` (`XS`..`XL`, `<=S`, `<=M`), `kind`, `category`, `severity`, `tag`, `blocked`, `stale-refs` (toggle: shows the chip `[stale: refs]`) or "clear all", then a value (`(any)` clears one chip) |
+| `f` | set a filter chip: pick `status`, `prio`, `effort` (`XS`..`XL`, `<=S`, `<=M`), `kind`, `category`, `severity`, `value`, `actor`, `tag`, `blocked`, `unestimated`, `stale-refs` (toggle: shows the chip `[stale: refs]`),
+`readiness` (`ready` / `waiting`: the same cut as `list --ready` / `--waiting`, which the dashboard keeps when it was
+opened with them) or "clear all", then a value (`(any)` clears one chip) |
 | `o` | cycle the sort order: `default` -> `prio-effort` (small first within a prio) -> `severity` (critical first) -> `frecency` (most opened / changed first) -> `default`; a non-default order shows as `[sort: ...]` in the title |
 | `e` | export the marked (else all shown) tasks: scratch buffer, clipboard, quickfix or a file, as Markdown or CSV, or "Preview in browser (mdview)" -- the `--to=` sinks |
 | `r` | rescan the vault now (the list also refreshes by itself, see "Live refresh"); keeps the cursor task and the marks |
@@ -288,10 +290,23 @@ More than `blocked_by` shapes the plan, all of it optional:
 - **`--plan=<id>`** draws the plan of a plan file (below): its tasks (`plan: <id>`), the stage order (`phase_order`),
   the goal, the status and the target in the head. **`--with-steps`** shows each task's `## Plan` steps and progress.
 - **`--write=<file>`** replaces only the generated block of a hand-written document:
-  `<!-- GENERATED:plan scope=<name> start -->` ... `<!-- GENERATED:plan end -->`. The rest of the file and its line
-  endings stay byte for byte; headings inside the block sit one level below the document's own. The block name is the
-  plan's slug, the area, `for-<slug>` or `all` (`--scope=<name>` picks another); `--check` writes nothing and says
-  whether the block is out of date. Blocks are not part of `check` or CI.
+  `<!-- GENERATED:plan scope=<name> start -->` ... `<!-- GENERATED:plan end -->`. The rest of the file keeps its bytes
+  and its line endings **line by line** (a document with mixed endings is not normalised); headings inside the block
+  sit one level below the document's own, and the plan's summary is quoted (`> `), so a summary that reads like a marker
+  cannot split the block. The block name is the plan's slug, the area, `for-<slug>` or `all` (`--scope=<name>` picks
+  another); `--check` writes nothing and says whether the block is out of date. Blocks are not part of `check` or CI.
+  The path is literal (`~`, `$VAR` are expanded, `[1]` is no wildcard) and a symlink is written **through**.
+  - The start marker **records how the block was made**: the target (`plan=<id>`, `for=<id>`, `area=<name>`), the
+    view (`ready=1`, `steps=1`) and the filters (`status=doing`, ...), e.g.
+    `<!-- GENERATED:plan scope=release plan=lib.nvim/release ready=1 start -->`. The refresh after a `done`, and
+    `--check`, read it back and build the same block. A plain marker you wrote by hand is rewritten with these
+    attributes by the first `--write`; one without them is resolved by its name (an area, an open plan's slug or id,
+    `for-<slug>`, `all`) and, when two plans or tasks share that slug, **skipped with the candidates named** instead of
+    refreshed from a guess. A filter value that cannot live on a marker line (a blank, `--`) is refused.
+  - Several blocks of one scope are all refreshed; a marker inside a fenced code block (a document that shows the
+    syntax) is no marker. A scope with a folder that could not be read is not written (a degraded copy of the plan).
+  - Refreshing reads the vault once for all the blocks of a document and reads the file again right before it
+    writes: an edit made meanwhile is kept, and a document that keeps changing is given up on with a message.
 
 ### `:Tasks planfile <area> <title...> [--areas=a,b] [--phases=a,b,c] [--gate=hard] [--target=<id>] [--status=]`
 
@@ -318,7 +333,8 @@ Sums of effort and value, always saying what they are made of: "22 d from 17 of 
 roi 2.8 · me 8.5 d / cdx 13.5 d / unclear 3 -- estimate from the scale, not a promise". The range puts every size at
 its low and its high end (a T-shirt size is not a number). The return on effort counts only the tasks that have both
 numbers. Quick wins (value 4 or more, effort S or less) are named. `--walk` goes through the tasks that miss an effort
-or a value, asks for them one by one (`Skip` first, `Stop` keeps what was given) and writes everything in one batch.
+or a value, asks for them one by one (`Skip` first; `Stop`, and a dismissed dialog (Esc), end the walk and keep what was given)
+and writes everything in one batch.
 
 ### `:Tasks done <id> [done_in=...] [date=YYYY-MM-DD] [--yes]`
 
@@ -335,7 +351,11 @@ message): the open steps of the task's own `## Plan` are **ticked** (a step mark
 open; the ticks are written with the finished copy, so the rollback covers them), a **plan file** whose last member this
 was is finished (moved to `Backlog/FEATURES/`, "Plan x is done: 12 tasks, estimate 9.5 d, finished in 14 days"), and
 the **generated blocks** of the documents named in `setup({ chain = { marker_docs = { ... } } })` are refreshed (only
-those files; the block of a finished plan becomes its closing line).
+those files; the block of a finished plan becomes its closing line). The headless CLI has no `setup`: it reads the same
+list from `$TASKS_MARKER_DOCS` (comma separated). A plan counts as finished when no task with `plan: <id>` is left that
+is not `done` -- valid or not: a mistyped `status:` keeps the plan open; a scan that could not read every folder closes
+nothing and says so. One id namespace holds plans, tasks and Backlog files: a plan whose id an open task or a finished
+item already has is not finished (and `plan-new` / `new` skip such a slug).
 
 After the finish a small dialog names the tasks it freed and the next task to start (see `:Tasks next`); with
 `setup({ next = { popup = false } })`, or without a UI, the same text is a plain message. A task that waited only on

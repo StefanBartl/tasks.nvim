@@ -143,8 +143,8 @@ lists the task with the file that changed: the signal to re-read a task before a
 
 `:Tasks list [area]` without `--to=` opens the dashboard (needs snacks.nvim; without it a plain selection list).
 
-1. Type to search; `f` sets a filter chip (status, prio, effort, kind, category, severity, tag, blocked,
-   stale-refs); `o` cycles the sort (default, prio-effort, severity, frecency).
+1. Type to search; `f` sets a filter chip (status, prio, effort, kind, category, severity, value, actor, tag,
+   blocked, unestimated, stale-refs, readiness); `o` cycles the sort (default, prio-effort, severity, frecency, roi).
 2. `<Tab>` marks tasks. `s` advances the status of the marked tasks (or the current one), `p` the prio, `D` finishes
    them after **one** confirmation. A task that someone else changed since the list was drawn is skipped with a
    message instead of being overwritten.
@@ -329,11 +329,15 @@ Finishing the task ticks the open steps (written with the finish, so a failed fi
 :Tasks plan --plan=my-area/ship-the-gateway --write=docs/HANDOVER.md
 ```
 
-Only the block changes; the rest of the document and its line endings stay byte for byte. Name the document once in
-`setup({ chain = { marker_docs = { "docs/HANDOVER.md" } } })` and every `done` refreshes its blocks (a stack finished
-in the dashboard refreshes them once); when the plan's last task is done the plan is finished too, and its block
-becomes "Plan ... is done: 12 tasks, estimate 9.5 d, finished in 14 days". Blocks are not part of `check` or CI (a task
-change must not turn the pipeline red); `plan --write=... --check` says whether one is out of date.
+Only the block changes; the rest of the document keeps its bytes and its line endings, line by line. The first
+`--write` also records on the start marker how the block was made (`plan=my-area/ship-the-gateway`, a `ready=1` view,
+filters), so the refresh builds the same block later; two plans that share a slug are told apart that way, and a block
+that cannot be told is skipped with the candidates named. Name the document once in
+`setup({ chain = { marker_docs = { "docs/HANDOVER.md" } } })` -- for the headless CLI (an agent finishing tasks) in
+`$TASKS_MARKER_DOCS` -- and every `done` refreshes its blocks (a stack finished in the dashboard refreshes them once);
+when the plan's last task is done the plan is finished too, and its block becomes "Plan ... is done: 12 tasks, estimate
+9.5 d, finished in 14 days". Blocks are not part of `check` or CI (a task change must not turn the pipeline red);
+`plan --write=... --check` says whether one is out of date.
 
 ## Planned scenarios
 

@@ -65,7 +65,8 @@ blockers, plan or estimate is valid and stays visible everywhere.
   next.popup               After `done`: a dialog with the next task (else a message).
   next.cdx_hint            Name ready tasks written `cdx` apart, never as your next task.
   chain.marker_docs        Documents whose `<!-- GENERATED:plan scope=... -->` blocks are
-                           refreshed after a task is finished (only these files).
+                           refreshed after a task is finished (only these files). The
+                           headless CLI reads `$TASKS_MARKER_DOCS` (comma separated).
   steps.ask_finish         In a task buffer, ticking the last `## Plan` step asks to finish
                            the task (off by default: it adds an autocommand).
   keys.dashboard           Dashboard list keys: action = key, or false.

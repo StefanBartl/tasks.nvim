@@ -61,6 +61,28 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- Review round over the plan / chain / marker-block code (ultracode review, every finding probed before it was fixed):
+  - `plans.close` no longer deletes a finished copy another run created, puts the README row of another run back over
+    nothing, names a failed put-back, resumes a killed close and refuses a plan whose id an open task or a finished item
+    already has; `plans.new` / `new` skip a slug of the other kind (one id namespace); `plans.find` checks the spelling
+    of the area. The done chain counts every task of the plan that is not `done` (a mistyped status keeps it open), does
+    not close on a partial scan and checks each plan once per batch.
+  - Generated blocks: the start marker records the target, view and filters, repeated and fenced blocks, per-line line
+    endings, a quoted plan summary, ambiguous names are skipped, one vault scan and a re-read before the write per
+    document, `plan --write` refuses a scope with unreadable folders, a document that is a symlink is written through,
+    `--write=<path>` and `chain.marker_docs` are literal paths, `$TASKS_MARKER_DOCS` for the headless CLI.
+  - Concurrency: README rows and task frontmatter are written under a lock (no lost update); `done`'s rollback leaves
+    the README and index of another run alone.
+  - Quadratic patterns (SEC-32 class) in the `## Plan` checkbox line and the folder-task asset scan; a huge title can
+    no longer push a generated file past the read limit; an unreadable task no longer deletes an index.
+  - CLI: a typed count is one cycle, `migrate-actor` checks its area, `done --unblock` advises after the unblock,
+    unknown statuses are not "everything is done", ids are cleaned in `next` / `list` output.
+  - Dashboard: `list --ready|--waiting` is kept (a `readiness` filter dimension), one scan per load (the live refresh
+    and `s` / `p` no longer scan twice), the done chain's notes are reported, a dismissed `estimate --walk` dialog ends
+    the walk, `:Tasks new` carries `after=` / `order=` / `plan=` / `phase=` through the form, the watcher also watches
+    `plans/` and mutes the echo of its own writes after a slow rescan, the help float is as tall as its wrapped text.
+  - Staleness: positions after a Windows drive letter, invalid dates, one probe instead of a spawn per path when git
+    cannot be used; same-file marks follow the file a ref resolves to.
 - Table cells are escaped in one linear pass (a long run of backslashes in front of `|` no longer freezes the editor
   or splits the cell); no pattern of the parser backtracks on whitespace (SEC-32).
 - `done` never deletes a finished copy it did not create, and re-reads the task right before it removes the

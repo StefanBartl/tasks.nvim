@@ -21,7 +21,7 @@
 ---@field ask_finish boolean  In a task buffer: when the LAST open step of `## Plan` is ticked, ask whether to finish the task (off by default: it adds an autocommand on task buffers).
 
 ---@class Tasks.ChainConfig
----@field marker_docs string[]  Documents whose `<!-- GENERATED:plan scope=... -->` blocks are refreshed after a task is finished. Only these files are ever touched (nothing is scanned); empty by default.
+---@field marker_docs string[]  Documents whose `<!-- GENERATED:plan scope=... -->` blocks are refreshed after a task is finished. Only these files are ever touched (nothing is scanned); empty by default. The headless CLI has no `setup`: `$TASKS_MARKER_DOCS` (comma separated) names them there.
 
 ---@class Tasks.CiConfig
 ---@field lint_timeout_ms integer  The vault's `md_lint.lua` is killed after this long (`ci`).
