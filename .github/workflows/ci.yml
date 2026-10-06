@@ -59,6 +59,20 @@ jobs:
         with:
           neovim: true
           version: stable
-      - run: nvim -n -i NONE --headless -u NONE -l TESTS/run.lua
+      # Checked out from the branch that only moves once the dependency's own CI is green.
+      - uses: actions/checkout@v5
+        with:
+          repository: "StefanBartl/testing.nvim"
+          path: .deps/testing.nvim
+          ref: ci-verified
+      - run: bash scripts/test.sh --json "$RUNNER_TEMP/testing-ir.json"
         env:
           TASKS_REQUIRE_SNACKS: "1"
+      # The IR is what a reporter or a person reads to find out WHICH case failed on WHICH platform.
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: testing-ir-${{ matrix.os }}
+          path: ${{ runner.temp }}/testing-ir.json
+          if-no-files-found: ignore
+          retention-days: 14

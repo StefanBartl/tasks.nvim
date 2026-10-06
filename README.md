@@ -1,5 +1,6 @@
 > **Alpha, not released yet.** The engine, the `:Tasks` command, the dashboard, the form and the headless CLI are
-> built and covered by specs (24). Only tested on Windows so far; the CI for Linux and macOS has not run yet.
+> built and covered by specs (40). Developed and tested on Windows; the CI runs the specs on Linux, Windows and macOS and
+> is green on Windows and Linux, while three specs currently fail on macOS (symlinked temp folders, `/var` vs `/private/var`).
 > Pin a commit if you depend on this.
 
 # tasks.nvim
@@ -155,12 +156,15 @@ the file `done` says so and moves the task anyway.
 ## Tests
 
 ```sh
-scripts/test.sh                  # all specs
-scripts/test.sh tasks_mutate     # specs whose name contains the argument
+scripts/test.sh                     # all specs
+scripts/test.sh --file tasks_mutate # spec files whose name contains the argument
+scripts/test.sh --json ir.json      # also write the machine-readable result
 ```
 
-The specs run against a temporary fixture vault, never a real one. lib.nvim is looked up in `$LIB_NVIM_DIR`,
-`$REPOS_DIR/lib.nvim`, `.deps/lib.nvim`, next to this repository and in lazy.nvim's data folder.
+The specs run on [testing.nvim](https://github.com/StefanBartl/testing.nvim) (configured in `.testing.lua`) against a
+temporary fixture vault, never a real one. testing.nvim and lib.nvim are looked up in `$TESTING_NVIM_DIR` / `$LIB_NVIM_DIR`,
+`.deps/<name>`, next to this repository and in lazy.nvim's data folder. The dashboard specs need snacks.nvim
+(`$SNACKS_DIR`, `.deps/snacks.nvim` or lazy.nvim's data folder); without it they skip the picker part.
 
 ## License
 

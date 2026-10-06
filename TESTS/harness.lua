@@ -1,5 +1,5 @@
 -- TESTS/harness.lua -- tiny assertion and temp-dir helpers shared by the specs.
--- Returned to each spec by TESTS/run.lua. Same shape as lib.nvim's TESTS/harness.lua
+-- Handed to each spec by testing.nvim (dialect "h", see .testing.lua). Same shape as lib.nvim's TESTS/harness.lua
 -- (`return function(H)` specs), so a spec can move between the two suites.
 
 local uv = vim.uv or vim.loop

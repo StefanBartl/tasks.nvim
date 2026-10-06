@@ -48,7 +48,7 @@ lua/tasks_nvim/
 └── @types/       LuaLS types
 scripts/tasks.lua   headless entry (nvim --headless -u NONE -l)
 scripts/tasks-ci.lua  same as `tasks.lua ci`, the one entry point for a pipeline
-TESTS/              specs (run with TESTS/run.lua)
+TESTS/              specs (run with scripts/test.sh, i.e. testing.nvim)
 ```
 
 ## Modules
@@ -403,8 +403,8 @@ Specs live in `TESTS/` and run against a temporary fixture vault, never
 against the real one:
 
 ```sh
-nvim -n -i NONE --headless -u NONE -l TESTS/run.lua            # all
-nvim -n -i NONE --headless -u NONE -l TESTS/run.lua tasks_mutate   # one
+scripts/test.sh                       # all
+scripts/test.sh --file tasks_mutate   # one
 ```
 
 One spec per module (`tasks_<module>_spec.lua`) plus the CLI and CI end-to-end specs; the shared helper is
