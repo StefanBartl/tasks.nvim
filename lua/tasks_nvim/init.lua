@@ -54,6 +54,16 @@ function M.setup(opts)
     vim.schedule(function()
       require("tasks_nvim.ui.steps_watch").enable()
     end)
+  else
+    -- "last call wins per key": a reload that switches the option off removes what an earlier call registered (the
+    -- augroup survives a `package.loaded` reset, so it is removed by name when the module is not loaded)
+    vim.schedule(function()
+      if package.loaded["tasks_nvim.ui.steps_watch"] then
+        require("tasks_nvim.ui.steps_watch").disable()
+      else
+        pcall(vim.api.nvim_del_augroup_by_name, "TasksStepsWatch")
+      end
+    end)
   end
   -- `:Tasks` is registered by `plugin/tasks_nvim.lua` (which a plugin manager sources when it loads the
   -- plugin); the engine facade does not reach into the front end.

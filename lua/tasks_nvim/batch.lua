@@ -71,22 +71,28 @@ end
 function M.plan_cycle(tasks, field, count)
   local model = require("tasks_nvim.model")
   local plan = {}
-  local presses = math.max(1, count or 1)
+  local presses = math.max(1, math.floor(count or 1))
+  -- The first press brings any value (a status nobody knows, a prio of 9) into the cycle; from then on it is periodic,
+  -- so `999999999p` costs one cycle, not a billion steps (a vim count is typed, and not interruptible here).
+  ---@generic T
+  ---@param cur T
+  ---@param step fun(cur: T): T
+  ---@param period integer
+  ---@return T
+  local function advance(cur, step, period)
+    cur = step(cur)
+    for _ = 1, (presses - 1) % period do
+      cur = step(cur)
+    end
+    return cur
+  end
   for _, t in ipairs(tasks) do
     ---@type string|integer|nil
     local from, to
     if field == "status" then
-      local cur = t.status
-      for _ = 1, presses do
-        cur = model.cycle_status(cur)
-      end
-      from, to = t.status, cur
+      from, to = t.status, advance(t.status, model.cycle_status, #model.OPEN_STATUSES)
     else
-      local cur = t.prio
-      for _ = 1, presses do
-        cur = model.cycle_prio(cur)
-      end
-      from, to = t.prio, cur
+      from, to = t.prio, advance(t.prio, model.cycle_prio, #model.PRIOS + 1)
     end
     plan[#plan + 1] = {
       id = t.id,
@@ -151,9 +157,10 @@ end
 ---@field areas string[]            # Areas whose index was regenerated (those with a change).
 ---@field index_errors string[]
 
----Run a list of `set` steps.
+---Run a list of `set` steps. The index of every touched area is regenerated once at the end (`opts.index = false`:
+---not at all).
 ---@param steps Tasks.BatchSetStep[]
----@param opts { root: string, today?: string }
+---@param opts { root: string, today?: string, index?: boolean }
 ---@return Tasks.BatchSetResult
 function M.set_many(steps, opts)
   ---@type Tasks.BatchSetResult
@@ -191,7 +198,9 @@ function M.set_many(steps, opts)
     end
   end
   res.areas = areas_of(changed_ids)
-  res.index_errors = reindex(res.areas, opts.root)
+  if opts.index ~= false then
+    res.index_errors = reindex(res.areas, opts.root)
+  end
   return res
 end
 

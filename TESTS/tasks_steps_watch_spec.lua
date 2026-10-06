@@ -127,6 +127,43 @@ return function(H)
       return groups() > 0
     end)
     ok(groups() > 0, "setup({ steps = { ask_finish = true } }) turns it on")
+    -- "last call wins": a later setup with the option off takes them away again
+    require("tasks_nvim").setup({ steps = { ask_finish = false } })
+    vim.wait(50, function()
+      return groups() == 0
+    end)
+    eq(groups(), 0, "setup({ steps = { ask_finish = false } }) turns it off again")
+
+    -- a task buffer that was open BEFORE enable(): primed, so its first tick of the last step asks
+    local pre = assert(mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "Preopened" })))
+    H.write(pre.path, H.read(pre.path) .. "\n## Plan\n\n- [ ] 1. only\n")
+    vim.cmd("edit " .. vim.fn.fnameescape(pre.path))
+    local pre_buf = vim.api.nvim_get_current_buf()
+    watch.enable()
+    local asked_before = #asked
+    answer = false
+    local pre_lines = vim.api.nvim_buf_get_lines(pre_buf, 0, -1, false)
+    for i, line in ipairs(pre_lines) do
+      if line:match("^%- %[ %] 1%.") then
+        pre_lines[i] = "- [x] 1. only"
+      end
+    end
+    vim.api.nvim_buf_set_lines(pre_buf, 0, -1, false, pre_lines)
+    eq(watch.check_buffer(pre_buf), true, "the first tick in an already open buffer asks")
+    eq(#asked, asked_before + 1)
+    watch.disable()
+
+    -- the vault prefix is compared like every path (Windows: `c:/` is `C:/`), the id keeps its on-disk spelling
+    if vim.fn.has("win32") == 1 then
+      local other =
+        assert(mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "Lower drive" })))
+      local lowered = other.path:gsub("^%a:", function(drive)
+        return drive:lower()
+      end)
+      local lower_buf = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_name(lower_buf, lowered)
+      eq(watch.task_id(lower_buf), other.id, "a lower-case drive letter is the same vault")
+    end
   end)
   cleanup()
   if not good then

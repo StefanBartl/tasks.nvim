@@ -30,8 +30,15 @@ function M.task_id(buf)
   if not root then
     return nil
   end
-  local name = require("tasks_nvim.fsio").norm(vim.api.nvim_buf_get_name(buf))
-  local area, rest = name:match("^" .. vim.pesc(root) .. "/([^/]+)/ROADMAP/tasks/(.+)%.md$")
+  local fsio = require("tasks_nvim.fsio")
+  local name = fsio.norm(vim.api.nvim_buf_get_name(buf))
+  -- The vault prefix is compared the way every path is (case-insensitively on Windows: `c:/` is `C:/`); the id is
+  -- sliced from the name as it is, so it keeps the casing on disk.
+  local n = #root
+  if #name <= n or name:sub(n + 1, n + 1) ~= "/" or not fsio.same_path(name:sub(1, n), root) then
+    return nil
+  end
+  local area, rest = name:sub(n + 2):match("^([^/]+)/ROADMAP/tasks/(.+)%.md$")
   if not area or not rest then
     return nil
   end
@@ -124,6 +131,13 @@ function M.enable()
     desc = "tasks.nvim: forget a closed task buffer",
     record = false,
   })
+  -- Task buffers that are already open (`setup` ran lazily, on the first `:Tasks`): note how they stand now, else
+  -- the first tick of their last step would pass for a first look and never ask.
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) and complete[buf] == nil then
+      M.prime(buf)
+    end
+  end
 end
 
 ---Remove the autocommands and the memory (specs, `setup` with the option off).

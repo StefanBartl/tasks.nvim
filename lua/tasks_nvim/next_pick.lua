@@ -38,6 +38,7 @@ local M = {}
 ---@field actor? string                         # `cdx`, `me`, `pair` or `none`: that queue instead of the human's.
 ---@field n? integer                            # Runners-up to return (default 2).
 ---@field cdx? integer                          # Tasks for an AI session to list apart (default 3).
+---@field unlisted? integer                     # Tasks of a status nobody knows (see `NextEmpty.unlisted`).
 
 ---@class Tasks.NextPick
 ---@field task? Tasks.Task
@@ -58,6 +59,7 @@ local M = {}
 ---@field for_me integer                        # Open tasks that are yours (actor me) and not startable.
 ---@field blocked_status integer                # `status: blocked` with nothing blocking (set them to open).
 ---@field parked integer
+---@field unlisted integer                      # Tasks whose `status` is none of the known ones: neither open nor done.
 
 ---@type table<string, integer>
 local STATUS_RANK = { doing = 1, open = 2, decision = 3 }
@@ -205,6 +207,7 @@ function M.pick(opts)
     for_me = 0,
     blocked_status = 0,
     parked = 0,
+    unlisted = opts.unlisted or 0,
   }
   for _, id in ipairs(built.ids) do
     local node = built.nodes[id]
@@ -220,7 +223,7 @@ function M.pick(opts)
       empty.for_me = empty.for_me + 1
     end
   end
-  if #opts.tasks == 0 then
+  if #opts.tasks == 0 and empty.unlisted == 0 then
     empty.kind = "all_done"
   elseif not opts.actor and #result.cdx > 0 then
     empty.kind = "only_cdx"
@@ -235,9 +238,19 @@ end
 ---@return string|nil err
 function M.pick_from_vault(opts)
   local scan = require("tasks_nvim.scan")
-  local open, skipped, errors = scan.open_tasks({ root = opts.root })
-  if not open then
-    return nil, tostring(skipped)
+  local all, errors = scan.all({ root = opts.root })
+  if not all then
+    return nil, tostring(errors)
+  end
+  -- A task whose `status:` is a word nobody knows is not open, and not done either: "everything is done" would be a
+  -- lie while it sits there (`check` names it). A file with no status at all is no task; a `done` one is finished.
+  local open, unlisted = {}, 0
+  for _, t in ipairs(all) do
+    if model.is_open_status(t.status) then
+      open[#open + 1] = t
+    elseif type(t.status) == "string" and t.status ~= "done" then
+      unlisted = unlisted + 1
+    end
   end
   local known = {}
   local result = M.pick({
@@ -251,6 +264,7 @@ function M.pick_from_vault(opts)
       return hit
     end,
     plans = require("tasks_nvim.plans").all({ root = opts.root }) or {},
+    unlisted = unlisted,
     done = opts.done,
     area = opts.area,
     actor = opts.actor,
@@ -258,7 +272,7 @@ function M.pick_from_vault(opts)
     cdx = opts.cdx,
   })
   -- A folder that could not be read means the answer may be incomplete, in particular an "all done".
-  if errors and #errors > 0 then
+  if type(errors) == "table" and #errors > 0 then
     result.incomplete = errors
   end
   return result, nil

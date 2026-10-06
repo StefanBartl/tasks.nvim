@@ -407,10 +407,10 @@ function commands.list(ctx)
   local shown = model.sort(filtered, order)
   for _, t in ipairs(shown) do
     if format == "ids" then
-      ctx.say(t.id)
+      ctx.say(fsio.clean(t.id))
     else
       local cells = {
-        t.id,
+        fsio.clean(t.id),
         cellv(t.status),
         cellv(t.prio),
         cellv(t.effort),
@@ -575,7 +575,7 @@ function commands.plan(ctx)
   end
   if format == "ids" then
     for _, id in ipairs(plan_view.ids(scope.plan, { ready_only = ready_only })) do
-      ctx.say(id)
+      ctx.say(fsio.clean(id))
     end
   elseif format == "tsv" then
     for _, line in ipairs(plan_view.tsv(scope.plan, { ready_only = ready_only })) do
@@ -820,11 +820,11 @@ end
 
 function commands.migrate_actor(ctx)
   local args, eo = ctx.args, ctx.eo
-  if #args.pos > 1 then
-    ctx.warn("error: migrate-actor takes at most one area")
+  local area, area_ok = area_arg(ctx, "migrate-actor")
+  if not area_ok then
     return 2
   end
-  local open, skipped, errors = scan.open_tasks({ root = eo.root, area = args.pos[1] })
+  local open, skipped, errors = scan.open_tasks({ root = eo.root, area = area })
   if not open then
     ctx.warn("error: " .. tostring(skipped))
     return 1
@@ -911,13 +911,25 @@ function commands.done(ctx)
     for _, task_id in ipairs(flow.next.freed_blocked) do
       steps[#steps + 1] = { id = task_id, patch = { status = "open" } }
     end
-    local unblocked =
-      require("tasks_nvim.batch").set_many(steps, { root = eo.root, today = eo.today })
+    local unblocked = require("tasks_nvim.batch").set_many(
+      steps,
+      { root = eo.root, today = eo.today, index = not args.opt["no-index"] }
+    )
     for _, changed in ipairs(unblocked.changed) do
-      ctx.say(("unblocked\t%s"):format(changed.id))
+      ctx.say(("unblocked\t%s"):format(fsio.clean(changed.id)))
     end
     for _, f in ipairs(unblocked.failed) do
       ctx.warn(("warn: %s: %s"):format(f.id, f.err))
+    end
+    if #unblocked.changed > 0 then
+      -- The advice below was worked out while the freed tasks still read `blocked`: they rank first once open.
+      local pick = next_pick.pick_from_vault({
+        root = eo.root,
+        done = { id = res.id, area = flow.done.area },
+      })
+      if pick then
+        flow.next = pick
+      end
     end
   end
   if flow.next and not args.opt["no-next"] then

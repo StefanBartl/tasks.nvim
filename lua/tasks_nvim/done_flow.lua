@@ -45,7 +45,37 @@ local M = {}
 ---@field notes string[]             # Follow-up steps that did not work; the finish itself stands.
 ---@field next? Tasks.NextPick       # What to start next (`next_pick`); absent when not asked for or not computable.
 
----Refresh the marker blocks of the documents named in `setup({ chain = { marker_docs = ... } })`. Only those files
+---The documents whose marker blocks a finish refreshes: `setup({ chain = { marker_docs } })` plus `$TASKS_MARKER_DOCS`
+---(comma separated; the headless CLI has no `setup`, so this is how it learns them, as `$TASKS_EXTRA_AREAS` is).
+---Each file once, however it is spelled.
+---@return string[]
+function M.marker_docs()
+  local out, seen = {}, {}
+  ---@param doc any
+  local function add(doc)
+    if type(doc) ~= "string" or fsio.trim(doc) == "" then
+      return
+    end
+    local key = fsio.doc_path(fsio.trim(doc))
+    if not seen[key] then
+      seen[key] = true
+      out[#out + 1] = key
+    end
+  end
+  for _, doc in ipairs(require("tasks_nvim.config").get().chain.marker_docs) do
+    add(doc)
+  end
+  local env = vim.env.TASKS_MARKER_DOCS
+  if env and env ~= "" then
+    for doc in env:gmatch("[^,]+") do
+      add(doc)
+    end
+  end
+  return out
+end
+
+---Refresh the marker blocks of the documents named in `setup({ chain = { marker_docs = ... } })` (and in
+---`$TASKS_MARKER_DOCS`, which is how the headless CLI is told). Only those files
 ---are read or written; a block that cannot be refreshed is a note, never an error.
 ---`opts.closed` (plan id -> summary) names plans that were finished a moment ago: their block (the one that names the
 ---plan by `plan=<id>`, by id, or by a slug no open plan shares) is rewritten as the "plan is done" line, its last
@@ -56,7 +86,7 @@ local M = {}
 function M.refresh_marker_docs(opts)
   opts = opts or {}
   local refreshed, notes = {}, {}
-  local docs = require("tasks_nvim.config").get().chain.marker_docs
+  local docs = M.marker_docs()
   if #docs == 0 then
     return refreshed, notes
   end

@@ -588,19 +588,24 @@ function M.next_lines(pick)
   local out = {}
   if pick.task then
     out[#out + 1] = ("next: %s\t%s\t%s"):format(
-      pick.task.id,
+      fsio.clean(pick.task.id),
       fsio.clean(pick.task.title),
       pick.reason or ""
     )
     for _, t in ipairs(pick.alternatives) do
-      out[#out + 1] = ("then: %s\t%s"):format(t.id, fsio.clean(t.title))
+      out[#out + 1] = ("then: %s\t%s"):format(fsio.clean(t.id), fsio.clean(t.title))
     end
   end
   if #pick.freed > 0 then
-    out[#out + 1] = "freed: " .. table.concat(pick.freed, ", ")
+    -- ids are file names: a TAB or LF in one must not start a record of its own in a line a script reads
+    local freed = {}
+    for _, id in ipairs(pick.freed) do
+      freed[#freed + 1] = fsio.clean(id)
+    end
+    out[#out + 1] = "freed: " .. table.concat(freed, ", ")
   end
   for _, t in ipairs(pick.cdx) do
-    out[#out + 1] = ("cdx: %s\t%s"):format(t.id, fsio.clean(t.title))
+    out[#out + 1] = ("cdx: %s\t%s"):format(fsio.clean(t.id), fsio.clean(t.title))
   end
   if pick.empty then
     out[#out + 1] = "empty: " .. M.empty_text(pick.empty)
@@ -630,6 +635,9 @@ function M.empty_text(empty)
   end
   if empty.parked > 0 then
     waiting[#waiting + 1] = ("%d parked"):format(empty.parked)
+  end
+  if (empty.unlisted or 0) > 0 then
+    waiting[#waiting + 1] = ("%d with a status nobody knows (see check)"):format(empty.unlisted)
   end
   return "Nothing can be started. Still open: "
     .. (#waiting > 0 and table.concat(waiting, ", ") or "see the list")
