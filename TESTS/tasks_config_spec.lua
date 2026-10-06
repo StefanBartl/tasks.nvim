@@ -45,7 +45,21 @@ return function(H)
     "repo_bases is a string list"
   )
   config.merge({ dashboard = { watch = false } })
-  eq(config.get().dashboard, { watch = false, debounce_ms = 250 }, "a section merges key by key")
+  eq(
+    config.get().dashboard,
+    { watch = false, debounce_ms = 250, backend = "auto" },
+    "a section merges key by key"
+  )
+  eq(
+    config.validate({ dashboard = { backend = "kit" } }).dashboard.backend,
+    "kit",
+    "a known backend"
+  )
+  eq(
+    config.validate({ dashboard = { backend = "fzf" } }).dashboard.backend,
+    nil,
+    "an unknown backend is dropped"
+  )
   config.merge({ dashboard = { watch = true } })
   eq(config.get().dashboard.watch, true)
   ok(#config.ignored() >= 1, "problems stay listed for :checkhealth")

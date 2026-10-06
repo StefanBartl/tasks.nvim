@@ -13,13 +13,13 @@ local M = {}
 ---@type Tasks.Opts
 local state = vim.deepcopy(DEFAULTS)
 
----@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"
+---@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"
 
 ---@type table<string, Tasks.ConfigType|table<string, Tasks.ConfigType>>
 local SCHEMA = {
   vault = "string",
   extra_areas = "string_list",
-  dashboard = { watch = "boolean", debounce_ms = "posint" },
+  dashboard = { watch = "boolean", debounce_ms = "posint", backend = "backend" },
   staleness = { git_timeout_ms = "posint", budget_ms = "posint", repo_bases = "string_list" },
   ci = { lint_timeout_ms = "posint", trust_vault_lint = "boolean" },
   next = { popup = "boolean", cdx_hint = "boolean" },
@@ -91,6 +91,11 @@ local function check(kind, value)
       end
     end
     return true, vim.deepcopy(value), nil
+  elseif kind == "backend" then
+    if value == "auto" or value == "snacks" or value == "kit" or value == "select" then
+      return true, value, nil
+    end
+    return false, nil, 'one of "auto", "snacks", "kit", "select"'
   elseif kind == "posint" then
     if type(value) == "number" and value > 0 and value == math.floor(value) then
       return true, value, nil

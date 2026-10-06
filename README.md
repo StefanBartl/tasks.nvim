@@ -115,7 +115,7 @@ Every key is optional.
 require("tasks_nvim").setup({
   vault = "~/vault",         -- one folder per area; $TASKS_VAULT when unset
   extra_areas = { "ALL" },   -- folders that are areas although they hold neither ROADMAP/ nor Backlog/
-  dashboard = { watch = true, debounce_ms = 250 },                              -- live refresh
+  dashboard = { watch = true, debounce_ms = 250, backend = "auto" },            -- live refresh; backend: auto | snacks | kit | select
   staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },   -- --stale=refs
   ci = { lint_timeout_ms = 120000 },                                            -- md_lint in the CI gate
   next = { popup = true, cdx_hint = true },                                     -- the dialog after done

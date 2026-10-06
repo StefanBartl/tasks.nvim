@@ -82,7 +82,7 @@ local MAX_CONFIRM_LINES = 8
 
 ---@class Tasks.DashOpts
 ---@field persist? boolean   # Remember the filter between sessions (default true).
----@field backend? "snacks"|"select"   # Force a backend (default: snacks when present).
+---@field backend? "auto"|"snacks"|"kit"|"select"   # Force a backend (default: `dashboard.backend`, `auto`: snacks when present, else kit).
 ---@field watch? boolean     # Live refresh (default: `M.config.watch`).
 
 -- ── small helpers ────────────────────────────────────────────────────────────
@@ -756,6 +756,11 @@ local function refresh_keep(picker, keep_marks)
   if picker.closed then
     return
   end
+  if picker.refresh_keep then
+    -- the kit backend rebuilds its own list
+    picker.refresh_keep(keep_marks)
+    return
+  end
   local cur = picker:current()
   local cursor_id = cur and cur.task and cur.task.id or nil
   local marked = {}
@@ -792,6 +797,48 @@ local function refresh_keep(picker, keep_marks)
       end
     end,
   })
+end
+
+---The items of the dashboard list: tasks (list view) or headings and tasks (stage view).
+---@param state Tasks.DashState
+---@return table[] items
+local function build_items(state)
+  local items = {}
+  local shown = reload(state)
+  if state.view == "stages" and state.plan then
+    for _, row in ipairs(core.stage_rows(state.plan)) do
+      if row.header then
+        items[#items + 1] = { text = row.header, header = row.header }
+      else
+        items[#items + 1] = {
+          text = core.search_text(row.task),
+          file = row.task.path,
+          task = row.task,
+          waits = row.waits,
+        }
+      end
+    end
+  else
+    for _, t in ipairs(shown) do
+      items[#items + 1] = { text = core.search_text(t), file = t.path, task = t }
+    end
+  end
+  return items
+end
+
+---The text parts of one row (both pickers).
+---@param state Tasks.DashState
+---@param item table
+---@return table[] parts
+local function format_item(state, item)
+  if item.header then
+    return { { "-- " .. item.header .. " --", "Title" } }
+  end
+  local parts = core.parts(item.task, state.widths, state.readiness)
+  if item.waits then
+    parts[#parts + 1] = { "  waits: " .. item.waits, "Comment" }
+  end
+  return parts
 end
 
 ---What the file watcher calls: rescan, and only when the result differs from
@@ -864,9 +911,10 @@ local function start_watch(state, picker)
   return w
 end
 
----@param Snacks table
+---@param engine "snacks"|"kit"
+---@param Snacks table|nil
 ---@param state Tasks.DashState
-local function open_snacks(Snacks, state)
+local function open_picker(engine, Snacks, state)
   ---@type Tasks.DashWatcher|nil
   local watcher
 
@@ -902,7 +950,7 @@ local function open_snacks(Snacks, state)
     picker:close()
     vim.schedule(function()
       fn(function()
-        open_state(state, { backend = "snacks" })
+        open_state(state, { backend = engine })
       end)
     end)
   end
@@ -953,7 +1001,10 @@ local function open_snacks(Snacks, state)
     ---`<CR>`: a visit for the frecency sort, then snacks' own jump.
     tasks_open = function(picker, item, action)
       touch(targets(picker, true))
-      return Snacks.picker.actions.jump(picker, item, action)
+      if Snacks then
+        return Snacks.picker.actions.jump(picker, item, action)
+      end
+      return picker:jump(item)
     end,
     tasks_done = function(picker)
       local tasks = targets(picker, true)
@@ -1052,30 +1103,104 @@ local function open_snacks(Snacks, state)
     end
   end
 
+  if engine == "kit" then
+    -- lib.nvim's picker: no snacks needed. The prompt keeps the focus, so the keys are the Alt chords
+    -- (`keys.dashboard_input`) and <Tab> marks. The actions above only need the few picker methods defined here.
+    local kit = require("lib.nvim.ui.kit")
+    local handle
+    local adapter = { closed = false }
+    function adapter:selected(o)
+      local marked = handle.marked()
+      if #marked > 0 then
+        return marked
+      end
+      local item = o and o.fallback and handle.current() or nil
+      return item and { item } or {}
+    end
+    function adapter:current()
+      return handle.current()
+    end
+    function adapter:close()
+      handle.close()
+    end
+    function adapter:jump(item)
+      handle.close()
+      if item and item.file then
+        pcall(vim.cmd, "edit " .. vim.fn.fnameescape(item.file))
+      end
+    end
+    adapter.refresh_keep = function(keep_marks)
+      if adapter.closed then
+        return
+      end
+      local items = build_items(state)
+      handle.set_items(items, { keep_marks = keep_marks })
+      handle.set_title(title_of(state))
+    end
+    local keys = {}
+    for lhs, spec in pairs(input_keys) do
+      keys[lhs] = function()
+        actions[spec[1]](adapter)
+      end
+    end
+    local first = build_items(state)
+    handle = kit.picker({
+      items = first,
+      key = function(item)
+        return item.task and item.task.id or ("# " .. item.header)
+      end,
+      text = function(item)
+        return item.text
+      end,
+      selectable = function(item)
+        return item.task ~= nil
+      end,
+      format = function(item)
+        return format_item(state, item)
+      end,
+      preview = function(item, surface)
+        if not item.task then
+          surface:set_lines({})
+          return
+        end
+        local read, lines = pcall(vim.fn.readfile, item.file, "", 200)
+        surface:set_lines(read and lines or { "(cannot read the file)" })
+        pcall(vim.api.nvim_set_option_value, "filetype", "markdown", { buf = surface.bufnr })
+      end,
+      keys = keys,
+      title = title_of(state),
+      results_width = 0.62,
+      on_submit = function(_, _, item)
+        if item.task then
+          touch({ item.task })
+          adapter:jump(item)
+        end
+      end,
+      on_close = function()
+        adapter.closed = true
+        state.preload = nil
+        if watcher then
+          watcher:stop()
+          watcher = nil
+        end
+      end,
+    })
+    if not handle then
+      error("the kit picker could not be opened")
+    end
+    watcher = start_watch(state, adapter)
+    if watcher and adapter.closed then
+      watcher:stop()
+      watcher = nil
+    end
+    return
+  end
+
   local picker = Snacks.picker({
     source = "tasks_nvim",
     title = title_of(state),
     finder = function(_, ctx)
-      local items = {}
-      local shown = reload(state)
-      if state.view == "stages" and state.plan then
-        for _, row in ipairs(core.stage_rows(state.plan)) do
-          if row.header then
-            items[#items + 1] = { text = row.header, header = row.header }
-          else
-            items[#items + 1] = {
-              text = core.search_text(row.task),
-              file = row.task.path,
-              task = row.task,
-              waits = row.waits,
-            }
-          end
-        end
-      else
-        for _, t in ipairs(shown) do
-          items[#items + 1] = { text = core.search_text(t), file = t.path, task = t }
-        end
-      end
+      local items = build_items(state)
       local picker = ctx and ctx.picker
       if picker then
         picker.title = title_of(state)
@@ -1088,14 +1213,7 @@ local function open_snacks(Snacks, state)
       return items
     end,
     format = function(item)
-      if item.header then
-        return { { "-- " .. item.header .. " --", "Title" } }
-      end
-      local parts = core.parts(item.task, state.widths, state.readiness)
-      if item.waits then
-        parts[#parts + 1] = { "  waits: " .. item.waits, "Comment" }
-      end
-      return parts
+      return format_item(state, item)
     end,
     preview = "file",
     confirm = "tasks_open",
@@ -1241,10 +1359,15 @@ local told_no_snacks = false
 ---@param opts? Tasks.DashOpts
 function open_state(state, opts)
   opts = opts or {}
-  if opts.backend ~= "select" then
-    local Snacks = soft.require("snacks", { "picker" })
+  local backend = opts.backend or settings().backend or "auto"
+  local Snacks = backend ~= "select" and backend ~= "kit" and soft.require("snacks", { "picker" })
+    or nil
+  if backend == "auto" and not Snacks then
+    backend = "kit"
+  end
+  if backend == "snacks" or (backend == "auto" and Snacks) then
     if Snacks then
-      local opened, err = pcall(open_snacks, Snacks, state)
+      local opened, err = pcall(open_picker, "snacks", Snacks, state)
       if opened then
         return
       end
@@ -1254,10 +1377,17 @@ function open_state(state, opts)
       if not told_no_snacks then
         told_no_snacks = true
         notify.info(
-          "snacks.nvim is not installed: showing a plain selection list (no marks, filter chips or live refresh)"
+          "snacks.nvim is not installed: showing a plain selection list (no marks, filter chips or live refresh); "
+            .. '`dashboard.backend = "kit"` uses the picker of lib.nvim instead'
         )
       end
     end
+  elseif backend == "kit" then
+    local opened, err = pcall(open_picker, "kit", nil, state)
+    if opened then
+      return
+    end
+    notify.warn(("the kit picker failed (%s), using the plain list"):format(tostring(err)))
   end
   open_select(state)
 end

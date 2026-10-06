@@ -800,4 +800,41 @@ return function(H)
     local got = scan.find("lib.nvim/loose", { root = sv_root })
     eq({ got.plan, got.phase }, { sp.id, "two" })
   end
+
+  -- ── the dashboard on lib.nvim's picker (no snacks) ──
+  do
+    local dash = require("tasks_nvim.ui.dash")
+    local kit_root = F.vault(H)
+    F.task(H, kit_root, "lib.nvim", "kit-a", F.meta("Kit alpha", "open"))
+    F.task(H, kit_root, "lib.nvim", "kit-b", F.meta("Kit beta", "doing"))
+    local was_watch = dash.config.watch
+    dash.config.watch = false
+    local orig_notify = vim.notify
+    vim.notify = function() end
+    local state = dash.open({ root = kit_root }, { backend = "kit", persist = false })
+    vim.wait(50)
+    local results
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.bo[buf].filetype == "lib-kit-picker-results" then
+        results = buf
+      end
+    end
+    ok(state ~= nil and results ~= nil, "the picker opened")
+    local text = table.concat(vim.api.nvim_buf_get_lines(results, 0, -1, false), "\n")
+    has(text, "Kit alpha")
+    has(text, "Kit beta")
+    -- the status key of the input window advances the task under the cursor (the first row: doing -> decision)
+    vim.api.nvim_feedkeys(vim.keycode("<M-s>"), "x", false)
+    vim.wait(100)
+    eq(require("tasks_nvim.scan").find("lib.nvim/kit-b", { root = kit_root }).status, "decision")
+    -- the stage view through the key
+    vim.api.nvim_feedkeys(vim.keycode("<M-g>"), "x", false)
+    vim.wait(50)
+    text = table.concat(vim.api.nvim_buf_get_lines(results, 0, -1, false), "\n")
+    has(text, "Unsorted")
+    vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "x", false)
+    vim.notify = orig_notify
+    dash.config.watch = was_watch
+    vim.cmd("stopinsert")
+  end
 end

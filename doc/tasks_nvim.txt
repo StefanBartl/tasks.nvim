@@ -41,7 +41,7 @@ blockers, plan or estimate is valid and stays visible everywhere.
   require("tasks_nvim").setup({
     vault = "~/vault",
     extra_areas = { "ALL" },
-    dashboard = { watch = true, debounce_ms = 250 },
+    dashboard = { watch = true, debounce_ms = 250, backend = "auto" },
     staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },
     ci = { lint_timeout_ms = 120000 },
     next = { popup = true, cdx_hint = true },
@@ -57,6 +57,8 @@ blockers, plan or estimate is valid and stays visible everywhere.
                            `$TASKS_EXTRA_AREAS` (comma separated) for the same.
   dashboard.watch          Refresh the dashboard when task files change.
   dashboard.debounce_ms    Quiet period before a refresh (default 250).
+  dashboard.backend        Picker of `:Tasks list`: "snacks", "kit" (lib.nvim, no snacks;
+                           Alt-chord keys), "select", or "auto" (snacks if installed, else kit).
   staleness.git_timeout_ms One `git log` call is killed after this long.
   staleness.budget_ms      All git calls of one `--stale=refs` run together.
   staleness.repo_bases     Folders holding the repos by name (`<base>/<area>`).

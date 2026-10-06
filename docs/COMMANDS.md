@@ -113,7 +113,13 @@ same goes for `--sort=` (the default order is "not given": the remembered one ap
 cycles back to it). An empty result
 stays open (`show_empty`), so a filter that matches nothing can be cleared with `f`.
 
-Without snacks.nvim a `vim.ui.select` flow lists the same tasks; picking one opens a menu
+**Backends.** `setup({ dashboard = { backend = ... } })`: `snacks` (snacks.nvim; letter keys in the list window),
+`kit` (lib.nvim's own picker, **no snacks needed**: marks with `<Tab>`, highlighted rows, a file preview, the same
+live refresh, the stage view, `P` and `J`/`K`; the prompt keeps the focus, so the keys are the Alt chords of
+`keys.dashboard_input`, e.g. `<M-s>`, `<M-g>`, `<M-a>`), `select` (below) or `auto` (default): snacks when installed,
+else kit.
+
+Without a picker (`backend = "select"`) a `vim.ui.select` flow lists the same tasks; picking one opens a menu
 (open the file, advance status / prio, finish, filter, next sort order, export the list,
 Backlog, ROADMAP.md) for **that one task** -- no marks, no batch. It never raises.
 

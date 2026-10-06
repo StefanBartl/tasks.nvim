@@ -61,6 +61,8 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- `dashboard.backend = "kit"`: the dashboard on lib.nvim's own picker (marks, highlights, preview, stage view, assign and move), no snacks.nvim needed; `auto` (default) uses snacks when installed and the kit picker otherwise.
+
 - Dashboard stage view (`v`), assigning tasks to a plan and stage (`P`), moving them with `order` (`J` / `K`).
 
 - The first member of a plan that goes to `doing` (`set`, dashboard `s`) moves the plan file from `planning` to `doing`; the dashboard filters by `plan` and `phase`.

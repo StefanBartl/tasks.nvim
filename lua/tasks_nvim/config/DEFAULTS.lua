@@ -7,6 +7,7 @@
 ---@class Tasks.DashboardConfig
 ---@field watch boolean        Refresh the dashboard when a task or Backlog file changes (file watchers).
 ---@field debounce_ms integer  Quiet period after a change before the list is rescanned.
+---@field backend "auto"|"snacks"|"kit"|"select"  The picker behind `:Tasks list`: `snacks` (snacks.nvim), `kit` (lib.nvim's own picker, no snacks needed; its keys are the Alt chords of `keys.dashboard_input`), `select` (a plain `vim.ui.select` list), `auto` = snacks when installed, else kit.
 
 ---@class Tasks.StalenessConfig
 ---@field git_timeout_ms integer  One `git log` call is killed after this long (`--stale=refs`).
@@ -51,7 +52,7 @@
 return {
   vault = nil,
   extra_areas = {},
-  dashboard = { watch = true, debounce_ms = 250 },
+  dashboard = { watch = true, debounce_ms = 250, backend = "auto" },
   staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },
   ci = { lint_timeout_ms = 120000, trust_vault_lint = false },
   next = { popup = true, cdx_hint = true },
