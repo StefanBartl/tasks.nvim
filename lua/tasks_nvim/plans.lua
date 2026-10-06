@@ -233,6 +233,11 @@ function M.find(id, opts)
   if not area or not slug then
     return nil, id_err or ("expected <area>/<slug>, got " .. tostring(id))
   end
+  -- Not an area, or one spelled in another case (`LIB.NVIM/x` would find `lib.nvim/x` on a case-insensitive disk,
+  -- under a second id; `plans.members` compares ids as strings and would close the plan with members still open).
+  if not vault.has_area(root, area) then
+    return nil, "no such open plan: " .. id
+  end
   local path = vault.plan_path(root, area, slug)
   if not fsio.is_file(path) then
     return nil, "no such open plan: " .. id
@@ -311,7 +316,9 @@ end
 ---@field slug? string
 ---@field today? string
 
----Create `<area>/ROADMAP/plans/<slug>.md` (never overwrites; a taken slug gets `-2`, `-3`, ...).
+---Create `<area>/ROADMAP/plans/<slug>.md` (never overwrites; a taken slug gets `-2`, `-3`, ...). Plans, open tasks and
+---Backlog files share ONE id namespace per area: a finished plan lands in `Backlog/FEATURES` and would read as a
+---finished task of that id, so a slug held by a task (file or folder), a finished item or another plan is taken.
 ---@param area string
 ---@param opts Tasks.NewPlanOpts
 ---@return { id: string, path: string }|nil result
@@ -430,16 +437,25 @@ function M.new(area, opts)
   if not mkdir_ok then
     return nil, "cannot create " .. vault.plans_dir(root, area) .. ": " .. tostring(mkerr)
   end
+  local backlog_taken, berr = scan.backlog_slugs(area, { root = root })
+  if not backlog_taken then
+    return nil, berr
+  end
   local n = 1
   while n < 1000 do
     local slug = n == 1 and base or (base .. "-" .. n)
     local path = vault.plan_path(root, area, slug)
-    local ok, err = fsio.create_exclusive(path, text)
-    if ok then
-      return { id = area .. "/" .. slug, path = path }, nil
-    end
-    if not fsio.is_exists(err) then
-      return nil, "cannot create " .. path .. ": " .. tostring(err)
+    local held = backlog_taken[slug] ~= nil
+      or fsio.is_file(vault.task_path(root, area, slug))
+      or fsio.is_dir(vault.task_dir(root, area, slug))
+    if not held then
+      local ok, err = fsio.create_exclusive(path, text)
+      if ok then
+        return { id = area .. "/" .. slug, path = path }, nil
+      end
+      if not fsio.is_exists(err) then
+        return nil, "cannot create " .. path .. ": " .. tostring(err)
+      end
     end
     n = n + 1
   end
@@ -447,8 +463,10 @@ function M.new(area, opts)
 end
 
 ---Finish a plan: `status: done`, moved to `Backlog/FEATURES/YYYY-MM-DD_<slug>.md`, a row in the Backlog README. The
----finished copy and the README are snapshotted first and put back byte for byte when a step fails; the plan file
----is not removed before the finished copy is written.
+---finished copy is created first and the plan file is not removed before it is written; a failing step puts back what
+---THIS run changed (never a finished copy another run created: two closes of one plan may overlap, and the later
+---one must not delete the earlier one's result). A finished copy a killed run left behind (same text) is resumed.
+---A plan whose id is already held by an open task or a finished item is refused (one id namespace).
 ---@param id string
 ---@param opts? { root?: string, date?: string, today?: string, checkpoint_dir?: string }
 ---@return { id: string, from: string, to: string, readme: string }|nil result
@@ -483,8 +501,29 @@ function M.close(id, opts)
   local mutate = require("tasks_nvim.mutate")
   local rel = date .. "_" .. plan.slug .. ".md"
   local target = vault.backlog_dir(root, plan.area, "FEATURES") .. "/" .. rel
-  if fsio.is_file(target) or fsio.is_dir(target) then
+  -- The finished copy of an earlier, killed close (same text) is picked up; anything else at the target is not ours.
+  local resume = false
+  if fsio.is_file(target) and fsio.read(target) == new_text then
+    resume = true
+  elseif fsio.is_file(target) or fsio.is_dir(target) then
     return nil, "target exists: " .. target
+  end
+  -- One id namespace: the finished plan would read as a finished task of this id.
+  local open_task = scan.find(id, { root = root })
+  if open_task then
+    return nil,
+      ("an open task has the id %s (%s): rename it or the plan before finishing the plan"):format(
+        id,
+        open_task.path
+      )
+  end
+  local held = scan.find_done(id, { root = root })
+  if held and fsio.norm(held.path) ~= fsio.norm(target) then
+    return nil,
+      ("a finished item with the id %s already exists (%s): finishing the plan would make two"):format(
+        id,
+        held.path
+      )
   end
   local readme_path = vault.backlog_readme(root, plan.area)
   local readme_old
@@ -507,18 +546,23 @@ function M.close(id, opts)
     readme_state = changed and "updated" or "unchanged"
   end
 
-  local tracked = { target }
-  if readme_old then
-    tracked[#tracked + 1] = readme_path
-  end
-  local cp, cerr = checkpoint.create(tracked, { dir = opts.checkpoint_dir })
+  -- Only the finished copy is snapshotted: the README is written LAST and atomically, so a failing step never has a
+  -- README of this run to put back (a restore would put the old README over the row another run added).
+  local cp, cerr = checkpoint.create({ target }, { dir = opts.checkpoint_dir })
   if not cp then
     return nil, "cannot snapshot before moving: " .. tostring(cerr)
   end
-  local function fail(msg)
+  local created = false
+  ---@param msg string
+  ---@param extra? string  # More that could not be undone.
+  local function fail(msg, extra)
+    -- The snapshot noted `target` as "did not exist": a restore would delete a finished copy this run never created.
+    if not created then
+      checkpoint.forget(cp, target)
+    end
     local _, restore_errors = checkpoint.restore(cp)
     checkpoint.discard(cp)
-    local stuck = {}
+    local stuck = { extra }
     for _, e in ipairs(restore_errors) do
       stuck[#stuck + 1] = e.path
     end
@@ -531,9 +575,12 @@ function M.close(id, opts)
   if not made then
     return fail("cannot create " .. fsio.dirname(target) .. ": " .. tostring(merr))
   end
-  local ok, werr = fsio.create_exclusive(target, new_text)
-  if not ok then
-    return fail("cannot create " .. target .. ": " .. tostring(werr))
+  if not resume then
+    local ok, werr = fsio.create_exclusive(target, new_text)
+    if not ok then
+      return fail("cannot create " .. target .. ": " .. tostring(werr))
+    end
+    created = true
   end
   if fsio.read(plan.path) ~= old_text then
     return fail(
@@ -548,7 +595,19 @@ function M.close(id, opts)
     local wrote, rwerr = fsio.write_atomic(readme_path, readme_new)
     if not wrote then
       -- the plan file is gone and the finished copy is there: put the plan file back before the restore drops it
-      fsio.create_exclusive(plan.path, old_text)
+      local back, b_err = fsio.create_exclusive(plan.path, old_text)
+      if not back and not fsio.is_file(plan.path) then
+        -- the finished copy is now the only holder of the text: the restore must not delete it
+        checkpoint.forget(cp, target)
+        return fail(
+          "cannot write " .. readme_path .. ": " .. tostring(rwerr),
+          ("%s (cannot restore it: %s; the finished copy %s holds the text)"):format(
+            plan.path,
+            tostring(b_err),
+            target
+          )
+        )
+      end
       return fail("cannot write " .. readme_path .. ": " .. tostring(rwerr))
     end
   end

@@ -228,7 +228,7 @@ function M.done_many(ids, opts)
     docs_refreshed = {},
     notes = {},
   }
-  local moved = {}
+  local moved, plan_ids = {}, {}
   for _, id in ipairs(ids) do
     local flow, err = done_flow.run(id, {
       root = opts.root,
@@ -237,6 +237,7 @@ function M.done_many(ids, opts)
       date = opts.date,
       pick_next = false,
       refresh_docs = false,
+      defer_plan_close = true,
     })
     local r = flow and flow.done
     if not flow or not r then
@@ -246,12 +247,28 @@ function M.done_many(ids, opts)
     else
       res.done[#res.done + 1] = { id = id, from = r.from, to = r.to, readme = r.readme }
       moved[#moved + 1] = id
+      if r.plan_id then
+        plan_ids[#plan_ids + 1] = r.plan_id
+      end
       res.steps_ticked = res.steps_ticked + flow.steps_ticked
       vim.list_extend(res.plans_closed, flow.plans_closed)
       for plan_id, summary in pairs(flow.plan_summaries) do
         res.plan_summaries[plan_id] = summary
       end
       vim.list_extend(res.notes, flow.notes)
+    end
+  end
+  if #plan_ids > 0 then
+    -- The plans of the finished tasks: ONE scan for the whole stack (not one per task), after the last finish.
+    local ran, closed = pcall(done_flow.close_plans, plan_ids, opts)
+    if ran then
+      vim.list_extend(res.plans_closed, closed.closed)
+      vim.list_extend(res.notes, closed.notes)
+      for plan_id, summary in pairs(closed.summaries) do
+        res.plan_summaries[plan_id] = summary
+      end
+    else
+      res.notes[#res.notes + 1] = "closing the plans: " .. tostring(closed)
     end
   end
   res.areas = areas_of(moved)

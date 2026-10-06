@@ -252,4 +252,53 @@ return function(H)
   has(printed, "steps\t" .. c1.id .. "\t2")
   has(printed, "plan-closed\t" .. cli_plan.id .. "\tPlan " .. cli_plan.id .. " is done: 1 task")
   ok(scan.find_done(c1.id, { root = root }) ~= nil)
+
+  -- ── review fixes: a member is any task of the plan that is not done, and a batch checks each plan once ──
+  do
+    local tp = assert(plans.new("lib.nvim", { root = root, today = F.TODAY, title = "Typo plan" }))
+    local good = new("Typo good", { plan = tp.id })
+    -- a status nobody wrote down: the file is invalid, but it is still a member that is not done
+    F.task(
+      H,
+      root,
+      "lib.nvim",
+      "typo-member",
+      F.meta("Typo member", "in progress", { { "plan", tp.id } })
+    )
+    local typo_flow = assert(done_flow.run(good.id, o))
+    eq(typo_flow.plans_closed, {}, "a member with a mistyped status keeps the plan open")
+    ok(H.exists(tp.path))
+
+    -- a scan that could not list every folder cannot say that no member is left
+    local pp =
+      assert(plans.new("lib.nvim", { root = root, today = F.TODAY, title = "Partial plan" }))
+    local real_all = scan.all
+    scan.all = function(sopts)
+      local tasks = real_all(sopts)
+      return tasks, { "cannot list " .. root .. "/cascade.nvim/ROADMAP/tasks (test)" }
+    end
+    local partial = done_flow.close_plans({ pp.id }, o)
+    scan.all = real_all
+    eq(partial.closed, {})
+    has(partial.notes[1], "scan was incomplete")
+    ok(H.exists(pp.path), "the plan stays")
+
+    -- a batch of members of one plan: one scan for the whole stack, the plan closed once
+    local bp = assert(plans.new("lib.nvim", { root = root, today = F.TODAY, title = "Scan plan" }))
+    local ids = {}
+    for i = 1, 3 do
+      ids[#ids + 1] = new("Scan member " .. i, { plan = bp.id }).id
+    end
+    local scans = 0
+    scan.all = function(sopts)
+      scans = scans + 1
+      return real_all(sopts)
+    end
+    local stack = batch.done_many(ids, vim.tbl_extend("force", o, { pick_next = false }))
+    scan.all = real_all
+    eq(#stack.done, 3)
+    eq(stack.plans_closed, { bp.id }, "the plan is closed once, with its last member")
+    ok(scans <= 1, "one scan for the batch, not one per task (" .. scans .. ")")
+    ok(not H.exists(bp.path))
+  end
 end

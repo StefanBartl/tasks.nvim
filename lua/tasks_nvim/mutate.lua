@@ -771,9 +771,11 @@ function M.new(area, opts)
   local n = 1
   while true do
     local slug = n == 1 and base or (base .. "-" .. n)
-    -- A slug is taken by a file or a folder task of that name, in either form.
+    -- A slug is taken by a file or a folder task of that name, in either form, and by an open plan: plans and tasks
+    -- share one id namespace (a finished plan lands in the Backlog and would read as a finished task of that id).
     local in_use = fsio.is_dir(vault.task_dir(root, area, slug))
       or fsio.is_file(vault.task_path(root, area, slug))
+      or fsio.is_file(vault.plan_path(root, area, slug))
     if not taken[slug] and not in_use then
       local path = opts.folder and vault.folder_task_path(root, area, slug)
         or vault.task_path(root, area, slug)
@@ -1285,25 +1287,18 @@ end
 ---@return string msg
 local function rollback_done(plan, cp, progress, err)
   local task = plan.task
-  ---Drop `path` from the snapshot, so the restore neither deletes nor overwrites it.
-  ---@param path string
   local function forget(path)
-    for i = #cp.entries, 1, -1 do
-      local entry = cp.entries[i]
-      if entry.path == path then
-        if entry.backup then
-          pcall(os.remove, entry.backup)
-        end
-        table.remove(cp.entries, i)
-      end
-    end
+    checkpoint.forget(cp, path)
   end
 
   -- The snapshot noted `target` as "did not exist". When this run never created it (`create_exclusive` answered
   -- `exists`: another process finished the same task first), the restore would delete THEIR finished copy and the
-  -- task would be gone from the working tree.
+  -- task would be gone from the working tree. Nothing else was written by this run either (the finished copy comes
+  -- first), so the README and the index of the snapshot are stale too: put back over THEIR rows they would undo them.
   if not task.folder and not plan.resume and not progress.created_target then
-    forget(plan.target)
+    for i = #cp.entries, 1, -1 do
+      forget(cp.entries[i].path)
+    end
   end
   local stuck = {}
   if progress.moved then

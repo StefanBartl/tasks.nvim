@@ -466,4 +466,131 @@ return function(H)
     "and no finished copy is left"
   )
   eq(H.read(readme), readme_before, "the README is untouched")
+
+  -- ── review fixes: one id namespace, and a close never destroys what another run made ──
+  do
+    local fsio = require("tasks_nvim.fsio")
+    local r2 = F.vault(H)
+    local o2 = { root = r2, today = F.TODAY, checkpoint_dir = H.tmpdir() .. "/cp-ns" }
+    local readme2 = r2 .. "/lib.nvim/Backlog/README.md"
+    local function new_plan(title)
+      return assert(plans.new("lib.nvim", vim.tbl_extend("force", o2, { title = title })))
+    end
+    local function samepath(a, b)
+      return fsio.norm(a) == fsio.norm(b)
+    end
+
+    -- the area must be spelled like its folder: on a case-insensitive disk `LIB.NVIM/x` would reach the plan
+    local alpha = new_plan("Alpha")
+    local wrong, wrong_err = plans.find("LIB.NVIM/alpha", o2)
+    eq(wrong, nil, "plans.find: an area spelled in another case is no area")
+    has(wrong_err, "no such open plan")
+    eq(plans.close("LIB.NVIM/alpha", o2), nil, "plans.close refuses it too")
+    ok(H.exists(alpha.path), "and the plan is untouched")
+
+    -- plans, tasks and Backlog files share one id namespace
+    F.task(H, r2, "lib.nvim", "umbrella", F.meta("Umbrella", "open"))
+    eq(
+      new_plan("Umbrella").id,
+      "lib.nvim/umbrella-2",
+      "plans.new: a slug held by an open task is taken"
+    )
+    assert(mutate.new("lib.nvim", vim.tbl_extend("force", o2, { title = "Folded", folder = true })))
+    eq(new_plan("Folded").id, "lib.nvim/folded-2", "... by a folder task too")
+    H.write(
+      r2 .. "/lib.nvim/Backlog/TASKS/2026-09-01_old-thing.md",
+      F.text(F.meta("Old thing", "done"))
+    )
+    eq(new_plan("Old thing").id, "lib.nvim/old-thing-2", "... and by a finished item")
+    eq(
+      assert(mutate.new("lib.nvim", vim.tbl_extend("force", o2, { title = "Alpha" }))).id,
+      "lib.nvim/alpha-2",
+      "mutate.new: a slug held by an open plan is taken"
+    )
+
+    -- closing a plan whose id an open task or a finished item holds would make two items of one id
+    local delta = new_plan("Delta")
+    F.task(H, r2, "lib.nvim", "delta", F.meta("Delta", "open"))
+    local c1, c1_err = plans.close(delta.id, o2)
+    eq(c1, nil)
+    has(c1_err, "an open task has the id")
+    ok(H.exists(delta.path), "the plan stays")
+    local gamma = new_plan("Gamma")
+    H.write(r2 .. "/lib.nvim/Backlog/TASKS/2026-09-02_gamma.md", F.text(F.meta("Gamma", "done")))
+    local c2, c2_err = plans.close(gamma.id, o2)
+    eq(c2, nil)
+    has(c2_err, "already exists")
+    ok(H.exists(gamma.path), "the plan stays")
+
+    -- another run finishes the same plan between our check and our create: its finished copy and README row stay
+    local rival = new_plan("Rival")
+    local rival_target = r2 .. "/lib.nvim/Backlog/FEATURES/2026-10-03_rival.md"
+    local real_create = fsio.create_exclusive
+    fsio.create_exclusive = function(path, body)
+      if samepath(path, rival_target) then
+        H.write(path, "foreign finished copy\n")
+        H.write(readme2, H.read(readme2) .. "ROW OF THE OTHER RUN\n")
+        return false, fsio.EXISTS
+      end
+      return real_create(path, body)
+    end
+    local lost, lost_err = plans.close(rival.id, o2)
+    fsio.create_exclusive = real_create
+    eq(lost, nil)
+    has(lost_err, "cannot create")
+    eq(
+      H.read(rival_target),
+      "foreign finished copy\n",
+      "the finished copy of the other run survives"
+    )
+    has(H.read(readme2), "ROW OF THE OTHER RUN", "and so does its README row")
+
+    -- a run killed between the finished copy and the removal of the plan file: the next close resumes
+    local killed = new_plan("Killed")
+    local killed_target = r2 .. "/lib.nvim/Backlog/FEATURES/2026-10-03_killed.md"
+    local real_remove = fsio.remove
+    fsio.remove = function(path)
+      if samepath(path, killed.path) then
+        error("killed (test)")
+      end
+      return real_remove(path)
+    end
+    local survived = pcall(plans.close, killed.id, o2)
+    fsio.remove = real_remove
+    eq(survived, false)
+    ok(H.exists(killed_target) and H.exists(killed.path), "the half state of the killed run")
+    local resumed = assert(plans.close(killed.id, o2))
+    ok(samepath(resumed.to, killed_target))
+    ok(not H.exists(killed.path), "the plan file is removed now")
+    local rows = 0
+    for line in vim.gsplit(H.read(readme2), "\n", { plain = true }) do
+      if line:find("2026-10-03_killed.md", 1, true) then
+        rows = rows + 1
+      end
+    end
+    eq(rows, 1, "one README row")
+
+    -- the README write fails and the plan file cannot be put back: the finished copy is the only holder
+    local stuck = new_plan("Stuck")
+    local stuck_target = r2 .. "/lib.nvim/Backlog/FEATURES/2026-10-03_stuck.md"
+    local real_atomic = fsio.write_atomic
+    fsio.write_atomic = function(path, body, wopts)
+      if samepath(path, readme2) then
+        return false, "disk full (test)"
+      end
+      return real_atomic(path, body, wopts)
+    end
+    fsio.create_exclusive = function(path, body)
+      if samepath(path, stuck.path) then
+        return false, "locked (test)"
+      end
+      return real_create(path, body)
+    end
+    local stuck_res, stuck_err = plans.close(stuck.id, o2)
+    fsio.write_atomic, fsio.create_exclusive = real_atomic, real_create
+    eq(stuck_res, nil)
+    has(stuck_err, "rollback incomplete")
+    has(stuck_err, "stuck.md")
+    has(H.read(stuck_target), "status: done", "the finished copy still holds the plan")
+  end
 end

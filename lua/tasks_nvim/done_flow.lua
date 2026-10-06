@@ -32,6 +32,7 @@ local M = {}
 ---@field chain? boolean       # Run the follow-up steps (default true).
 ---@field pick_next? boolean   # Name the freed tasks and pick the next one (default true; a batch picks once at its end).
 ---@field refresh_docs? boolean  # Refresh the generated blocks of the configured documents (default true; a batch does it once).
+---@field defer_plan_close? boolean  # Leave step b to the caller (`close_plans`): a batch checks each plan once, not per task.
 
 ---What a finish did. `done` is what `mutate.done` returned (`done.already` for a task that was finished before).
 ---@class Tasks.DoneFlow
@@ -85,6 +86,79 @@ function M.refresh_marker_docs(opts)
   return refreshed, notes
 end
 
+---@class Tasks.ClosedPlans
+---@field closed string[]                        # Ids of the plan files that were finished.
+---@field summaries table<string, Tasks.PlanSummary>
+---@field notes string[]                         # Plans that could not be closed, or whose state could not be judged.
+
+---Step b: finish every plan of `plan_ids` that has no open member task left. One scan for all of them, and none when
+---no such plan file exists (a task may name a plan that was never written). A member is any task with `plan: <id>`
+---whose status is not `done`, valid or not: a typo in `status:` must not make the plan look finished. A scan that
+---could not list every folder cannot say that no member is open: the plans stay and a note says so.
+---@param plan_ids string[]
+---@param opts? { root?: string, date?: string, today?: string, checkpoint_dir?: string }
+---@return Tasks.ClosedPlans
+function M.close_plans(plan_ids, opts)
+  opts = opts or {}
+  ---@type Tasks.ClosedPlans
+  local out = { closed = {}, summaries = {}, notes = {} }
+  local files, seen = {}, {}
+  for _, plan_id in ipairs(plan_ids) do
+    if not seen[plan_id] then
+      seen[plan_id] = true
+      local file = plans.find(plan_id, { root = opts.root })
+      if file then
+        files[#files + 1] = file
+      end
+    end
+  end
+  if #files == 0 then
+    return out
+  end
+  local all, errors = scan.all({ root = opts.root })
+  if not all then
+    out.notes[1] = ("the plans could not be checked: %s"):format(tostring(errors))
+    return out
+  end
+  if type(errors) == "table" and #errors > 0 then
+    for _, file in ipairs(files) do
+      out.notes[#out.notes + 1] = ("the plan %s was not closed: the scan was incomplete (%s)"):format(
+        file.id,
+        tostring(errors[1])
+      )
+    end
+    return out
+  end
+  for _, file in ipairs(files) do
+    local open = 0
+    for _, t in ipairs(plans.members(file.id, all)) do
+      if t.status ~= "done" then
+        open = open + 1
+      end
+    end
+    if open == 0 then
+      local summary = plans.summary(file, { root = opts.root, date = opts.date or opts.today })
+      local closed, cerr = plans.close(file.id, {
+        root = opts.root,
+        date = opts.date,
+        today = opts.today,
+        checkpoint_dir = opts.checkpoint_dir,
+      })
+      if not closed then
+        out.notes[#out.notes + 1] = ("the plan %s could not be closed: %s"):format(
+          file.id,
+          tostring(cerr)
+        )
+      else
+        out.closed[#out.closed + 1] = file.id
+        summary.title = file.title
+        out.summaries[file.id] = summary
+      end
+    end
+  end
+  return out
+end
+
 ---Finish `id`.
 ---@param id string
 ---@param opts? Tasks.DoneFlowOpts
@@ -123,33 +197,14 @@ function M.run(id, opts)
   end
 
   -- b. the plan this task belonged to: finished when no member is left open
-  if done.plan_id then
+  if done.plan_id and not opts.defer_plan_close then
     step("closing the plan " .. done.plan_id, function()
-      local open = scan.open_tasks({ root = opts.root })
-      if not open or #plans.members(done.plan_id, open) > 0 then
-        return
+      local res = M.close_plans({ done.plan_id }, opts)
+      vim.list_extend(flow.plans_closed, res.closed)
+      vim.list_extend(flow.notes, res.notes)
+      for plan_id, summary in pairs(res.summaries) do
+        flow.plan_summaries[plan_id] = summary
       end
-      local file = plans.find(done.plan_id, { root = opts.root })
-      if not file then
-        return
-      end
-      local summary = plans.summary(file, { root = opts.root, date = opts.date or opts.today })
-      local closed, cerr = plans.close(done.plan_id, {
-        root = opts.root,
-        date = opts.date,
-        today = opts.today,
-        checkpoint_dir = opts.checkpoint_dir,
-      })
-      if not closed then
-        flow.notes[#flow.notes + 1] = ("the plan %s could not be closed: %s"):format(
-          done.plan_id,
-          tostring(cerr)
-        )
-        return
-      end
-      flow.plans_closed[#flow.plans_closed + 1] = done.plan_id
-      summary.title = file.title
-      flow.plan_summaries[done.plan_id] = summary
     end)
   end
 
