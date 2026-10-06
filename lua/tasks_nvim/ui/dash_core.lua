@@ -64,6 +64,8 @@ M.FILTER_DIMS = {
   "unestimated",
   "stale-refs",
   "readiness",
+  "plan",
+  "phase",
 }
 
 ---Highlight group per severity.
@@ -473,6 +475,12 @@ function M.chips(f)
   if f.readiness then
     chips[#chips + 1] = f.readiness
   end
+  if f.plan and #f.plan > 0 then
+    chips[#chips + 1] = "plan: " .. joined(f.plan)
+  end
+  if f.phase and #f.phase > 0 then
+    chips[#chips + 1] = "phase: " .. joined(f.phase)
+  end
   return chips
 end
 
@@ -578,6 +586,8 @@ function M.set_dim(f, dim, value)
     or dim == "severity"
     or dim == "actor"
     or dim == "tag"
+    or dim == "plan"
+    or dim == "phase"
   then
     out[dim] = value ~= nil and { tostring(value) } or nil
   end
@@ -607,6 +617,17 @@ function M.dim_choices(dim, tasks)
     return { "cdx", "me", "pair", "none" }
   elseif dim == "readiness" then
     return { "ready", "waiting" }
+  elseif dim == "plan" or dim == "phase" then
+    local seen, out = {}, {}
+    for _, t in ipairs(tasks) do
+      local v = t[dim]
+      if v and not seen[v] then
+        seen[v] = true
+        out[#out + 1] = v
+      end
+    end
+    table.sort(out)
+    return out
   elseif dim == "tag" then
     local seen, out = {}, {}
     for _, t in ipairs(tasks) do
@@ -678,6 +699,12 @@ function M.filter_to_options(f)
   if f.readiness then
     o.readiness = f.readiness
   end
+  if f.plan and #f.plan > 0 then
+    o.plan = joined(f.plan)
+  end
+  if f.phase and #f.phase > 0 then
+    o.phase = joined(f.phase)
+  end
   return o
 end
 
@@ -703,6 +730,8 @@ function M.filter_from_stored(opts)
     stale_refs = opts.stale_refs == true,
     blocked = opts.blocked == true,
     unestimated = opts.unestimated == true,
+    plan = type(opts.plan) == "string" and opts.plan or nil,
+    phase = type(opts.phase) == "string" and opts.phase or nil,
   })
   if f and (opts.readiness == "ready" or opts.readiness == "waiting") then
     f.readiness = opts.readiness

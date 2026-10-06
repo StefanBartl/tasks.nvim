@@ -144,7 +144,7 @@ lists the task with the file that changed: the signal to re-read a task before a
 `:Tasks list [area]` without `--to=` opens the dashboard (needs snacks.nvim; without it a plain selection list).
 
 1. Type to search; `f` sets a filter chip (status, prio, effort, kind, category, severity, value, actor, tag,
-   blocked, unestimated, stale-refs, readiness); `o` cycles the sort (default, prio-effort, severity, frecency, roi).
+   blocked, unestimated, stale-refs, readiness, plan, phase); `o` cycles the sort (default, prio-effort, severity, frecency, roi).
 2. `<Tab>` marks tasks. `s` advances the status of the marked tasks (or the current one), `p` the prio, `D` finishes
    them after **one** confirmation. A task that someone else changed since the list was drawn is skipped with a
    message instead of being overwritten.

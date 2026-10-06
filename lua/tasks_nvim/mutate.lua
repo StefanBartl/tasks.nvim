@@ -862,6 +862,16 @@ function M.set(id, patch, opts)
   if not ok then
     return nil, "cannot write " .. task.path .. ": " .. tostring(werr)
   end
+  -- The first member of a plan that goes to `doing` starts the plan: `planning` -> `doing`. Best effort: the task is
+  -- already written, a plan file that cannot be updated is not a reason to fail the `set`.
+  if task.plan and patch.status == "doing" then
+    local file = require("tasks_nvim.plans").find(task.plan, { root = root })
+    if file and file.status == "planning" then
+      fsio.with_lock(file.path, function()
+        return fm.update(file.path, { { "status", "doing" }, { "updated", today } })
+      end)
+    end
+  end
   if opts.index ~= false then
     result.index, result.index_err = index.write_area(task.area, { root = root })
   end

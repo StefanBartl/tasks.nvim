@@ -61,6 +61,8 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- The first member of a plan that goes to `doing` (`set`, dashboard `s`) moves the plan file from `planning` to `doing`; the dashboard filters by `plan` and `phase`.
+
 - Review round over the plan / chain / marker-block code (ultracode review, every finding probed before it was fixed):
   - `plans.close` no longer deletes a finished copy another run created, puts the README row of another run back over
     nothing, names a failed put-back, resumes a killed close and refuses a plan whose id an open task or a finished item

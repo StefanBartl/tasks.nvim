@@ -665,4 +665,59 @@ return function(H)
     }, "2026-01-01")
     ok(#mutate_row < 600, "the row is bounded (" .. #mutate_row .. " bytes)")
   end
+
+  -- ── the first member of a plan that goes to `doing` starts the plan ──
+  do
+    local plans = require("tasks_nvim.plans")
+    local start_plan =
+      assert(plans.new("lib.nvim", vim.tbl_extend("force", o, { title = "Start me" })))
+    local member = assert(
+      mutate.new(
+        "lib.nvim",
+        vim.tbl_extend("force", o, { title = "Starter", plan = start_plan.id })
+      )
+    )
+    eq(assert(plans.find(start_plan.id, o)).status, "planning")
+    assert(mutate.set(member.id, { effort = "S" }, o))
+    eq(assert(plans.find(start_plan.id, o)).status, "planning", "another change does not start it")
+    assert(mutate.set(member.id, { status = "doing" }, o))
+    eq(assert(plans.find(start_plan.id, o)).status, "doing", "the first doing member does")
+  end
+
+  -- ── plan and phase are filter dimensions of the dashboard ──
+  do
+    local core = require("tasks_nvim.ui.dash_core")
+    local pf_root = F.vault(H)
+    F.task(
+      H,
+      pf_root,
+      "lib.nvim",
+      "a1",
+      F.meta("A1", "open", { { "plan", "lib.nvim/p" }, { "phase", "build" } })
+    )
+    F.task(
+      H,
+      pf_root,
+      "lib.nvim",
+      "a2",
+      F.meta("A2", "open", { { "plan", "lib.nvim/p" }, { "phase", "ship" } })
+    )
+    F.task(H, pf_root, "lib.nvim", "a3", F.meta("A3", "open"))
+    local function count(filter)
+      return #assert(core.load({ root = pf_root, filter = filter })).tasks
+    end
+    eq(count({ plan = { "lib.nvim/p" } }), 2)
+    eq(count({ plan = { "lib.nvim/p" }, phase = { "ship" } }), 1)
+    eq(count({ phase = { "none" } }), 0)
+    eq(
+      core.chips({ plan = { "lib.nvim/p" }, phase = { "ship" } }),
+      { "plan: lib.nvim/p", "phase: ship" }
+    )
+    local stored = core.filter_from_stored(
+      core.filter_to_options({ plan = { "lib.nvim/p" }, phase = { "ship" } })
+    )
+    eq({ stored.plan, stored.phase }, { { "lib.nvim/p" }, { "ship" } }, "and they are remembered")
+    eq(core.set_dim({}, "phase", "build").phase, { "build" })
+    eq(core.dim_choices("phase", assert(core.load({ root = pf_root })).tasks), { "build", "ship" })
+  end
 end

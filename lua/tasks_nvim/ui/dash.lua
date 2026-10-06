@@ -406,8 +406,9 @@ local function set_filter(state, after)
       after()
       return
     end
-    -- only the tag menu needs the tasks (to offer the tags in use); the others are fixed lists
-    local scope = dim == "tag" and core.load({ root = state.root, area = state.area, filter = {} })
+    -- only the tag, plan and phase menus need the tasks (to offer the values in use); the others are fixed lists
+    local scope = (dim == "tag" or dim == "plan" or dim == "phase")
+        and core.load({ root = state.root, area = state.area, filter = {} })
       or nil
     local choices = core.dim_choices(dim, scope and scope.tasks or {})
     table.insert(choices, 1, core.CLEAR)

@@ -1004,6 +1004,7 @@ function M.filter(tasks, f)
   local category = to_set(f.category)
   local effort, severity = to_set(f.effort), to_set(f.severity)
   local value, actor = to_set(f.value), to_set(f.actor)
+  local plan_set, phase_set = to_set(f.plan), to_set(f.phase)
   local effort_max = f.effort_max and M.effort_days(f.effort_max) or nil
   local today = f.today or M.today()
   -- `--stale=refs`: the caller may hand in a ready map (`f.ref_stale`); else the
@@ -1062,6 +1063,12 @@ function M.filter(tasks, f)
       -- `none` matches the tasks nobody classified (not even by derivation).
       local who = M.actor(t) or "none"
       keep = actor[who] == true
+    end
+    if keep and plan_set and not (t.plan and plan_set[t.plan]) then
+      keep = false
+    end
+    if keep and phase_set and not (t.phase and phase_set[t.phase]) then
+      keep = false
     end
     if keep and f.unestimated and t.value ~= nil and M.effort_days(t.effort) ~= nil then
       keep = false

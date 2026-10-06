@@ -83,7 +83,7 @@ counts, the active filter chips and, when it is not the default, the sort order:
 | `p` | advance the prio: none -> 1 -> 2 -> 3 -> none (3 -> none removes the key) |
 | `D` | finish after **one** confirmation naming every task (engine `done`, moved to `Backlog/`) |
 | `f` | set a filter chip: pick `status`, `prio`, `effort` (`XS`..`XL`, `<=S`, `<=M`), `kind`, `category`, `severity`, `value`, `actor`, `tag`, `blocked`, `unestimated`, `stale-refs` (toggle: shows the chip `[stale: refs]`),
-`readiness` (`ready` / `waiting`: the same cut as `list --ready` / `--waiting`, which the dashboard keeps when it was
+`plan` and `phase` (the plans and stages in use), `readiness` (`ready` / `waiting`: the same cut as `list --ready` / `--waiting`, which the dashboard keeps when it was
 opened with them) or "clear all", then a value (`(any)` clears one chip) |
 | `o` | cycle the sort order: `default` -> `prio-effort` (small first within a prio) -> `severity` (critical first) -> `frecency` (most opened / changed first) -> `default`; a non-default order shows as `[sort: ...]` in the title |
 | `e` | export the marked (else all shown) tasks: scratch buffer, clipboard, quickfix or a file, as Markdown or CSV, or "Preview in browser (mdview)" -- the `--to=` sinks |

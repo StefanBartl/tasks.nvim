@@ -62,6 +62,8 @@
 ---@field value_min? integer           # Matches value >= value_min (a task without value never matches).
 ---@field actor? string|string[]       # `cdx`, `me`, `pair` or `none`; matches `model.actor` (the written value, else derived).
 ---@field area? string|string[]
+---@field plan? string|string[]      # Matches `plan:` (the plan file id; a task without a plan never matches).
+---@field phase? string|string[]     # Matches `phase:` (a task without a phase never matches).
 ---@field blocked? boolean            # status `blocked` or a non-empty `blocked_by`.
 ---@field unestimated? boolean        # Missing the effort or the value (the tasks `estimate` walks).
 ---@field stale? integer              # Not updated for at least this many days (undated counts as stale).
