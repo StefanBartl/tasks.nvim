@@ -419,4 +419,61 @@ return function(H)
     "another ctx is another entry"
   )
   model.reset_parse_cache()
+
+  -- ── SEC-32 for the `## Plan` checkbox line and the asset scan of a folder task (review 2026-10-06) ──
+  local steps = require("tasks_nvim.steps")
+  local blanks = string.rep(" ", 100000)
+  local plan_body = "## Akzeptanz\n\n- [ ] a"
+    .. blanks
+    .. "b\n\n## Plan\n\n- [ ] 1. a"
+    .. blanks
+    .. "b\n- [ ] 2. c\n"
+  local started = vim.uv.hrtime()
+  local parsed_steps = assert(steps.parse(plan_body))
+  local ticked_text, ticked_n = steps.tick_all(plan_body)
+  steps.uncovered_acceptance(plan_body)
+  ok(
+    (vim.uv.hrtime() - started) / 1e9 < 0.5,
+    "a step line with a 100000-blank run is parsed in linear time"
+  )
+  eq(parsed_steps.total, 2)
+  eq(ticked_n, 2)
+  eq(
+    parsed_steps.items[1].text,
+    "1. a" .. blanks .. "b",
+    "the step text is kept, only trimmed at the ends"
+  )
+  ok(ticked_text:find("- [x] 1. a", 1, true) ~= nil)
+  eq(
+    steps.parse("## Plan\n\n- [ ]   padded text   \n").items[1].text,
+    "padded text",
+    "ends are trimmed"
+  )
+  eq(steps.parse("## Plan\n\n- [ ]\n").items[1].text, "", "a bare checkbox is a step without text")
+
+  local croot = F.vault(H)
+  local folder_dir = croot .. "/lib.nvim/ROADMAP/tasks/big"
+  vim.fn.mkdir(folder_dir .. "/assets", "p")
+  H.write(folder_dir .. "/assets/there.png", "x")
+  H.write(
+    folder_dir .. "/big.md",
+    "---\ntitle: Big\nstatus: open\n---\n"
+      .. string.rep("](assets/", 40000)
+      .. "\n![ok](assets/there.png) ![gone](assets/missing.png) ![](assets/) ![sp](assets/a b.png)\n"
+  )
+  local check = require("tasks_nvim.check")
+  local t1 = vim.uv.hrtime()
+  local asset_res = assert(check.run({ root = croot, area = "lib.nvim" }))
+  ok(
+    (vim.uv.hrtime() - t1) / 1e9 < 1.5,
+    "a body that repeats `](assets/` 40000 times is scanned in linear time"
+  )
+  local dangling = {}
+  for _, f in ipairs(asset_res.findings) do
+    if f.code == "asset-dangling" then
+      dangling[#dangling + 1] = f.message
+    end
+  end
+  eq(#dangling, 1, "exactly the one missing asset with a closing bracket is reported")
+  ok(dangling[1]:find("assets/missing.png", 1, true) ~= nil)
 end

@@ -126,13 +126,28 @@ local function dangling_assets(task)
   end
   local dir = fsio.dirname(task.path)
   local missing, seen = {}, {}
-  for target in text:gmatch("%]%((assets/[^)%s]+)%)") do
-    if not seen[target] then
-      seen[target] = true
-      if not asset_exists(dir, target) then
-        missing[#missing + 1] = target
+  -- `](assets/<name>)`: one linear pass. The gmatch pattern `%]%((assets/[^)%s]+)%)` is quadratic on a body that repeats
+  -- `](assets/` without a closing bracket (every start scans to the end of the file and backtracks).
+  local pos = 1
+  while true do
+    local s, e = text:find("](assets/", pos, true)
+    if not s then
+      break
+    end
+    local stop = text:find("[)%s]", e + 1)
+    if not stop then
+      break
+    end
+    if stop > e + 1 and text:sub(stop, stop) == ")" then
+      local target = text:sub(s + 2, stop - 1)
+      if not seen[target] then
+        seen[target] = true
+        if not asset_exists(dir, target) then
+          missing[#missing + 1] = target
+        end
       end
     end
+    pos = math.max(stop, e + 1)
   end
   return missing
 end

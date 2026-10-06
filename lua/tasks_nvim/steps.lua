@@ -14,6 +14,8 @@
 ---
 --- Not its job: finding the file (`scan`), writing it (`mutate.done` writes the ticked text with the finish).
 
+local fsio = require("tasks_nvim.fsio")
+
 local M = {}
 
 ---@param line string
@@ -82,8 +84,9 @@ end
 ---@return string|nil mark   # " ", "x" or "X"
 ---@return string text         # "" when there is no checkbox
 local function checkbox(bare)
-  local mark, text = bare:match("^%s*[-*]%s+%[([ xX])%]%s*(.-)%s*$")
-  return mark, text or ""
+  -- `(.*)$` and a linear trim: a lazy `(.-)%s*$` backtracks over a long whitespace run (SEC-32).
+  local mark, rest = bare:match("^%s*[-*]%s+%[([ xX])%](.*)$")
+  return mark, fsio.trim(rest or "")
 end
 
 ---Read the section. `nil` when the text has no `## Plan` section or the section holds no checkbox.
