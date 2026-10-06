@@ -525,6 +525,7 @@ local function write_plan_block(ctx, scope, path)
       for_id = opt["for"] --[[@as string|nil]],
       plan_id = opt.plan --[[@as string|nil]],
     })
+  ---@type string|nil
   local area = ctx.args.pos[1]
   if area == "all" then
     area = nil

@@ -38,6 +38,7 @@ local M = {}
 ---@field is_done fun(id: string): boolean # Whether a task id is finished (in a Backlog).
 ---@field gate_blockers table<string, string[]>  # Plan files with `gate: hard`: the tasks of the stage before, as blockers.
 ---@field phase_edges table<string, string[]>    # Plan files without a gate: the stage before, as soft edges.
+---@field file_key? fun(task: Tasks.Task, rel: string): string  # Which FILE a ref of a task means (the same-file marks); without it the ref's own path.
 
 ---What a task is waiting for, one word.
 ---@alias Tasks.PlanState
