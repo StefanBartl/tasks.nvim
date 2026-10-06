@@ -483,11 +483,15 @@ local function walk_estimates(tasks)
         #queue
       )
       ask(msg, { "Skip", "Stop", "1", "2", "3", "4", "5" }, function(pos)
-        if pos == nil or pos == 2 then
-          if pos == 2 then
-            done_task()
-            finish()
+        if pos == nil then
+          return
+        end
+        if pos == 2 then
+          -- Stop ends the walk HERE: what was given for this task is kept, the next task is not visited
+          if next(patch) then
+            steps[#steps + 1] = { id = t.id, patch = patch }
           end
+          finish()
           return
         end
         if pos >= 3 then
@@ -666,11 +670,10 @@ function M.list(ctx)
       notify.error("--ready and --waiting exclude each other")
       return
     end
-    local kept, kerr = require("tasks_nvim.plan_scope").filter_readiness(
-      filtered,
-      flags.ready and "ready" or "waiting",
-      root
-    )
+    -- carried in the filter: the dashboard rescans (live refresh, `r`, a re-sort) and applies the same cut
+    filter.readiness = flags.ready and "ready" or "waiting"
+    local kept, kerr =
+      require("tasks_nvim.plan_scope").filter_readiness(filtered, filter.readiness, root)
     if not kept then
       notify.error(tostring(kerr))
       return
@@ -963,7 +966,10 @@ function M.task_new_form(given)
         "Attach assets (screenshots, logs) to the new task?\n\nYes makes a folder task with an assets/ folder and opens the file explorer on it.",
         "attach assets",
         function(with_assets)
-          local opts = vim.tbl_extend("force", values.opts, { folder = with_assets })
+          -- after=/order=/plan=/phase= are no fields of the form: they go on as they were typed on the command line
+          local carried =
+            { after = given.after, order = given.order, plan = given.plan, phase = given.phase }
+          local opts = vim.tbl_extend("force", carried, values.opts, { folder = with_assets })
           local res, err = mutate.new(values.area, opts)
           if not res then
             if buf and vim.api.nvim_buf_is_valid(buf) then
@@ -1050,6 +1056,11 @@ function M.task_new(ctx)
       "category",
       "severity",
       "status",
+      -- not fields of the form: carried through to `mutate.new` as they were typed
+      "after",
+      "order",
+      "plan",
+      "phase",
     }) do
       if ctx.kv[key] ~= nil and ctx.kv[key] ~= "" then
         given[key] = ctx.kv[key]
@@ -1103,7 +1114,8 @@ function M.task_new(ctx)
       plan = values.plan,
       phase = values.phase,
       status = values.status,
-      refs = source and source.ref or nil,
+      -- a list: a string would be split at the commas of a file name (`a,b.lua`)
+      refs = source and source.ref and { source.ref } or nil,
       folder = ctx.flags.folder == true,
     })
     if not res then

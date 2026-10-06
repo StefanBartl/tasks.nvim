@@ -147,6 +147,11 @@ function M.dirs(root, area, opts)
   local out = {}
   for _, name in ipairs(names) do
     local tasks = vault.tasks_dir(root, name)
+    -- plan files steer readiness (`gate: hard`, stages): a change to one changes what the list shows
+    local plans_dir = vault.plans_dir(root, name)
+    if fsio.is_dir(plans_dir) then
+      out[#out + 1] = { path = plans_dir }
+    end
     if fsio.is_dir(tasks) then
       out[#out + 1] = { path = tasks }
       for _, sub in ipairs(subdirs(tasks)) do
@@ -427,6 +432,14 @@ function Watcher:hold(fn)
   if not outer then
     self.mute_until = self.opts.now() + self.opts.mute_ms
     self:disarm()
+    -- The events of the writes arrive on the NEXT turn of the loop, after the rescan the caller makes right now. When
+    -- that rescan takes longer than the window, the window is over before the echo arrives and the echo triggers a
+    -- second, invisible rescan: the window is started once more as soon as the loop turns.
+    vim.defer_fn(function()
+      if not self.stopped then
+        self.mute_until = math.max(self.mute_until, self.opts.now() + self.opts.mute_ms)
+      end
+    end, 0)
   end
   if not res[1] then
     error(res[2], 0)

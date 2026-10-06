@@ -30,6 +30,7 @@ local model = require("tasks_nvim.model")
 local plan = require("tasks_nvim.plan")
 local plan_scope = require("tasks_nvim.plan_scope")
 local scan = require("tasks_nvim.scan")
+local vault = require("tasks_nvim.vault")
 
 local M = {}
 
@@ -62,6 +63,7 @@ M.FILTER_DIMS = {
   "blocked",
   "unestimated",
   "stale-refs",
+  "readiness",
 }
 
 ---Highlight group per severity.
@@ -101,6 +103,7 @@ end
 ---@field skipped? integer     # Task files not listed (done, missing or unknown status).
 ---@field errors string[]      # Directories that could not be read.
 ---@field stale_report? Tasks.StalenessReport  # With `--stale=refs`: what the check found and what it could not.
+---@field readiness? Tasks.DashReadiness       # Where each task stands: judged from the SAME scan as the list.
 
 ---A filter whose `stale_refs` lookup knows the vault root (a copy; the stored
 ---filter stays free of it).
@@ -119,17 +122,43 @@ end
 ---@return Tasks.DashLoad|nil result
 ---@return string|nil err
 function M.load(opts)
-  local open, skipped, errors = scan.open_tasks({ root = opts.root, area = opts.area })
-  if not open then
-    return nil, tostring(skipped)
+  -- ONE pass over the whole vault: the list (one area, or all) and the readiness of its tasks (a blocker may live in
+  -- another area) come from it. Two scans per refresh were what the live refresh cost before.
+  if opts.area and not vault.valid_area(opts.area) then
+    return nil, "invalid area name: " .. tostring(opts.area)
+  end
+  local all, scan_errors = scan.all({ root = opts.root })
+  if not all then
+    return nil, tostring(scan_errors)
+  end
+  local errors = type(scan_errors) == "table" and scan_errors or {}
+  local open, skipped = {}, 0
+  for _, t in ipairs(all) do
+    if not opts.area or t.area == opts.area then
+      if model.is_open_status(t.status) then
+        open[#open + 1] = t
+      else
+        skipped = skipped + 1
+      end
+    end
+  end
+  local ran, shared = pcall(plan_scope.shared, opts.root, { all = all, errors = errors })
+  if not ran then
+    shared = nil
   end
   local filtered, stale_report = model.filter(open, M.with_root(opts.filter, opts.root))
+  if opts.filter and opts.filter.readiness and shared then
+    filtered = plan_scope.filter_readiness(filtered, opts.filter.readiness, opts.root, shared)
+      or filtered
+  end
+  local tasks = model.sort(filtered, opts.sort, { scores = opts.scores })
   return {
-    tasks = model.sort(filtered, opts.sort, { scores = opts.scores }),
+    tasks = tasks,
     open = #open,
     skipped = skipped,
     errors = errors,
     stale_report = stale_report,
+    readiness = shared and M.readiness(tasks, opts.root, shared) or nil,
   },
     nil
 end
@@ -152,11 +181,16 @@ end
 ---(the counts fall back to what the files say), it never breaks the dashboard.
 ---@param tasks Tasks.Task[]
 ---@param root? string
+---@param shared? Tasks.PlanShared   # The pass over the vault the caller already made (`plan_scope.shared`).
 ---@return Tasks.DashReadiness|nil
-function M.readiness(tasks, root)
-  local ok, index = pcall(plan_scope.index, root)
-  if not ok or not index then
-    return nil
+function M.readiness(tasks, root, shared)
+  local index = shared and shared.index
+  if not index then
+    local ok
+    ok, index = pcall(plan_scope.index, root)
+    if not ok or not index then
+      return nil
+    end
   end
   local out = { states = {}, open_blockers = {}, sums = estimate.rollup(tasks) }
   for _, t in ipairs(tasks) do
@@ -436,6 +470,9 @@ function M.chips(f)
   if f.unestimated then
     chips[#chips + 1] = "unestimated"
   end
+  if f.readiness then
+    chips[#chips + 1] = f.readiness
+  end
   return chips
 end
 
@@ -532,6 +569,8 @@ function M.set_dim(f, dim, value)
     out.unestimated = value and true or nil
   elseif dim == "stale-refs" then
     out.stale_refs = value and true or nil
+  elseif dim == "readiness" then
+    out.readiness = (value == "ready" or value == "waiting") and value or nil
   elseif
     dim == "status"
     or dim == "kind"
@@ -566,6 +605,8 @@ function M.dim_choices(dim, tasks)
     return { "1", "2", "3", "4", "5", ">=4" }
   elseif dim == "actor" then
     return { "cdx", "me", "pair", "none" }
+  elseif dim == "readiness" then
+    return { "ready", "waiting" }
   elseif dim == "tag" then
     local seen, out = {}, {}
     for _, t in ipairs(tasks) do
@@ -634,6 +675,9 @@ function M.filter_to_options(f)
   if f.unestimated then
     o.unestimated = true
   end
+  if f.readiness then
+    o.readiness = f.readiness
+  end
   return o
 end
 
@@ -660,6 +704,9 @@ function M.filter_from_stored(opts)
     blocked = opts.blocked == true,
     unestimated = opts.unestimated == true,
   })
+  if f and (opts.readiness == "ready" or opts.readiness == "waiting") then
+    f.readiness = opts.readiness
+  end
   return f or {}
 end
 
@@ -759,9 +806,28 @@ function M.describe_done(res)
   for _, e in ipairs(res.index_errors) do
     lines[#lines + 1] = "index " .. e
   end
+  -- what the done chain did beyond the finish (the same facts `:Tasks done` reports): the steps ticked, the plans
+  -- closed, the documents refreshed, and what did not work -- the finish stands, but nobody may be left in the dark
+  if (res.steps_ticked or 0) > 0 then
+    lines[#lines + 1] = ("%d plan step%s ticked off"):format(
+      res.steps_ticked,
+      res.steps_ticked == 1 and "" or "s"
+    )
+  end
+  for _, plan_id in ipairs(res.plans_closed or {}) do
+    lines[#lines + 1] = "plan " .. plan_id .. " is finished"
+  end
+  for _, doc in ipairs(res.docs_refreshed or {}) do
+    lines[#lines + 1] = "plan block refreshed in " .. doc
+  end
+  for _, note in ipairs(res.notes or {}) do
+    lines[#lines + 1] = note
+  end
   local level = "info"
   if #res.failed > 0 or #res.index_errors > 0 then
     level = (#res.done + #res.already == 0) and "error" or "warn"
+  elseif #(res.notes or {}) > 0 then
+    level = "warn"
   end
   return level, table.concat(lines, "\n")
 end

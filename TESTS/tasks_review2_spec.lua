@@ -412,4 +412,185 @@ return function(H)
     eq(node["lib.nvim/l1"].same_file, { "lib.nvim/l2" }, "the same repo's README is one file")
     eq(node["cascade.nvim/c1"].same_file, {}, "another repo's README is another file")
   end
+
+  -- ── `:Tasks new`: the keys the form has no field for go on to the task; a range ref is one ref ──
+  do
+    local cmd = require("tasks_nvim.ui.cmd")
+    local confirm = require("tasks_nvim.ui.confirm")
+    local vault = require("tasks_nvim.vault")
+    local scan = require("tasks_nvim.scan")
+    vault.set_root(root)
+    local orig_yesno, orig_notify = confirm.yesno, vim.notify
+    confirm.yesno = function(_, _, cb)
+      cb(false)
+    end
+    vim.notify = function() end
+    local captured
+    cmd.form_open = function(spec)
+      captured = spec
+    end
+    cmd.task_new({
+      args = { area = nil },
+      kv = { plan = "lib.nvim/rel", phase = "build", order = "3" },
+      flags = {},
+      rest = {},
+      range = { range = 0, line1 = 1, line2 = 1 },
+    })
+    cmd.form_open = nil
+    assert(captured, "the form was opened")
+    captured.on_submit({ area = "lib.nvim", opts = { title = "Via the form" } }, nil)
+    local made = assert(scan.find("lib.nvim/via-the-form", { root = root }))
+    eq(made.plan, "lib.nvim/rel", "plan= reached the task")
+    eq(made.phase, "build", "phase= too")
+    eq(made.order, 3, "and order=")
+
+    local dir = H.tmpdir()
+    local comma_file = dir .. "/a,b.lua"
+    vim.fn.writefile({ "first line" }, comma_file)
+    vim.cmd("edit " .. vim.fn.fnameescape(comma_file))
+    local ctx = {
+      args = { area = "lib.nvim" },
+      kv = {},
+      flags = {},
+      rest = {},
+      range = { range = 1, line1 = 1, line2 = 1 },
+    }
+    local src = assert(cmd.range_source(ctx))
+    cmd.task_new(ctx)
+    local ranged = assert(scan.find("lib.nvim/first-line", { root = root }))
+    eq(ranged.refs, { src.ref }, "a file name with a comma stays ONE ref")
+    vim.cmd("enew")
+    confirm.yesno, vim.notify = orig_yesno, orig_notify
+    vault.set_root(nil)
+  end
+
+  -- ── the dashboard: readiness is a filter, one scan per load, the chain's notes are told, the help is current ──
+  do
+    local core = require("tasks_nvim.ui.dash_core")
+    local dash = require("tasks_nvim.ui.dash")
+    local scan = require("tasks_nvim.scan")
+    local dash_root = F.vault(H)
+    F.task(H, dash_root, "lib.nvim", "free-one", F.meta("Free one", "open"))
+    F.task(H, dash_root, "lib.nvim", "gate", F.meta("Gate", "open"))
+    F.task(
+      H,
+      dash_root,
+      "lib.nvim",
+      "waits",
+      F.meta("Waits", "open", { { "blocked_by", "[lib.nvim/gate]" } })
+    )
+    local function ids(res)
+      return vim.tbl_map(function(t)
+        return t.id
+      end, res.tasks)
+    end
+    local ready = assert(core.load({ root = dash_root, filter = { readiness = "ready" } }))
+    eq(
+      vim.list_contains(ids(ready), "lib.nvim/waits"),
+      false,
+      "--ready leaves the waiting task out"
+    )
+    ok(vim.list_contains(ids(ready), "lib.nvim/free-one"))
+    local waiting = assert(core.load({ root = dash_root, filter = { readiness = "waiting" } }))
+    eq(ids(waiting), { "lib.nvim/waits" }, "--waiting keeps only it")
+    eq(core.chips({ readiness = "ready" }), { "ready" }, "a chip says so")
+    eq(core.filter_is_empty({ readiness = "waiting" }), false)
+    eq(
+      core.filter_from_stored(core.filter_to_options({ readiness = "ready" })).readiness,
+      "ready",
+      "and it is remembered"
+    )
+    eq(core.set_dim({}, "readiness", "waiting").readiness, "waiting", "the f menu sets it")
+    ok(vim.list_contains(core.FILTER_DIMS, "readiness"))
+
+    -- one pass over the vault builds the list AND where each task stands
+    local real_all, scans = scan.all, 0
+    scan.all = function(sopts)
+      scans = scans + 1
+      return real_all(sopts)
+    end
+    local loaded = assert(core.load({ root = dash_root, area = "lib.nvim" }))
+    scan.all = real_all
+    eq(scans, 1, "one scan for the list and the readiness")
+    ok(loaded.readiness ~= nil and loaded.readiness.states["lib.nvim/waits"] == "waiting")
+
+    -- the chain's follow-ups are told, and a note lifts the level
+    local level, text = core.describe_done({
+      done = { { id = "a/x" } },
+      already = {},
+      failed = {},
+      areas = { "a" },
+      index_errors = {},
+      steps_ticked = 2,
+      plans_closed = { "a/p" },
+      docs_refreshed = { "/d.md" },
+      notes = { "the plan a/q could not be closed: boom" },
+    })
+    eq(level, "warn")
+    has(text, "2 plan steps ticked off")
+    has(text, "plan a/p is finished")
+    has(text, "/d.md")
+    has(text, "could not be closed: boom")
+    eq(
+      (core.describe_done({ done = {}, already = {}, failed = {}, areas = {}, index_errors = {} })),
+      "info"
+    )
+
+    -- the help names what exists
+    local help = table.concat(dash.help_lines(), "\n")
+    for _, sort in ipairs(require("tasks_nvim.model").SORTS) do
+      has(help, sort)
+    end
+    for _, dim in ipairs(core.FILTER_DIMS) do
+      has(help, dim)
+    end
+  end
+
+  -- ── the help float is as tall as its text WRAPS ──
+  do
+    local help_float = require("tasks_nvim.ui.help_float")
+    local long = string.rep("w", 300)
+    local win = help_float.open({ long, long, "short" }, "tasks-review2-help")
+    local config = vim.api.nvim_win_get_config(win)
+    local rows = 0
+    for _, text in ipairs({ long, long, "short" }) do
+      rows = rows + math.max(1, math.ceil(#text / (config.width - 2)))
+    end
+    ok(config.height >= math.min(rows, vim.o.lines - 6), "the height counts wrapped rows")
+    ok(config.height > 3, "not one row per logical line")
+    vim.api.nvim_win_close(win, true)
+    vim.on_key(nil, vim.api.nvim_create_namespace("tasks-review2-help"))
+  end
+
+  -- ── the <Tab> list of finished ids comes from file names, not from parsing every file ──
+  do
+    local routes = require("tasks_nvim.ui.routes")
+    local vault = require("tasks_nvim.vault")
+    local scan = require("tasks_nvim.scan")
+    local comp_root = F.vault(H)
+    vault.set_root(comp_root)
+    H.write(
+      comp_root .. "/lib.nvim/Backlog/TASKS/2026-09-01_old-one.md",
+      F.text(F.meta("Old one", "done"))
+    )
+    H.write(
+      comp_root .. "/lib.nvim/Backlog/FEATURES/2026-09-02_old-two.md",
+      F.text(F.meta("Old two", "done"))
+    )
+    local real_backlog, parsed = scan.backlog, 0
+    scan.backlog = function(...)
+      parsed = parsed + 1
+      return real_backlog(...)
+    end
+    local offered = routes.done_ids and routes.done_ids() or nil
+    scan.backlog = real_backlog
+    vault.set_root(nil)
+    if offered then
+      eq(parsed, 0, "no finished file is read")
+      ok(
+        vim.list_contains(offered, "lib.nvim/old-one")
+          and vim.list_contains(offered, "lib.nvim/old-two")
+      )
+    end
+  end
 end

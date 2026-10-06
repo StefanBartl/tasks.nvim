@@ -48,6 +48,7 @@
 
 --- Filter for `model.filter`. Every set-like field matches any of its values.
 ---@class Tasks.Filter
+---@field readiness? "ready"|"waiting"   # The readiness cut of `list --ready|--waiting`: applied by whoever loads the vault (it needs every open task, `model.filter` does not know it).
 ---@field status? string|string[]
 ---@field prio? integer|integer[]
 ---@field prio_max? integer           # Matches prio <= prio_max (a task without prio never matches).

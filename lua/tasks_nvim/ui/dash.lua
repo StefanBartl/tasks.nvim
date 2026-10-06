@@ -224,7 +224,8 @@ local function reload(state)
     end
   end
   state.widths = core.widths(state.shown)
-  state.readiness = core.readiness(state.shown, state.root)
+  -- the load carries the readiness it was judged from (one scan); only a failed load has none
+  state.readiness = res and res.readiness or core.readiness(state.shown, state.root)
   state.signature = core.signature(state.shown, state.readiness)
   return state.shown
 end
@@ -555,12 +556,15 @@ local ACTIONS = {
   {
     name = "filter",
     action = "tasks_filter",
-    text = "set a filter chip (status prio effort kind category severity tag blocked stale-refs)",
+    text = "set a filter chip (" .. table.concat(core.FILTER_DIMS, " ") .. ")",
   },
   {
     name = "sort",
     action = "tasks_sort",
-    text = "cycle the sort: default -> prio-effort -> severity -> frecency -> default",
+    text = "cycle the sort: "
+      .. table.concat(require("tasks_nvim.model").SORTS, " -> ")
+      .. " -> "
+      .. require("tasks_nvim.model").SORTS[1],
   },
   {
     name = "export",
@@ -682,7 +686,9 @@ function M.refresh_if_changed(state, picker)
   end
   local res = load_state(state)
   if
-    not res or core.signature(res.tasks, core.readiness(res.tasks, state.root)) == state.signature
+    not res
+    or core.signature(res.tasks, res.readiness or core.readiness(res.tasks, state.root))
+      == state.signature
   then
     return false
   end
@@ -819,6 +825,8 @@ local function open_snacks(Snacks, state)
       state.preload = {
         tasks = require("tasks_nvim.model").sort(vim.list_slice(state.shown), state.sort),
         errors = {},
+        -- the same tasks, so the same readiness: handing it over is what makes the shortcut a shortcut
+        readiness = state.readiness,
       }
       refresh_keep(picker, true)
     end,

@@ -62,6 +62,13 @@ return function(H)
     "lib.nvim/Backlog/FEATURES",
     "lib.nvim/Backlog/TASKS",
   }, "with tasks/: it and each folder-task folder, non-recursive")
+  -- plan files steer readiness (`gate: hard`, stages): their folder is watched once it exists
+  vim.fn.mkdir(root .. "/lib.nvim/ROADMAP/plans", "p")
+  ok(
+    vim.tbl_contains(rel(watch.dirs(root, "lib.nvim")), "lib.nvim/ROADMAP/plans"),
+    "plans/ is watched"
+  )
+  vim.fn.delete(root .. "/lib.nvim/ROADMAP/plans", "d")
   -- lib.nvim 4, cascade.nvim 3 (tasks/ + 2 buckets), ALL 2, nvim-config 2; migrate.nvim has neither
   eq(#watch.dirs(root, nil), 11, "all areas")
   local all = rel(watch.dirs(root, nil))
@@ -251,6 +258,16 @@ return function(H)
     ok(d.held, "still held inside the outer batch")
   end)
   eq(d.held, false)
+
+  -- the window starts again when the loop turns: the caller's rescan may outlast it, and the echo of the writes
+  -- arrives only after that rescan
+  d:hold(function() end)
+  w.clock = w.clock + watch.DEFAULTS.mute_ms + 1
+  vim.wait(60, function()
+    return false
+  end)
+  w.event(tasks_dir, "a.md")
+  eq(w.pending(), 0, "an echo that arrives after a slow rescan is dropped as well")
 
   -- ── stop: nothing left running ──────────────────────────────────────────
   w.clock = w.clock + watch.DEFAULTS.mute_ms + 1

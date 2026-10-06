@@ -24,7 +24,12 @@ function M.open(lines, ns_name)
   end
   -- Never larger than the editor: a help wider or taller than the screen was cut off and could not scroll.
   width = math.min(width, math.max(10, vim.o.columns - 6))
-  local height = math.min(#lines, math.max(3, vim.o.lines - 6))
+  -- Rows, not lines: a line wider than the window wraps, and the float cannot scroll (the picker keeps the focus).
+  local rows = 0
+  for _, l in ipairs(lines) do
+    rows = rows + math.max(1, math.ceil(vim.fn.strdisplaywidth(l) / width))
+  end
+  local height = math.min(rows, math.max(3, vim.o.lines - 6))
   local win = vim.api.nvim_open_win(buf, false, {
     relative = "editor",
     row = math.max(0, math.floor((vim.o.lines - height) / 2) - 1),

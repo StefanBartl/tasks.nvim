@@ -164,6 +164,21 @@ return function(H)
     eq(#asked, 1)
     has(said(), "nothing given, nothing changed")
 
+    -- Stop at the value question of the FIRST of two tasks: the second is never asked, and the end is reported once
+    for _, title in ipairs({ "Walk A", "Walk B" }) do
+      assert(mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = title, effort = "S" })))
+    end
+    -- (the earlier task `stale` still lacks a value and is walked first: Stop there)
+    answers = {
+      function()
+        return 2
+      end,
+    }
+    asked = {}
+    run("estimate lib.nvim --walk")
+    eq(#asked, 1, "Stop ends the walk: the remaining tasks are not asked")
+    eq(select(2, said():gsub("nothing given", "")), 1, "and the end is reported once")
+
     -- ── next: a dialog with the answer; Open jumps ──
     local shown = {}
     popup.chooser = function(msg, choices, cb)

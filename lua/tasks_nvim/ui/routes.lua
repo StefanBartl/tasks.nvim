@@ -153,10 +153,15 @@ local function done_ids()
   end
   local ids = {}
   if root then
+    -- From the file names: `scan.backlog` reads and parses every finished task, which a <Tab> must not do (a thousand
+    -- files cost a second each time the cache runs out). `scan.find_done` matches by slug too, so these are the ids
+    -- `open`/`done`/`preview` accept; a Backlog document that is no task has no valid slug and is not offered.
     for _, a in ipairs(vault.areas(root)) do
-      local ok, finished = pcall(scan.backlog, a.name, { root = root })
-      for _, t in ipairs(ok and finished or {}) do
-        ids[#ids + 1] = t.id
+      local ok, slugs = pcall(scan.backlog_slugs, a.name, { root = root })
+      for slug in pairs(ok and slugs or {}) do
+        if vault.valid_slug(slug) then
+          ids[#ids + 1] = a.name .. "/" .. slug
+        end
       end
     end
   end
@@ -164,6 +169,9 @@ local function done_ids()
   done_cache = { at = now_ms(), root = root, ids = ids }
   return ids
 end
+
+---The ids `done_ids` offers (exported for the specs).
+M.done_ids = done_ids
 
 ---Complete the item under the cursor of a comma list (`ui,do` -> `ui,docs`); what is before it stays, a leading
 ---`[` of a `blocked_by=[a, b]` value too.

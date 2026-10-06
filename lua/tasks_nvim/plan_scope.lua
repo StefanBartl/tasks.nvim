@@ -117,12 +117,18 @@ end
 ---@param tasks Tasks.Task[]
 ---@param which "ready"|"waiting"
 ---@param root? string
+---@param shared? Tasks.PlanShared   # The pass over the vault the caller already made.
 ---@return Tasks.Task[]|nil kept
 ---@return string|nil err
-function M.filter_readiness(tasks, which, root)
-  local index, everything = M.index(root)
-  if not index then
-    return nil, tostring(everything)
+function M.filter_readiness(tasks, which, root, shared)
+  local index, everything
+  if shared then
+    index = shared.index
+  else
+    index, everything = M.index(root)
+    if not index then
+      return nil, tostring(everything)
+    end
   end
   local kept = {}
   for _, t in ipairs(tasks) do
