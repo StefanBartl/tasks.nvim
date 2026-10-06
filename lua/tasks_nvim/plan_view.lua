@@ -113,7 +113,9 @@ function M.markdown(plan, opts)
     lines[#lines + 1] = ("**%s** (%s)"):format(fsio.clean(file.title), file.status or "?")
     if file.summary ~= "" and file.summary ~= file.title then
       lines[#lines + 1] = ""
-      lines[#lines + 1] = fsio.clean(file.summary)
+      -- a quote, never a bare line: the summary is the plan's own text, and a line of it that reads like a marker
+      -- (`<!-- GENERATED:plan end -->`) or a heading would split the generated block it sits in
+      lines[#lines + 1] = "> " .. fsio.clean(file.summary)
     end
     if #file.phase_order > 0 then
       lines[#lines + 1] = ""
@@ -318,75 +320,231 @@ function M.default_scope(opts)
   return opts.area or "all"
 end
 
-local START = "^<!%-%- GENERATED:plan scope=(%S+) start %-%->%s*$"
-local END = "^<!%-%- GENERATED:plan end %-%->%s*$"
+local START_PREFIX = "<!-- GENERATED:plan scope="
+local START_SUFFIX = " start -->"
+local END_LINE = "<!-- GENERATED:plan end -->"
 
 ---The marker lines of a block for `scope`.
 ---@param scope string
+---@param attrs? table<string, string>
 ---@return string start
 ---@return string finish
-function M.block_markers(scope)
-  return ("<!-- GENERATED:plan scope=%s start -->"):format(scope), "<!-- GENERATED:plan end -->"
+function M.block_markers(scope, attrs)
+  return M.start_line(scope, attrs), END_LINE
 end
 
----The scopes of the marker blocks in a document.
+---The start marker line of a block: `<!-- GENERATED:plan scope=<name> [key=value ...] start -->`. The attributes
+---record how the block was made (the target, the view, the filters), so a later refresh builds the same block.
+---@param scope string
+---@param attrs? table<string, string>
+---@return string
+function M.start_line(scope, attrs)
+  local keys = {}
+  for key in pairs(attrs or {}) do
+    keys[#keys + 1] = key
+  end
+  table.sort(keys)
+  local parts = { START_PREFIX .. scope }
+  for _, key in ipairs(keys) do
+    parts[#parts + 1] = key .. "=" .. (attrs or {})[key]
+  end
+  return table.concat(parts, " ") .. START_SUFFIX
+end
+
+---Read a start marker line: its scope name and attributes. Linear: no pattern runs over the user's text. A line that
+---is no start marker answers `nil`; a trailing CR (a CRLF document) is no part of it.
+---@param line string
+---@return string|nil scope
+---@return table<string, string>|nil attrs
+function M.parse_start(line)
+  if line:sub(1, #START_PREFIX) ~= START_PREFIX then
+    return nil, nil
+  end
+  local trimmed = fsio.trim(line)
+  if
+    #trimmed < #START_PREFIX + #START_SUFFIX + 1 or trimmed:sub(-#START_SUFFIX) ~= START_SUFFIX
+  then
+    return nil, nil
+  end
+  local middle = trimmed:sub(#START_PREFIX + 1, #trimmed - #START_SUFFIX)
+  local scope, attrs = nil, {}
+  for word in middle:gmatch("%S+") do
+    if not scope then
+      scope = word
+    else
+      local key, value = word:match("^([%w_%-]+)=(.*)$")
+      if key then
+        attrs[key] = value
+      end
+    end
+  end
+  if not scope then
+    return nil, nil
+  end
+  return scope, attrs
+end
+
+---@param line string
+---@return boolean
+local function is_end(line)
+  return line:sub(1, #END_LINE) == END_LINE and fsio.trim(line) == END_LINE
+end
+
+---@class Tasks.MarkerBlock
+---@field scope string
+---@field attrs table<string, string>
+---@field start integer       # Line number of the start marker.
+---@field finish? integer     # Line number of the end marker; nil when the block is not closed.
+---@field err? string         # Why the block cannot be replaced (no end marker before the next start).
+
+---The marker blocks of a document, in order. A marker inside a fenced code block (a doc that SHOWS the syntax) is
+---no marker. Lines are split on `\n` only: a trailing `\r` stays with its line.
+---@param text string
+---@return Tasks.MarkerBlock[] blocks
+---@return string[] lines
+function M.parse_blocks(text)
+  local lines = vim.split(text, "\n", { plain = true })
+  local blocks, open = {}, nil
+  local fence_char, fence_len
+  for i, line in ipairs(lines) do
+    local indent, run = line:match("^( *)([`~]+)")
+    local is_fence = indent ~= nil
+      and #indent <= 3
+      and #run >= 3
+      and not run:find("[^" .. run:sub(1, 1) .. "]")
+    if fence_char then
+      -- a closing fence: the same character, at least as long, nothing else on the line
+      if
+        is_fence
+        and run:sub(1, 1) == fence_char
+        and #run >= fence_len
+        and fsio.trim(line:sub(#indent + #run + 1)) == ""
+      then
+        fence_char, fence_len = nil, nil
+      end
+    elseif is_fence then
+      fence_char, fence_len = run:sub(1, 1), #run
+    else
+      local scope, attrs = M.parse_start(line)
+      if scope then
+        if open then
+          open.err = ("the block `%s` is not closed before the next block starts"):format(
+            open.scope
+          )
+        end
+        open = { scope = scope, attrs = attrs, start = i }
+        blocks[#blocks + 1] = open
+      elseif open and is_end(line) then
+        open.finish = i
+        open = nil
+      end
+    end
+  end
+  for _, block in ipairs(blocks) do
+    if not block.finish and not block.err then
+      block.err = ("the block `%s` has no `%s` line"):format(block.scope, END_LINE)
+    end
+  end
+  return blocks, lines
+end
+
+---The names of the marker blocks in a document, each once, in the order they first appear.
 ---@param text string
 ---@return string[] scopes
 function M.block_scopes(text)
-  local out = {}
-  for line in fsio.lf(text):gmatch("[^\n]*") do
-    local scope = line:match(START)
-    if scope then
-      out[#out + 1] = scope
+  local out, seen = {}, {}
+  for _, block in ipairs((M.parse_blocks(text))) do
+    if not seen[block.scope] then
+      seen[block.scope] = true
+      out[#out + 1] = block.scope
     end
   end
   return out
 end
 
----Replace the body of the block `scope` in `text`, nothing else: the rest of the document and its line endings
----stay byte for byte. `nil, err` when there is no such block (the error lists the scopes that exist) or its end
----marker is missing.
+---Rewrite the marker blocks of `text` that `pick` chooses, nothing else: every other line keeps its own bytes and its
+---own line ending (a document with mixed endings is not normalised). `pick(block)` answers the new body (Markdown, with
+---or without a trailing newline) and, optionally, the attributes the start marker is rewritten with; `nil` leaves the
+---block alone. The body takes the line ending of its block's start marker. A chosen block that cannot be replaced (no
+---end marker) is an error, and so is a body that contains a marker line (it would split the block on the next read).
 ---@param text string
----@param scope string
----@param body string   # Markdown, with or without a trailing newline.
+---@param pick fun(block: Tasks.MarkerBlock): string|nil, table<string, string>|nil
 ---@return string|nil new_text
 ---@return string|nil err
 ---@return boolean|nil changed
-function M.replace_block(text, scope, body)
-  local eol = fsio.eol_of(text)
-  local lines = vim.split(fsio.lf(text), "\n", { plain = true })
-  local first, last
-  for i, line in ipairs(lines) do
-    if not first then
-      if line:match(START) == scope then
-        first = i
+---@return string[]|nil changed_scopes   # The scopes of the blocks whose body is not what it was (each once).
+function M.replace_blocks(text, pick)
+  local blocks, lines = M.parse_blocks(text)
+  local out, at = {}, 1
+  local changed_scopes, seen = {}, {}
+  for _, block in ipairs(blocks) do
+    local body, attrs = pick(block)
+    if body ~= nil then
+      if block.err then
+        return nil, block.err
       end
-    elseif line:match(END) then
-      last = i
-      break
-    elseif line:match(START) then
-      return nil, ("the block `%s` is not closed before the next block starts"):format(scope)
+      local cr = lines[block.start]:sub(-1) == "\r" and "\r" or ""
+      while body:sub(-1) == "\n" do
+        body = body:sub(1, -2)
+      end
+      local fresh = vim.split(body, "\n", { plain = true })
+      for _, line in ipairs(fresh) do
+        if M.parse_start(line) or is_end(line) then
+          return nil, "the generated text contains a marker line: " .. line
+        end
+      end
+      vim.list_extend(out, lines, at, block.start - 1)
+      local start_line = attrs and (M.start_line(block.scope, attrs) .. cr) or lines[block.start]
+      local finish = block.finish --[[@as integer]]
+      local was, now = { lines[block.start] }, { start_line }
+      for i = block.start + 1, finish - 1 do
+        was[#was + 1] = lines[i]
+      end
+      for _, line in ipairs(fresh) do
+        now[#now + 1] = line .. cr
+      end
+      vim.list_extend(out, now)
+      if not seen[block.scope] and table.concat(was, "\n") ~= table.concat(now, "\n") then
+        seen[block.scope] = true
+        changed_scopes[#changed_scopes + 1] = block.scope
+      end
+      at = finish
     end
   end
-  if not first then
+  vim.list_extend(out, lines, at, #lines)
+  local result = table.concat(out, "\n")
+  return result, nil, result ~= text, changed_scopes
+end
+
+---Replace the body of every block named `scope` in `text` (see `replace_blocks`). `attrs` rewrites their start
+---markers. `nil, err` when there is no such block (the error lists the scopes that exist) or one is not closed.
+---@param text string
+---@param scope string
+---@param body string
+---@param attrs? table<string, string>
+---@return string|nil new_text
+---@return string|nil err
+---@return boolean|nil changed
+function M.replace_block(text, scope, body, attrs)
+  local found = false
+  local result, err, changed = M.replace_blocks(text, function(block)
+    if block.scope == scope then
+      found = true
+      return body, attrs
+    end
+  end)
+  if not result then
+    return nil, err
+  end
+  if not found then
     local have = M.block_scopes(text)
     return nil,
-      ("no block `<!-- GENERATED:plan scope=%s start -->` in the file%s"):format(
-        scope,
+      ("no block `%s` in the file%s"):format(
+        M.start_line(scope),
         #have > 0 and (" (it has: " .. table.concat(have, ", ") .. ")") or ""
       )
   end
-  if not last then
-    return nil, ("the block `%s` has no `<!-- GENERATED:plan end -->` line"):format(scope)
-  end
-  local fresh = vim.split((body:gsub("\n+$", "")), "\n", { plain = true })
-  local out = {}
-  vim.list_extend(out, lines, 1, first)
-  vim.list_extend(out, fresh)
-  vim.list_extend(out, lines, last, #lines)
-  local joined = table.concat(out, "\n")
-  local result = eol == "\n" and joined or joined:gsub("\n", eol)
-  return result, nil, result ~= text
+  return result, nil, changed
 end
 
 ---One line per task in plan order: `stage id state status prio effort leverage title`, tab-separated.

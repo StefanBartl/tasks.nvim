@@ -287,13 +287,11 @@ local function to_int(value, what)
   return tonumber(value), nil
 end
 
----Turn the filter options into a `Tasks.Filter` (the parsing itself is shared
----with the editor commands: `filter_opts.parse`).
+---The filter options as `filter_opts.parse` takes them (also what a marker block records).
 ---@param opt table<string, string|boolean>
----@return Tasks.Filter|nil filter
----@return string|nil err
-local function filter_from(opt)
-  return filter_opts.parse({
+---@return table
+local function filter_option_map(opt)
+  return {
     status = opt.status --[[@as string|nil]],
     prio = opt.prio --[[@as string|nil]],
     effort = opt.effort --[[@as string|nil]],
@@ -308,7 +306,16 @@ local function filter_from(opt)
     blocked = opt.blocked == true,
     unestimated = opt.unestimated == true,
     today = opt.today --[[@as string|nil]],
-  })
+  }
+end
+
+---Turn the filter options into a `Tasks.Filter` (the parsing itself is shared
+---with the editor commands: `filter_opts.parse`).
+---@param opt table<string, string|boolean>
+---@return Tasks.Filter|nil filter
+---@return string|nil err
+local function filter_from(opt)
+  return filter_opts.parse(filter_option_map(opt))
 end
 
 ---@param opt table<string, string|boolean>
@@ -518,39 +525,33 @@ local function write_plan_block(ctx, scope, path)
       for_id = opt["for"] --[[@as string|nil]],
       plan_id = opt.plan --[[@as string|nil]],
     })
-  local text, rerr = fsio.read(path)
-  if not text then
-    ctx.warn("error: cannot read " .. path .. ": " .. tostring(rerr))
-    return 1
+  local area = ctx.args.pos[1]
+  if area == "all" then
+    area = nil
   end
-  local body = plan_view.markdown(scope.plan, {
-    title = scope.title,
-    done = scope.done,
-    ready_only = opt.ready == true,
-    with_steps = opt["with-steps"] == true,
-    plan_file = scope.plan_file,
-    block = true,
-  })
-  local fresh, err, changed = plan_view.replace_block(text, key, body)
-  if not fresh then
+  -- The marker records how the block was made (target, view, filters): the refresh after a finish builds the same.
+  local attrs, aerr = plan_scope.marker_attrs(
+    filter_option_map(opt),
+    { ready = opt.ready == true, steps = opt["with-steps"] == true },
+    {
+      area = area,
+      plan_id = opt.plan --[[@as string|nil]],
+      for_id = opt["for"] --[[@as string|nil]],
+    },
+    key
+  )
+  if not attrs then
+    ctx.warn("error: " .. tostring(aerr))
+    return 2
+  end
+  local res, err =
+    plan_scope.write_block(path, scope, { key = key, attrs = attrs, check = opt.check == true })
+  if not res then
     ctx.warn("error: " .. tostring(err))
     return 1
   end
-  if opt.check then
-    ctx.say(("%s\t%s"):format(changed and "stale" or "current", path))
-    return changed and 1 or 0
-  end
-  if not changed then
-    ctx.say(("unchanged\t%s"):format(path))
-    return 0
-  end
-  local ok, werr = fsio.write_atomic(path, fresh, { follow_symlinks = true })
-  if not ok then
-    ctx.warn("error: cannot write " .. path .. ": " .. tostring(werr))
-    return 1
-  end
-  ctx.say(("written\t%s"):format(path))
-  return 0
+  ctx.say(("%s\t%s"):format(res.state, path))
+  return res.state == "stale" and 1 or 0
 end
 
 function commands.plan(ctx)

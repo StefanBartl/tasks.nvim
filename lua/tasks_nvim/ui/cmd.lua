@@ -376,43 +376,34 @@ function M.write_plan_block(ctx, scope)
   end
   local key = flags.scope
     or plan_view.default_scope({ area = area, for_id = flags["for"], plan_id = flags.plan })
-  local text, rerr = fsio.read(path)
-  if not text then
-    notify.error(("cannot read %s: %s"):format(path, tostring(rerr)))
+  -- The marker records how the block was made (target, view, filters): the refresh after a finish builds the same.
+  local plan_scope = require("tasks_nvim.plan_scope")
+  local attrs, aerr = plan_scope.marker_attrs(
+    filter_options(flags),
+    { ready = flags.ready == true, steps = flags["with-steps"] == true },
+    { area = area, plan_id = flags.plan, for_id = flags["for"] },
+    key
+  )
+  if not attrs then
+    notify.error(tostring(aerr))
     return
   end
-  local body = plan_view.markdown(scope.plan, {
-    title = scope.title,
-    done = scope.done,
-    ready_only = flags.ready == true,
-    with_steps = flags["with-steps"] == true,
-    plan_file = scope.plan_file,
-    block = true,
-  })
-  local fresh, err, changed = plan_view.replace_block(text, key, body)
-  if not fresh then
+  local res, err =
+    plan_scope.write_block(path, scope, { key = key, attrs = attrs, check = flags.check })
+  if not res then
     notify.error(tostring(err))
     return
   end
-  if flags.check then
-    if changed then
-      notify.warn(("the block `%s` in %s is out of date"):format(key, path))
-    else
-      notify.info(("the block `%s` in %s is current"):format(key, path))
-    end
-    return
-  end
-  if not changed then
+  if res.state == "stale" then
+    notify.warn(("the block `%s` in %s is out of date"):format(key, path))
+  elseif res.state == "current" then
+    notify.info(("the block `%s` in %s is current"):format(key, path))
+  elseif res.state == "unchanged" then
     notify.info(("block `%s` in %s: unchanged"):format(key, path))
-    return
+  else
+    refresh_buffers(path)
+    notify.info(("block `%s` in %s updated"):format(key, path))
   end
-  local ok, werr = fsio.write_atomic(path, fresh, { follow_symlinks = true })
-  if not ok then
-    notify.error(("cannot write %s: %s"):format(path, tostring(werr)))
-    return
-  end
-  refresh_buffers(path)
-  notify.info(("block `%s` in %s updated"):format(key, path))
 end
 
 ---`:Tasks planfile <area> <title...> [--areas=] [--phases=] [--gate=hard] [--target=] [--status=]`

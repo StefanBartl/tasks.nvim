@@ -47,8 +47,9 @@ local M = {}
 
 ---Refresh the marker blocks of the documents named in `setup({ chain = { marker_docs = ... } })`. Only those files
 ---are read or written; a block that cannot be refreshed is a note, never an error.
----`opts.closed` (plan id -> summary) names plans that were finished a moment ago: their block is rewritten as the
----"plan is done" line, its last state.
+---`opts.closed` (plan id -> summary) names plans that were finished a moment ago: their block (the one that names the
+---plan by `plan=<id>`, by id, or by a slug no open plan shares) is rewritten as the "plan is done" line, its last
+---state.
 ---@param opts? { root?: string, closed?: table<string, table> }
 ---@return string[] refreshed  # The documents that changed.
 ---@return string[] notes
@@ -66,8 +67,7 @@ function M.refresh_marker_docs(opts)
   local closed
   for plan_id, summary in pairs(opts.closed or {}) do
     closed = closed or {}
-    closed[(plan_id:match("([^/]+)$")) or plan_id] =
-      require("tasks_nvim.plan_view").plan_closed_text(plan_id, summary)
+    closed[plan_id] = require("tasks_nvim.plan_view").plan_closed_text(plan_id, summary)
   end
   for _, doc in ipairs(docs) do
     local path = fsio.doc_path(doc)
