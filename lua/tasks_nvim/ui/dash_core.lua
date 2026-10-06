@@ -106,6 +106,7 @@ end
 ---@field errors string[]      # Directories that could not be read.
 ---@field stale_report? Tasks.StalenessReport  # With `--stale=refs`: what the check found and what it could not.
 ---@field readiness? Tasks.DashReadiness       # Where each task stands: judged from the SAME scan as the list.
+---@field plan? Tasks.Plan                     # The plan of the shown tasks (stages, waits): the stage view reads it.
 
 ---A filter whose `stale_refs` lookup knows the vault root (a copy; the stored
 ---filter stays free of it).
@@ -161,6 +162,7 @@ function M.load(opts)
     errors = errors,
     stale_report = stale_report,
     readiness = shared and M.readiness(tasks, opts.root, shared) or nil,
+    plan = shared and select(2, pcall(plan.build, tasks, shared.index)) or nil,
   },
     nil
 end
@@ -737,6 +739,156 @@ function M.filter_from_stored(opts)
     f.readiness = opts.readiness
   end
   return f or {}
+end
+
+-- ── the stage view: tasks grouped by stage, reordered with `order` ──────────────
+
+---@class Tasks.DashRow
+---@field header? string      # A group heading (no task).
+---@field task? Tasks.Task
+---@field waits? string       # What the task waits for (open blockers).
+
+---The rows of the stage view, in plan order: a heading per stage ("Stage 1 . 5 tasks . not parallel" when two of them
+---name the same file), the tasks of the stage, then the ones the plan puts behind (waiting on a later stage or in a
+---cycle) and a last block "unsorted" for tasks without a plan, an edge or anything waiting on them.
+---@param built Tasks.Plan
+---@return Tasks.DashRow[]
+function M.stage_rows(built)
+  local groups, order = {}, {}
+  local function add(key, title, id)
+    if not groups[key] then
+      groups[key] = { title = title, ids = {} }
+      order[#order + 1] = key
+    end
+    table.insert(groups[key].ids, id)
+  end
+  local stage_of = {}
+  for i, ids in ipairs(built.stages) do
+    for _, id in ipairs(ids) do
+      stage_of[id] = i
+    end
+  end
+  local unsorted = {}
+  for _, id in ipairs(built.ids) do
+    local node = built.nodes[id]
+    local t = node.task
+    local lone = not t.plan
+      and #(t.blocked_by or {}) == 0
+      and #(t.after or {}) == 0
+      and node.leverage == 0
+      and #node.open_blockers == 0
+    if lone then
+      unsorted[#unsorted + 1] = id
+    elseif stage_of[id] then
+      add(stage_of[id], ("Stage %d"):format(stage_of[id] - 1), id)
+    else
+      add("later", "Behind the stages", id)
+    end
+  end
+  local conflicts = {}
+  for _, c in ipairs(built.conflicts) do
+    conflicts[c.stage + 1] = true
+  end
+  local rows = {}
+  local function emit(key, title)
+    local g = groups[key]
+    local head = ("%s \194\183 %d task%s"):format(title, #g.ids, #g.ids == 1 and "" or "s")
+    if conflicts[key] then
+      head = head .. " \194\183 not parallel"
+    end
+    rows[#rows + 1] = { header = head }
+    for _, id in ipairs(g.ids) do
+      local node = built.nodes[id]
+      rows[#rows + 1] = {
+        task = node.task,
+        waits = #node.open_blockers > 0 and table.concat(node.open_blockers, ", ") or nil,
+      }
+    end
+  end
+  for _, key in ipairs(order) do
+    if key ~= "later" then
+      emit(key, groups[key].title)
+    end
+  end
+  if groups.later then
+    emit("later", groups.later.title)
+  end
+  if #unsorted > 0 then
+    rows[#rows + 1] =
+      { header = ("Unsorted \194\183 %d task%s"):format(#unsorted, #unsorted == 1 and "" or "s") }
+    for _, id in ipairs(unsorted) do
+      rows[#rows + 1] = { task = built.nodes[id].task }
+    end
+  end
+  return rows
+end
+
+---A readable `order` value.
+---@param n number
+---@return string
+local function fmt_order(n)
+  return (string.format("%.6g", n))
+end
+
+---Move a task one place inside a list of neighbours (`dir` -1 up, +1 down) by giving it an `order` BETWEEN the two
+---neighbours it lands between: a fraction, never a renumbering of the others. `order` only breaks ties behind status
+---and prio, so the move is visible among tasks of the same status and prio. A neighbour without `order` counts as
+---last: moving past one gives the task an order before it, or (down) takes the task's order away.
+---@param list Tasks.Task[]   # The tasks in the order shown (of one group).
+---@param id string
+---@param dir integer
+---@return { id: string, patch: table }|nil step
+---@return string|nil why
+function M.order_step(list, id, dir)
+  local at
+  for i, t in ipairs(list) do
+    if t.id == id then
+      at = i
+    end
+  end
+  if not at then
+    return nil, "not in this group"
+  end
+  local mate, beyond = list[at + dir], list[at + 2 * dir]
+  if not mate then
+    return nil, dir < 0 and "already first" or "already last"
+  end
+  local value
+  if dir < 0 then
+    if mate.order == nil then
+      value = (beyond and beyond.order or 0) + 1
+    elseif beyond and beyond.order then
+      value = (beyond.order + mate.order) / 2
+    else
+      value = mate.order - 1
+    end
+  else
+    if mate.order == nil then
+      return { id = id, patch = { order = require("tasks_nvim.mutate").REMOVE } }, nil
+    elseif beyond and beyond.order then
+      value = (mate.order + beyond.order) / 2
+    else
+      value = mate.order + 1
+    end
+  end
+  return { id = id, patch = { order = fmt_order(value) } }, nil
+end
+
+---Steps that give tasks a plan and a stage (`plan_id` / `phase` nil removes the key).
+---@param tasks Tasks.Task[]
+---@param plan_id string|nil
+---@param phase string|nil
+---@return Tasks.BatchSetStep[]
+function M.assign_steps(tasks, plan_id, phase)
+  local REMOVE = require("tasks_nvim.mutate").REMOVE
+  local steps = {}
+  for _, t in ipairs(tasks) do
+    steps[#steps + 1] = {
+      id = t.id,
+      patch = { plan = plan_id or REMOVE, phase = phase or REMOVE },
+    }
+  end
+  return steps
 end
 
 -- ── cycles and plans ─────────────────────────────────────────────────────────

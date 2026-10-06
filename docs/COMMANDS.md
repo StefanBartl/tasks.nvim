@@ -87,6 +87,9 @@ counts, the active filter chips and, when it is not the default, the sort order:
 opened with them) or "clear all", then a value (`(any)` clears one chip) |
 | `o` | cycle the sort order: `default` -> `prio-effort` (small first within a prio) -> `severity` (critical first) -> `frecency` (most opened / changed first) -> `default`; a non-default order shows as `[sort: ...]` in the title |
 | `e` | export the marked (else all shown) tasks: scratch buffer, clipboard, quickfix or a file, as Markdown or CSV, or "Preview in browser (mdview)" -- the `--to=` sinks |
+| `v` | switch to the **stage view**: tasks grouped by stage ("Stage 1 · 5 tasks · not parallel"), what each waits for, tasks without plan, edge or dependants in an "Unsorted" block; `v` again returns to the list (marks and filter stay) |
+| `P` | give the marked (else current) tasks a plan (an open plan file) and one of its stages: `plan:` / `phase:` in one batch |
+| `J` / `K` | stage view: move the task down / up among its stage's tasks: `order` becomes a fraction between the two neighbours, nothing is renumbered. `order` only breaks ties behind status and prio, so the move shows among tasks of equal status and prio |
 | `r` | rescan the vault now (the list also refreshes by itself, see "Live refresh"); keeps the cursor task and the marks |
 | `gp` | preview the task file under the cursor in the browser through mdview.nvim ([Browser preview](#browser-preview-mdview)); the single-task menu of the plain fallback has "preview the file (mdview)" |
 | `gb` / `gr` | the Backlog picker (`:Tasks folder <area> backlog`) / `ROADMAP/ROADMAP.md` of the area under the cursor |

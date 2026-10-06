@@ -720,4 +720,84 @@ return function(H)
     eq(core.set_dim({}, "phase", "build").phase, { "build" })
     eq(core.dim_choices("phase", assert(core.load({ root = pf_root })).tasks), { "build", "ship" })
   end
+
+  -- ── the stage view: groups, moving, assigning ──
+  do
+    local core = require("tasks_nvim.ui.dash_core")
+    local dash = require("tasks_nvim.ui.dash")
+    local plans = require("tasks_nvim.plans")
+    local scan = require("tasks_nvim.scan")
+    local sv_root = F.vault(H)
+    local so = { root = sv_root, today = F.TODAY, checkpoint_dir = H.tmpdir() .. "/cp" }
+    local sp = assert(
+      plans.new("lib.nvim", vim.tbl_extend("force", so, { title = "Stages", phases = "one,two" }))
+    )
+    local function mk(slug, extra)
+      F.task(H, sv_root, "lib.nvim", slug, F.meta(slug, "open", extra))
+    end
+    mk("a", { { "plan", sp.id }, { "phase", "one" }, { "order", "1" } })
+    mk("b", { { "plan", sp.id }, { "phase", "one" }, { "order", "2" } })
+    mk("c", { { "plan", sp.id }, { "phase", "one" }, { "order", "3" } })
+    mk("d", { { "plan", sp.id }, { "phase", "two" } })
+    mk("loose")
+    local loaded = assert(core.load({ root = sv_root }))
+    local rows = core.stage_rows(loaded.plan)
+    local heads, order = {}, {}
+    for _, r in ipairs(rows) do
+      if r.header then
+        heads[#heads + 1] = r.header
+      else
+        order[#order + 1] = r.task.slug .. (r.waits and "*" or "")
+      end
+    end
+    has(heads[1], "Stage 0")
+    has(heads[2], "Stage 1")
+    has(heads[#heads], "Unsorted")
+    eq(order, { "a", "b", "c", "d", "loose" }, "stage order, the unsorted block last")
+
+    -- order_step: between the neighbours, never a renumbering
+    local function task(slug, ord)
+      return { id = "x/" .. slug, order = ord }
+    end
+    local list = { task("a", 1), task("b", 2), task("c", 3) }
+    eq(core.order_step(list, "x/c", -1).patch.order, "1.5", "up: between the two above")
+    eq(core.order_step(list, "x/b", -1).patch.order, "0", "to the top: below the first")
+    eq(core.order_step(list, "x/a", 1).patch.order, "2.5", "down: between the two below")
+    eq(core.order_step(list, "x/c", 1), nil, "already last")
+    eq(select(2, core.order_step(list, "x/a", -1)), "already first")
+
+    -- moving through the real set path
+    local state = { root = sv_root, view = "stages", plan = loaded.plan }
+    local orig_notify = vim.notify
+    vim.notify = function() end
+    ok(dash.move(state, scan.find("lib.nvim/c", { root = sv_root }), -1), "c moved up")
+    eq(scan.find("lib.nvim/c", { root = sv_root }).order, 1.5)
+    eq(
+      dash.move({ root = sv_root, view = "list" }, scan.find("lib.nvim/c", { root = sv_root }), -1),
+      false,
+      "only in the stage view"
+    )
+
+    -- assigning: plan, then stage
+    local orig_select = vim.ui.select
+    local answers = { "lib.nvim/stages", "two" }
+    vim.ui.select = function(items, _, cb)
+      local want = table.remove(answers, 1)
+      for i, item in ipairs(items) do
+        if item == want then
+          return cb(item, i)
+        end
+      end
+      cb(nil)
+    end
+    local changed
+    dash.assign(state, { scan.find("lib.nvim/loose", { root = sv_root }) }, function(c)
+      changed = c
+    end)
+    vim.ui.select = orig_select
+    vim.notify = orig_notify
+    eq(changed, true)
+    local got = scan.find("lib.nvim/loose", { root = sv_root })
+    eq({ got.plan, got.phase }, { sp.id, "two" })
+  end
 end

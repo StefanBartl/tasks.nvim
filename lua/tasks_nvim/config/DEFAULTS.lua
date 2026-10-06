@@ -70,6 +70,10 @@ return {
       roadmap = "gr",
       preview = "gp",
       help = "g?",
+      view = "v",
+      assign = "P",
+      move_down = "J",
+      move_up = "K",
     },
     dashboard_input = {
       status = "<M-s>",
@@ -83,6 +87,10 @@ return {
       roadmap = "<M-m>",
       preview = "<M-v>",
       help = "<M-?>",
+      view = "<M-g>",
+      assign = "<M-a>",
+      move_down = "<M-j>",
+      move_up = "<M-k>",
     },
     form = {
       tick_space = "<Space>",

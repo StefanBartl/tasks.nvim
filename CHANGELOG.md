@@ -61,6 +61,8 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- Dashboard stage view (`v`), assigning tasks to a plan and stage (`P`), moving them with `order` (`J` / `K`).
+
 - The first member of a plan that goes to `doing` (`set`, dashboard `s`) moves the plan file from `planning` to `doing`; the dashboard filters by `plan` and `phase`.
 
 - Review round over the plan / chain / marker-block code (ultracode review, every finding probed before it was fixed):

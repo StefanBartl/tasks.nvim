@@ -77,6 +77,8 @@ local MAX_CONFIRM_LINES = 8
 ---@field readiness? Tasks.DashReadiness              # Where each shown task stands, and the sums (nil when the vault could not be read).
 ---@field preload? Tasks.DashLoad        # A load the next `reload` uses instead of scanning again.
 ---@field watch? boolean                             # Live refresh for this dashboard.
+---@field view? "list"|"stages"                      # The stage view groups the tasks by stage (`v` switches).
+---@field plan? Tasks.Plan                           # The plan of the shown tasks, from the last load.
 
 ---@class Tasks.DashOpts
 ---@field persist? boolean   # Remember the filter between sessions (default true).
@@ -200,6 +202,7 @@ local function reload(state)
     state.shown = {}
   else
     state.shown = res.tasks
+    state.plan = res.plan or state.plan
     -- Files or folders that could not be read are not "no tasks": say so once per distinct set of errors
     -- (the watcher reloads often), so a transiently locked folder does not make tasks vanish silently.
     local errs = res.errors or {}
@@ -311,6 +314,100 @@ function M.cycle(state, tasks, field, count)
   end
   notify[level](text)
   return res
+end
+
+---Apply steps from the stage view (assign, move) as one batch, with the message `s` / `p` give.
+---@param state Tasks.DashState
+---@param steps Tasks.BatchSetStep[]
+---@param what string
+---@return Tasks.DashSetResult|nil
+local function apply_steps(state, steps, what)
+  if #steps == 0 then
+    return nil
+  end
+  local res = core.apply_set(steps, { root = state.root })
+  refresh_buffers(res)
+  touch(res.changed)
+  local level, text = core.describe_set(what, res)
+  notify[level](text)
+  return res
+end
+
+---`P`: give tasks a plan (an open plan file) and a stage of it.
+---@param state Tasks.DashState
+---@param tasks Tasks.Task[]
+---@param after fun(changed: boolean)
+function M.assign(state, tasks, after)
+  if #tasks == 0 then
+    after(false)
+    return
+  end
+  local files = require("tasks_nvim.plans").all({ root = state.root }) or {}
+  local labels = { "(no plan)" }
+  for _, f in ipairs(files) do
+    labels[#labels + 1] = f.id
+  end
+  vim.ui.select(
+    labels,
+    { prompt = ("Plan for %d task%s"):format(#tasks, #tasks == 1 and "" or "s") },
+    function(choice, idx)
+      if not choice then
+        after(false)
+        return
+      end
+      local file = idx > 1 and files[idx - 1] or nil
+      local function finish(phase)
+        local res =
+          apply_steps(state, core.assign_steps(tasks, file and file.id or nil, phase), "assign")
+        after(res ~= nil and #res.changed > 0)
+      end
+      if not file or #file.phase_order == 0 then
+        finish(nil)
+        return
+      end
+      local phases = vim.list_extend({ "(no stage)" }, file.phase_order)
+      vim.ui.select(phases, { prompt = "Stage of " .. file.id }, function(phase, pidx)
+        if not phase then
+          after(false)
+          return
+        end
+        finish(pidx > 1 and phase or nil)
+      end)
+    end
+  )
+end
+
+---`J` / `K` in the stage view: the neighbours of `task` in its group (up to the headings).
+---@param state Tasks.DashState
+---@param task Tasks.Task
+---@param dir integer
+---@return boolean moved
+function M.move(state, task, dir)
+  if state.view ~= "stages" or not state.plan then
+    notify.info("moving needs the stage view (v)")
+    return false
+  end
+  local list, seen = {}, false
+  for _, row in ipairs(core.stage_rows(state.plan)) do
+    if row.header then
+      if seen then
+        break
+      end
+      list = {}
+    else
+      list[#list + 1] = row.task
+      if row.task.id == task.id then
+        seen = true
+      end
+    end
+  end
+  local step, why = core.order_step(list, task.id, dir)
+  if not step then
+    notify.info(("not moved: %s"):format(tostring(why)))
+    return false
+  end
+  local res = apply_steps(state, { step }, "order")
+  return res ~= nil and #res.changed > 0
 end
 
 ---`D`: ask once for the whole batch, then finish every target.
@@ -590,6 +687,26 @@ local ACTIONS = {
     text = "Backlog picker of the area under the cursor",
   },
   { name = "roadmap", action = "tasks_roadmap", text = "ROADMAP.md of the area under the cursor" },
+  {
+    name = "view",
+    action = "tasks_view",
+    text = "switch between the list and the stage view (tasks grouped by stage, what each waits for)",
+  },
+  {
+    name = "assign",
+    action = "tasks_assign",
+    text = "give the marked (else current) tasks a plan and a stage",
+  },
+  {
+    name = "move_up",
+    action = "tasks_move_up",
+    text = "stage view: move the task up among its stage's tasks (`order`, a fraction between the neighbours)",
+  },
+  {
+    name = "move_down",
+    action = "tasks_move_down",
+    text = "stage view: move the task down",
+  },
   { name = "help", action = "tasks_help", text = "this help" },
 }
 
@@ -885,6 +1002,34 @@ local function open_snacks(Snacks, state)
         preview_task(task)
       end)
     end,
+    tasks_view = function(picker)
+      state.view = state.view == "stages" and "list" or "stages"
+      refresh_keep(picker, true)
+    end,
+    tasks_assign = function(picker)
+      local tasks = targets(picker, true)
+      detour(picker, function(reopen)
+        M.assign(state, tasks, function()
+          reopen()
+        end)
+      end)
+    end,
+    tasks_move_up = function(picker)
+      local task = current_task(picker)
+      if task and held(function()
+        return M.move(state, task, -1)
+      end) then
+        refresh_keep(picker, false)
+      end
+    end,
+    tasks_move_down = function(picker)
+      local task = current_task(picker)
+      if task and held(function()
+        return M.move(state, task, 1)
+      end) then
+        refresh_keep(picker, false)
+      end
+    end,
     tasks_help = function()
       show_help()
     end,
@@ -912,8 +1057,24 @@ local function open_snacks(Snacks, state)
     title = title_of(state),
     finder = function(_, ctx)
       local items = {}
-      for _, t in ipairs(reload(state)) do
-        items[#items + 1] = { text = core.search_text(t), file = t.path, task = t }
+      local shown = reload(state)
+      if state.view == "stages" and state.plan then
+        for _, row in ipairs(core.stage_rows(state.plan)) do
+          if row.header then
+            items[#items + 1] = { text = row.header, header = row.header }
+          else
+            items[#items + 1] = {
+              text = core.search_text(row.task),
+              file = row.task.path,
+              task = row.task,
+              waits = row.waits,
+            }
+          end
+        end
+      else
+        for _, t in ipairs(shown) do
+          items[#items + 1] = { text = core.search_text(t), file = t.path, task = t }
+        end
       end
       local picker = ctx and ctx.picker
       if picker then
@@ -927,7 +1088,14 @@ local function open_snacks(Snacks, state)
       return items
     end,
     format = function(item)
-      return core.parts(item.task, state.widths, state.readiness)
+      if item.header then
+        return { { "-- " .. item.header .. " --", "Title" } }
+      end
+      local parts = core.parts(item.task, state.widths, state.readiness)
+      if item.waits then
+        parts[#parts + 1] = { "  waits: " .. item.waits, "Comment" }
+      end
+      return parts
     end,
     preview = "file",
     confirm = "tasks_open",

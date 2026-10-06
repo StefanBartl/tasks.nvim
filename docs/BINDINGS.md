@@ -36,6 +36,9 @@ Details of every verb: [COMMANDS.md](COMMANDS.md).
 | `gp` | preview the task file in the browser |
 | `r` | rescan now |
 | `gb` / `gr` | Backlog picker / ROADMAP of the area under the cursor |
+| `v` | switch between the list and the stage view |
+| `P` | give the marked (else current) tasks a plan and a stage |
+| `J` / `K` | stage view: move the task down / up among its stage's tasks (sets `order`) |
 | `g?` | help |
 
 A count works on the cycling keys: `3p` advances the priority three steps, `2s` the status, `3o` the sort order. The other keys ignore a count (mark several tasks with `<Tab>` instead).
@@ -56,7 +59,7 @@ require("tasks_nvim").setup({
 ```
 
 An action that is not named keeps its default. Dashboard actions: `status prio done filter sort export rescan
-backlog roadmap preview help`. Form actions: `tick_space tick_enter submit cancel cancel_ctrl help`. An unknown
+backlog roadmap preview view assign move_down move_up help`. Form actions: `tick_space tick_enter submit cancel cancel_ctrl help`. An unknown
 action name is reported (and listed in `:checkhealth`), never bound. The help (`g?`) lists the default keys.
 
 ## Form (`:Tasks new` without arguments)
