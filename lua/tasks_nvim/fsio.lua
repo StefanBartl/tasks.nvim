@@ -183,12 +183,31 @@ end
 ---Write `content` to `path` through a temp sibling and a rename, creating the parent directory. Bytes are
 ---written as given (no newline is appended). The work is `lib.nvim.fs.write.atomic`: flushed before the rename
 ---(a crash leaves the old or the new content, never an empty file) and taking over the mode of the file it replaces.
+---
+---A symlink at `path` is REPLACED by the new regular file (the safe default for files the vault owns: a link planted in
+---a vault must not redirect a write outside it). `opts.follow_symlinks` writes through the link instead: for a document
+---the USER named (`--write=<file>`, `chain.marker_docs`), which may well be a symlink to the original.
 ---@param path string
 ---@param content string
+---@param opts? { follow_symlinks?: boolean }
 ---@return boolean ok
 ---@return string|nil err
-function M.write_atomic(path, content)
-  return require("lib.nvim.fs.write.atomic")(path, content, { mkdirp = true, tag = "tasks-tmp" })
+function M.write_atomic(path, content, opts)
+  local target = path
+  if opts and opts.follow_symlinks then
+    target = (vim.uv or vim.loop).fs_realpath(path) or path
+  end
+  return require("lib.nvim.fs.write.atomic")(target, content, { mkdirp = true, tag = "tasks-tmp" })
+end
+
+---A path the user typed (`--write=`, an entry of `chain.marker_docs`) as an absolute, forward-slash path: `~`, `$VAR`
+---and `%VAR%` are expanded (`lib.nvim.cross.fs.expand_path`), nothing else. `vim.fn.expand` would read `[1]` in
+---`plan[1].md` as a wildcard and select another file, run a backtick span through the shell, and join several matches.
+---@param path string
+---@return string
+function M.doc_path(path)
+  local expanded = require("lib.nvim.cross.fs.expand_path")(path)
+  return M.norm(vim.fn.fnamemodify(expanded, ":p"))
 end
 
 ---The error `create_exclusive` and `copy` answer when the target was already there. Compare through

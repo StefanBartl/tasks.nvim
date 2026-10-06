@@ -369,7 +369,7 @@ end
 function M.write_plan_block(ctx, scope)
   local flags = ctx.flags
   local plan_view = require("tasks_nvim.plan_view")
-  local path = vim.fn.expand(flags.write)
+  local path = fsio.doc_path(flags.write)
   local area = ctx.args.area
   if area == "all" then
     area = nil
@@ -406,7 +406,7 @@ function M.write_plan_block(ctx, scope)
     notify.info(("block `%s` in %s: unchanged"):format(key, path))
     return
   end
-  local ok, werr = fsio.write_atomic(path, fresh)
+  local ok, werr = fsio.write_atomic(path, fresh, { follow_symlinks = true })
   if not ok then
     notify.error(("cannot write %s: %s"):format(path, tostring(werr)))
     return

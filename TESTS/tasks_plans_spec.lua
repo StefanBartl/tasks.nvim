@@ -399,6 +399,39 @@ return function(H)
   eq(plan_view.default_scope({ area = "lib.nvim" }), "lib.nvim")
   eq(plan_view.default_scope({}), "all")
 
+  -- ── a document the user names: literal path (no wildcards), symlinks are written through ──
+  local lit_dir = H.tmpdir() .. "/literal"
+  vim.fn.mkdir(lit_dir, "p")
+  local block_doc = "intro\n" .. start .. "\nOLD\n" .. finish .. "\n"
+  H.write(lit_dir .. "/plan1.md", block_doc)
+  H.write(lit_dir .. "/plan[1].md", block_doc)
+  local lit = run({ "plan", "--plan=" .. made.id, "--write=" .. lit_dir .. "/plan[1].md" })
+  eq(lit.code, 0, lit.err)
+  has(H.read(lit_dir .. "/plan[1].md"), "## Ready now", "the literal file `plan[1].md` was written")
+  has(
+    H.read(lit_dir .. "/plan1.md"),
+    "OLD",
+    "and the file its name would match as a wildcard was not touched"
+  )
+  eq(
+    require("tasks_nvim.fsio").doc_path("~/x[1].md"):sub(-7),
+    "x[1].md",
+    "doc_path keeps brackets literal"
+  )
+
+  local real_doc = lit_dir .. "/real.md"
+  local link_doc = lit_dir .. "/link.md"
+  H.write(real_doc, block_doc)
+  local linked = pcall(function()
+    assert(vim.uv.fs_symlink(real_doc, link_doc))
+  end)
+  if linked then
+    local through = run({ "plan", "--plan=" .. made.id, "--write=" .. link_doc })
+    eq(through.code, 0, through.err)
+    eq(vim.uv.fs_lstat(link_doc).type, "link", "the symlink is still a symlink")
+    has(H.read(real_doc), "## Ready now", "and the original behind it holds the new block")
+  end
+
   -- ── closing a plan: moved to Backlog/FEATURES, a README row, rollback ──
   local closed = assert(plans.close(made.id, o))
   eq(closed.readme, "updated")

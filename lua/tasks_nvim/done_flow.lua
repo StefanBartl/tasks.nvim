@@ -69,7 +69,7 @@ function M.refresh_marker_docs(opts)
       require("tasks_nvim.plan_view").plan_closed_text(plan_id, summary)
   end
   for _, doc in ipairs(docs) do
-    local path = fsio.norm(vim.fn.expand(doc))
+    local path = fsio.doc_path(doc)
     local res, err = plan_scope.refresh_document(path, root, closed)
     if not res then
       notes[#notes + 1] = tostring(err)

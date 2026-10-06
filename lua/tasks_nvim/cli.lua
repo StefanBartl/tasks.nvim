@@ -544,7 +544,7 @@ local function write_plan_block(ctx, scope, path)
     ctx.say(("unchanged\t%s"):format(path))
     return 0
   end
-  local ok, werr = fsio.write_atomic(path, fresh)
+  local ok, werr = fsio.write_atomic(path, fresh, { follow_symlinks = true })
   if not ok then
     ctx.warn("error: cannot write " .. path .. ": " .. tostring(werr))
     return 1
@@ -566,7 +566,7 @@ function commands.plan(ctx)
   local ready_only = ctx.args.opt.ready == true
   local write_to = ctx.args.opt.write --[[@as string|nil]]
   if write_to then
-    return write_plan_block(ctx, scope, write_to)
+    return write_plan_block(ctx, scope, fsio.doc_path(write_to))
   end
   if ctx.args.opt.check then
     ctx.warn("error: --check goes with --write=<file>")

@@ -168,7 +168,8 @@ function M.refresh_document(path, root, closed)
     end
   end
   if fresh ~= text then
-    local ok, werr = fsio.write_atomic(path, fresh)
+    -- a document the user named may be a symlink to the original: write through it
+    local ok, werr = fsio.write_atomic(path, fresh, { follow_symlinks = true })
     if not ok then
       return nil, ("cannot write %s: %s"):format(path, tostring(werr))
     end
