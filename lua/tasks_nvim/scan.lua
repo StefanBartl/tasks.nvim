@@ -228,17 +228,12 @@ function M.backlog(area, opts)
       all_errors[#all_errors + 1] = e
     end
     for _, entry in ipairs(classify(dir, files)) do
-      local path = entry.path
-      local text = fsio.read(path)
-      -- Cheap pre-test: most old Backlog documents have no frontmatter at all.
-      if text and text:match("^\239?\187?\191?%-%-%-") then
-        local task = model.parse_text(
-          text,
-          { path = path, area = area, location = "backlog", folder = entry.folder }
-        )
-        if task.meta.status ~= nil then
-          tasks[#tasks + 1] = task
-        end
+      -- Through the parse cache (mtime and size): a finished task does not change, so a second look is a stat.
+      -- A document without frontmatter parses to an empty `meta` and is no task.
+      local task =
+        model.from_file(entry.path, { area = area, location = "backlog", folder = entry.folder })
+      if task.meta.status ~= nil then
+        tasks[#tasks + 1] = task
       end
     end
   end
@@ -279,6 +274,39 @@ function M.backlog_slugs(area, opts)
     end
   end
   return slugs, nil
+end
+
+---A finished-id lookup (`function(id): boolean`, the same answer as `find_done(id) ~= nil`) that lists each area's
+---Backlog ONCE. `find_done` walks, sorts and classifies both buckets of the area for every single id; a pass that asks
+---for hundreds of blockers (`check`, `plan`, `next`, `list --ready`) paid that for each of them.
+---@param opts? Tasks.ScanOpts
+---@return fun(id: string): boolean
+function M.finished_lookup(opts)
+  opts = opts or {}
+  local root = resolve_root(opts)
+  ---@type table<string, table<string, boolean>>
+  local per_area = {}
+  return function(id)
+    if not root then
+      return false
+    end
+    local area, slug = vault.parse_id(id)
+    if not area or not slug or not vault.dir_listed(root, area) then
+      return false
+    end
+    local set = per_area[area]
+    if not set then
+      set = {}
+      for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
+        local dir = vault.backlog_dir(root, area, bucket)
+        for _, entry in ipairs(classify(dir, markdown_files(dir, opts))) do
+          set[model.slug_of(entry.path, "backlog")] = true
+        end
+      end
+      per_area[area] = set
+    end
+    return set[slug] == true
+  end
 end
 
 ---The open task `<area>/<slug>`.

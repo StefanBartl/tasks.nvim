@@ -593,4 +593,76 @@ return function(H)
       )
     end
   end
+
+  -- ── the form's hint line names the keys that are in force ──
+  do
+    local ui_form = require("tasks_nvim.ui.form")
+    eq(
+      ui_form.key_hint({
+        tick_space = "<Space>",
+        tick_enter = "<CR>",
+        submit = "<C-s>",
+        cancel = "q",
+        help = "g?",
+      }),
+      "<!-- <Space>/<CR> tick, <C-s> submit, q cancel, g? help -->",
+      "the defaults read as they always did"
+    )
+    eq(
+      ui_form.key_hint({
+        tick_space = false,
+        tick_enter = "<CR>",
+        submit = "<C-CR>",
+        cancel = false,
+        help = "g?",
+      }),
+      "<!-- <CR> tick, <C-CR> submit, g? help -->",
+      "a moved key is named, a disabled one is left out"
+    )
+  end
+
+  -- ── finished ids: one listing per area gives the answers `find_done` gives, one walk per id did ──
+  do
+    local scan = require("tasks_nvim.scan")
+    local lookup_root = F.vault(H)
+    local backlog = lookup_root .. "/lib.nvim/Backlog"
+    H.write(backlog .. "/TASKS/2026-09-01_aaa.md", F.text(F.meta("Aaa", "done")))
+    H.write(backlog .. "/FEATURES/2026-09-01_bbb/2026-09-01_bbb.md", F.text(F.meta("Bbb", "done")))
+    vim.fn.mkdir(backlog .. "/TASKS/2026-09-01_ccc", "p")
+    H.write(backlog .. "/notes.md", "no frontmatter at all")
+    local lookup = scan.finished_lookup({ root = lookup_root })
+    for _, id in ipairs({
+      "lib.nvim/aaa",
+      "lib.nvim/bbb",
+      "lib.nvim/ccc",
+      "lib.nvim/zzz",
+      "lib.nvim/notes",
+      "LIB.NVIM/aaa",
+      "nope.nvim/aaa",
+      "not-an-id",
+    }) do
+      eq(
+        lookup(id),
+        scan.find_done(id, { root = lookup_root }) ~= nil,
+        "finished_lookup agrees with find_done for " .. id
+      )
+    end
+    ok(
+      lookup("lib.nvim/aaa") and lookup("lib.nvim/bbb"),
+      "task files and folder tasks are finished"
+    )
+    ok(not lookup("lib.nvim/ccc"), "a bare folder is not")
+    -- the list of finished TASKS: documents without frontmatter are no task, a second look is cached
+    local listed = assert(scan.backlog("lib.nvim", { root = lookup_root }))
+    eq(#listed, 2)
+  end
+
+  -- ── a huge title is clipped in the README row ──
+  do
+    local mutate_row = mutate.readme_row("FEATURES", "2026-01-01_x.md", {
+      title = string.rep("T", 5000),
+      summary = "",
+    }, "2026-01-01")
+    ok(#mutate_row < 600, "the row is bounded (" .. #mutate_row .. " bytes)")
+  end
 end

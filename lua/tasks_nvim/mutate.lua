@@ -885,7 +885,13 @@ end
 ---@param date string
 ---@return string
 local function readme_row(bucket, rel, task, date)
-  local content = cell(task.title)
+  -- The title is capped like the summary: one huge title must not push a README (read back with a size limit) past
+  -- what `done` can still read.
+  local title = task.title
+  if vim.fn.strchars(title) > 200 then
+    title = vim.fn.strcharpart(title, 0, 199) .. "…"
+  end
+  local content = cell(title)
   if task.summary ~= "" and task.summary ~= task.title then
     local summary = task.summary
     if vim.fn.strchars(summary) > 120 then

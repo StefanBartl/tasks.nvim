@@ -698,9 +698,15 @@ function M.build(tasks, index)
       local list = by_file[key]
       plan.conflicts[#plan.conflicts + 1] = { stage = i - 1, file = shown[key], ids = list }
       for _, id in ipairs(list) do
+        local node = plan.nodes[id]
+        local have = {}
+        for _, listed in ipairs(node.same_file) do
+          have[listed] = true
+        end
         for _, other in ipairs(list) do
-          if other ~= id and not vim.tbl_contains(plan.nodes[id].same_file, other) then
-            table.insert(plan.nodes[id].same_file, other)
+          if other ~= id and not have[other] then
+            have[other] = true
+            table.insert(node.same_file, other)
           end
         end
       end

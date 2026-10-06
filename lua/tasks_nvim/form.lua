@@ -102,14 +102,14 @@ local function heading(f)
 end
 
 ---Fresh form text.
----@param opts? { area?: string, title?: string, areas?: string[], tags?: string, refs?: string, ticks?: table<string, string|string[]> }
----  `ticks` overrides the ticked values per field name.
+---@param opts? { area?: string, title?: string, areas?: string[], tags?: string, refs?: string, ticks?: table<string, string|string[]>, hint?: string }
+---  `ticks` overrides the ticked values per field name; `hint` is the second line (the keys of the user's setup).
 ---@return string[] lines
 function M.template(opts)
   opts = opts or {}
   local lines = {
     "# New task",
-    "<!-- <Space>/<CR> tick, <C-s> submit, q cancel, g? help -->",
+    opts.hint or "<!-- <Space>/<CR> tick, <C-s> submit, q cancel, g? help -->",
   }
   if opts.areas and #opts.areas > 0 then
     lines[#lines + 1] = "<!-- areas: " .. table.concat(opts.areas, ", ") .. " -->"

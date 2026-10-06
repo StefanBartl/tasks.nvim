@@ -74,18 +74,10 @@ function M.shared(root, scanned)
       done_here[t.id] = true
     end
   end
-  local known = {}
+  local finished = scan.finished_lookup({ root = root })
   local files = plans.all({ root = root }) or {}
   local index = plan.index(open, function(id)
-    if done_here[id] then
-      return true
-    end
-    local hit = known[id]
-    if hit == nil then
-      hit = scan.find_done(id, { root = root }) ~= nil
-      known[id] = hit
-    end
-    return hit
+    return done_here[id] == true or finished(id)
   end, files)
   -- which file a ref means (the files two tasks "both change" are the same file, not the same name)
   index.file_key = require("tasks_nvim.staleness").file_key({ root = root })

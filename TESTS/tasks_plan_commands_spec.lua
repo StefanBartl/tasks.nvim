@@ -179,6 +179,20 @@ return function(H)
     eq(#asked, 1, "Stop ends the walk: the remaining tasks are not asked")
     eq(select(2, said():gsub("nothing given", "")), 1, "and the end is reported once")
 
+    -- a dialog that is dismissed (Esc) ends the walk like Stop: what was given before is written, not dropped
+    local dismissals = 0
+    cmd.chooser = function(_, choices, cb)
+      dismissals = dismissals + 1
+      if dismissals == 1 then
+        cb(5) -- the value of the first task: "3"
+      else
+        cb(nil) -- Esc on the next question
+      end
+    end
+    run("estimate lib.nvim --walk")
+    eq(dismissals, 2, "the second question was dismissed, no third one was asked")
+    has(said(), "estimate: 1 changed", "the answer given before the Esc was written")
+
     -- ── next: a dialog with the answer; Open jumps ──
     local shown = {}
     popup.chooser = function(msg, choices, cb)

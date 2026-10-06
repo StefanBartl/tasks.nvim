@@ -159,7 +159,8 @@ end
 ---@param open_ids table<string, Tasks.Task>
 ---@param names string[]  The areas being checked.
 ---@param scan_opts { root: string }
-local function plan_findings(findings, open_ids, names, scan_opts)
+---@param is_finished fun(id: string): boolean
+local function plan_findings(findings, open_ids, names, scan_opts, is_finished)
   local checked = {}
   for _, n in ipairs(names) do
     checked[n] = true
@@ -168,15 +169,7 @@ local function plan_findings(findings, open_ids, names, scan_opts)
   for _, t in pairs(open_ids) do
     all[#all + 1] = t
   end
-  local finished = {}
-  local blockers = plan.index(all, function(id)
-    local known = finished[id]
-    if known == nil then
-      known = scan.find_done(id, scan_opts) ~= nil
-      finished[id] = known
-    end
-    return known
-  end, plans.all(scan_opts) or {})
+  local blockers = plan.index(all, is_finished, plans.all(scan_opts) or {})
   local built = plan.build(all, blockers)
 
   for _, members in ipairs(built.cycles) do
@@ -247,7 +240,8 @@ end
 ---@param open_ids table<string, Tasks.Task>
 ---@param names string[]
 ---@param scan_opts { root: string }
-local function plan_file_findings(findings, open_ids, names, scan_opts)
+---@param is_finished fun(id: string): boolean
+local function plan_file_findings(findings, open_ids, names, scan_opts, is_finished)
   local checked = {}
   for _, n in ipairs(names) do
     checked[n] = true
@@ -260,11 +254,7 @@ local function plan_file_findings(findings, open_ids, names, scan_opts)
       for i, msg in ipairs(file.errors) do
         add(findings, "error", file.error_codes[i] or "frontmatter-invalid", file, msg)
       end
-      if
-        file.target
-        and not open_ids[file.target]
-        and not scan.find_done(file.target, scan_opts)
-      then
+      if file.target and not open_ids[file.target] and not is_finished(file.target) then
         add(
           findings,
           "warn",
@@ -275,17 +265,11 @@ local function plan_file_findings(findings, open_ids, names, scan_opts)
       end
     end
   end
-  local finished = {}
   for _, t in pairs(open_ids) do
     if checked[t.area] and t.plan then
       local file = by_id[t.plan]
       if not file then
-        local known = finished[t.plan]
-        if known == nil then
-          known = scan.find_done(t.plan, scan_opts) ~= nil
-          finished[t.plan] = known
-        end
-        if not known then
+        if not is_finished(t.plan) then
           add(
             findings,
             "error",
@@ -333,6 +317,8 @@ function M.run(opts)
     return nil, rerr
   end
   local scan_opts = { root = root }
+  -- every finished-id question of this run: one listing per area's Backlog, not a walk per id
+  local is_finished = scan.finished_lookup(scan_opts)
 
   local names = {}
   if opts.area then
@@ -449,7 +435,7 @@ function M.run(opts)
               )
             end
           else
-            if scan.find_done(ref, scan_opts) then
+            if is_finished(ref) then
               add(
                 findings,
                 "warn",
@@ -479,7 +465,7 @@ function M.run(opts)
         if ref_slug then
           if ref == t.id then
             add(findings, "error", "after-self", t, "after names the task itself")
-          elseif not open_ids[ref] and not scan.find_done(ref, scan_opts) then
+          elseif not open_ids[ref] and not is_finished(ref) then
             add(findings, "error", "after-dangling", t, "after " .. ref .. " does not exist")
           end
         end
@@ -520,8 +506,8 @@ function M.run(opts)
     end
   end
 
-  plan_findings(findings, open_ids, names, scan_opts)
-  plan_file_findings(findings, open_ids, names, scan_opts)
+  plan_findings(findings, open_ids, names, scan_opts, is_finished)
+  plan_file_findings(findings, open_ids, names, scan_opts, is_finished)
 
   table.sort(findings, finding_less)
   local errors, warnings = 0, 0

@@ -21,6 +21,28 @@ local form = require("tasks_nvim.form")
 
 local M = {}
 
+---The one-line hint at the top of the form, from the keys in force (a key set to `false` is left out).
+---@param keys table<string, string|false>
+---@return string
+function M.key_hint(keys)
+  local ticks = {}
+  for _, name in ipairs({ "tick_space", "tick_enter" }) do
+    if keys[name] then
+      ticks[#ticks + 1] = keys[name]
+    end
+  end
+  local parts = {}
+  if #ticks > 0 then
+    parts[#parts + 1] = table.concat(ticks, "/") .. " tick"
+  end
+  for _, item in ipairs({ { "submit", "submit" }, { "cancel", "cancel" }, { "help", "help" } }) do
+    if keys[item[1]] then
+      parts[#parts + 1] = keys[item[1]] .. " " .. item[2]
+    end
+  end
+  return "<!-- " .. table.concat(parts, ", ") .. " -->"
+end
+
 ---The help text, from the keys in force (`setup({ keys = { form = ... } })`); a key set to `false` is listed as "-".
 ---@param keys? table<string, string|false>  # Default: the configured form keys.
 ---@return string[]
@@ -163,6 +185,7 @@ end
 ---@param opts Tasks.FormOpenOpts
 ---@return integer buf
 function M.open(opts)
+  local form_keys = require("tasks_nvim.config").get().keys.form
   vim.cmd("botright new")
   local buf = vim.api.nvim_get_current_buf()
   vim.bo[buf].buftype = "nofile"
@@ -183,6 +206,7 @@ function M.open(opts)
       tags = opts.tags,
       refs = opts.refs,
       ticks = opts.ticks,
+      hint = M.key_hint(form_keys),
     })
   )
   vim.bo[buf].modified = false

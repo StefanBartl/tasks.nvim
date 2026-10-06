@@ -471,6 +471,14 @@ local function walk_estimates(tasks)
       end
       visit(i + 1)
     end
+    -- `Stop`, and a dialog that was dismissed (Esc, `q`): the walk ends HERE; what was given so far is kept and
+    -- written, not dropped without a word.
+    local function stop_here()
+      if next(patch) then
+        steps[#steps + 1] = { id = t.id, patch = patch }
+      end
+      finish()
+    end
     local function ask_value()
       if t.value ~= nil then
         done_task()
@@ -483,15 +491,8 @@ local function walk_estimates(tasks)
         #queue
       )
       ask(msg, { "Skip", "Stop", "1", "2", "3", "4", "5" }, function(pos)
-        if pos == nil then
-          return
-        end
-        if pos == 2 then
-          -- Stop ends the walk HERE: what was given for this task is kept, the next task is not visited
-          if next(patch) then
-            steps[#steps + 1] = { id = t.id, patch = patch }
-          end
-          finish()
+        if pos == nil or pos == 2 then
+          stop_here()
           return
         end
         if pos >= 3 then
@@ -511,14 +512,8 @@ local function walk_estimates(tasks)
       #queue
     )
     ask(msg, { "Skip", "Stop", "XS", "S", "M", "L", "XL" }, function(pos)
-      if pos == nil then
-        return
-      end
-      if pos == 2 then
-        if next(patch) then
-          steps[#steps + 1] = { id = t.id, patch = patch }
-        end
-        finish()
+      if pos == nil or pos == 2 then
+        stop_here()
         return
       end
       if pos >= 3 then

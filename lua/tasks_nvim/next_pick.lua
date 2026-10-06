@@ -252,17 +252,9 @@ function M.pick_from_vault(opts)
       unlisted = unlisted + 1
     end
   end
-  local known = {}
   local result = M.pick({
     tasks = open,
-    is_done = function(id)
-      local hit = known[id]
-      if hit == nil then
-        hit = scan.find_done(id, { root = opts.root }) ~= nil
-        known[id] = hit
-      end
-      return hit
-    end,
+    is_done = scan.finished_lookup({ root = opts.root }),
     plans = require("tasks_nvim.plans").all({ root = opts.root }) or {},
     unlisted = unlisted,
     done = opts.done,
