@@ -384,7 +384,20 @@ return function(H)
     has(lines[1], "Alpha feature")
     has(lines[2], "decision")
     has(lines[2], "cascade.nvim")
-    ok(p.opts.preview == "file", "the task file is the preview")
+    ok(type(p.opts.preview) == "function", "the task file is the preview")
+    local reset_called = false
+    ok(
+      p.opts.preview({
+        item = { header = "Stage 0" },
+        preview = {
+          reset = function()
+            reset_called = true
+          end,
+        },
+      }),
+      "a stage heading has an empty preview, not an error"
+    )
+    ok(reset_called)
     eq(p:items()[1].file, alpha, "an item points at its task file")
 
     -- ── s: advance status of the current task, in place ───────────────────

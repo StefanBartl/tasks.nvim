@@ -184,6 +184,7 @@ local function load_state(state)
     area = state.area,
     filter = state.filter,
     sort = state.sort,
+    want_plan = state.view == "stages",
   })
 end
 
@@ -229,7 +230,8 @@ local function reload(state)
   state.widths = core.widths(state.shown)
   -- the load carries the readiness it was judged from (one scan); only a failed load has none
   state.readiness = res and res.readiness or core.readiness(state.shown, state.root)
-  state.signature = core.signature(state.shown, state.readiness)
+  state.signature =
+    core.signature(state.shown, state.readiness, state.view == "stages" and state.plan or nil)
   return state.shown
 end
 
@@ -401,12 +403,12 @@ function M.move(state, task, dir)
       end
     end
   end
-  local step, why = core.order_step(list, task.id, dir)
-  if not step then
+  local steps, why = core.order_steps(list, task.id, dir)
+  if not steps then
     notify.info(("not moved: %s"):format(tostring(why)))
     return false
   end
-  local res = apply_steps(state, { step }, "order")
+  local res = apply_steps(state, steps, "order")
   return res ~= nil and #res.changed > 0
 end
 
@@ -854,7 +856,11 @@ function M.refresh_if_changed(state, picker)
   local res = load_state(state)
   if
     not res
-    or core.signature(res.tasks, res.readiness or core.readiness(res.tasks, state.root))
+    or core.signature(
+        res.tasks,
+        res.readiness or core.readiness(res.tasks, state.root),
+        state.view == "stages" and res.plan or nil
+      )
       == state.signature
   then
     return false
@@ -1000,6 +1006,20 @@ local function open_picker(engine, Snacks, state)
     end,
     ---`<CR>`: a visit for the frecency sort, then snacks' own jump.
     tasks_open = function(picker, item, action)
+      -- a stage heading is a row, not a task: it is neither opened nor marked for opening
+      local chosen = picker:selected({ fallback = true })
+      local only_tasks = {}
+      for _, it in ipairs(chosen) do
+        if it.task then
+          only_tasks[#only_tasks + 1] = it
+        end
+      end
+      if #only_tasks == 0 then
+        return
+      end
+      if Snacks and #only_tasks ~= #chosen then
+        picker.list:set_selected(only_tasks)
+      end
       touch(targets(picker, true))
       if Snacks then
         return Snacks.picker.actions.jump(picker, item, action)
@@ -1034,6 +1054,9 @@ local function open_picker(engine, Snacks, state)
     end,
     tasks_backlog = function(picker)
       local task = current_task(picker)
+      if not task then
+        return
+      end
       picker:close()
       vim.schedule(function()
         open_area_doc(state, task, "backlog")
@@ -1041,6 +1064,9 @@ local function open_picker(engine, Snacks, state)
     end,
     tasks_roadmap = function(picker)
       local task = current_task(picker)
+      if not task then
+        return
+      end
       picker:close()
       vim.schedule(function()
         open_area_doc(state, task, "roadmap")
@@ -1048,6 +1074,9 @@ local function open_picker(engine, Snacks, state)
     end,
     tasks_preview = function(picker)
       local task = current_task(picker)
+      if not task then
+        return
+      end
       picker:close()
       vim.schedule(function()
         preview_task(task)
@@ -1165,7 +1194,10 @@ local function open_picker(engine, Snacks, state)
         end
         local read, lines = pcall(vim.fn.readfile, item.file, "", 200)
         surface:set_lines(read and lines or { "(cannot read the file)" })
-        pcall(vim.api.nvim_set_option_value, "filetype", "markdown", { buf = surface.bufnr })
+        if vim.bo[surface.bufnr].filetype ~= "markdown" then
+          -- setting it fires FileType (ftplugin, treesitter, renderers): once per preview buffer, not per row
+          pcall(vim.api.nvim_set_option_value, "filetype", "markdown", { buf = surface.bufnr })
+        end
       end,
       keys = keys,
       title = title_of(state),
@@ -1215,7 +1247,14 @@ local function open_picker(engine, Snacks, state)
     format = function(item)
       return format_item(state, item)
     end,
-    preview = "file",
+    preview = function(ctx)
+      if ctx.item.header then
+        -- a stage heading has no file
+        ctx.preview:reset()
+        return true
+      end
+      return Snacks.picker.preview.file(ctx)
+    end,
     confirm = "tasks_open",
     -- An empty result (a filter that matches nothing) must stay open: `f` is how
     -- the user gets out of it.

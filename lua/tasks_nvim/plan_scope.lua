@@ -177,10 +177,32 @@ end
 function M.resolve_block(key, root, attrs, shared)
   attrs = attrs or {}
   if attrs.plan then
+    -- A recorded target that is no longer open: finished (history, said nothing about) or gone (a skip).
+    local found, ferr = plans.find(attrs.plan, { root = root })
+    if not found then
+      return nil, tostring(ferr), scan.find_done(attrs.plan, { root = root }) ~= nil
+    end
     return { root = root, plan_id = attrs.plan }, nil
   elseif attrs["for"] then
+    if not shared then
+      local err
+      shared, err = M.shared(root)
+      if not shared then
+        return nil, tostring(err), nil
+      end
+    end
+    if not shared.index.open[attrs["for"]] then
+      return nil,
+        ("the block `%s` names the task %s, which is not open"):format(key, attrs["for"]),
+        scan.find_done(attrs["for"], { root = root }) ~= nil
+    end
     return { root = root, for_id = attrs["for"] }, nil
   elseif attrs.area then
+    if not vault.has_area(root, attrs.area) then
+      return nil,
+        ("the block `%s` names an area that does not exist: %s"):format(key, attrs.area),
+        false
+    end
     return { root = root, area = attrs.area }, nil
   end
   if key == "all" then
@@ -353,12 +375,23 @@ end
 ---@param block Tasks.MarkerBlock
 ---@param closed table<string, string>
 ---@param shared fun(): Tasks.PlanShared|nil
+---@param root string
 ---@return string|nil
-local function closed_text(block, closed, shared)
+local function closed_text(block, closed, shared, root)
   if block.attrs.plan then
     return closed[block.attrs.plan]
   elseif block.scope:find("/", 1, true) then
     return closed[block.scope]
+  end
+  -- the order of `resolve_block`: a recorded area / task, `all` and an area's name stand for what they name, never
+  -- for a plan that merely has the same slug
+  if
+    block.attrs.area
+    or block.attrs["for"]
+    or block.scope == "all"
+    or vault.has_area(root, block.scope)
+  then
+    return nil
   end
   local found
   for id, text in pairs(closed) do
@@ -411,7 +444,7 @@ function M.refresh_document(path, root, closed)
   ---@return { body?: string, skip?: string }
   local function compute(block)
     local sh
-    local closed_body = closed and closed_text(block, closed, shared)
+    local closed_body = closed and closed_text(block, closed, shared, root)
     if closed_body then
       return { body = closed_body }
     end

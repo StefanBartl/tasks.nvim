@@ -965,6 +965,14 @@ function M.task_new_form(given)
           local carried =
             { after = given.after, order = given.order, plan = given.plan, phase = given.phase }
           local opts = vim.tbl_extend("force", carried, values.opts, { folder = with_assets })
+          -- The range ref is typed into the form as text, and a text field cannot hold a comma (`a,b.lua:5`): when the
+          -- user left the line alone, the ref goes on as the list it is.
+          if
+            given.ref_list
+            and vim.trim(tostring(values.opts.refs or "")) == vim.trim(tostring(given.refs or ""))
+          then
+            opts.refs = given.ref_list
+          end
           local res, err = mutate.new(values.area, opts)
           if not res then
             if buf and vim.api.nvim_buf_is_valid(buf) then
@@ -1063,6 +1071,7 @@ function M.task_new(ctx)
     end
     if source then
       given.refs, given.title = source.ref, source.text
+      given.ref_list = source.ref and { source.ref } or nil
     end
     M.task_new_form(given)
     return

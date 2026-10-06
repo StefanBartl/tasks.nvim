@@ -849,7 +849,10 @@ function commands.migrate_actor(ctx)
     ctx.warn("warn: the result is incomplete, could not read: " .. table.concat(errors, ", "))
   end
   if args.opt.write and #proposals > 0 then
-    local res = batch.set_many(batch.actor_steps(proposals), { root = eo.root, today = eo.today })
+    local res = batch.set_many(
+      batch.actor_steps(proposals),
+      { root = eo.root, today = eo.today, index = not args.opt["no-index"] }
+    )
     for _, f in ipairs(res.failed) do
       ctx.warn(("error: %s: %s"):format(f.id, f.err))
     end
@@ -922,7 +925,7 @@ function commands.done(ctx)
     for _, f in ipairs(unblocked.failed) do
       ctx.warn(("warn: %s: %s"):format(f.id, f.err))
     end
-    if #unblocked.changed > 0 then
+    if #unblocked.changed > 0 and not args.opt["no-next"] then
       -- The advice below was worked out while the freed tasks still read `blocked`: they rank first once open.
       local pick = next_pick.pick_from_vault({
         root = eo.root,
@@ -936,6 +939,9 @@ function commands.done(ctx)
   if flow.next and not args.opt["no-next"] then
     for _, line in ipairs(plan_view.next_lines(flow.next)) do
       ctx.say(line)
+    end
+    for _, e in ipairs(flow.next.incomplete or {}) do
+      ctx.warn("warn: cannot read directory " .. e .. " (the answer may be incomplete)")
     end
   end
   report_index(ctx, res)

@@ -96,6 +96,11 @@ function M.relevant(filename)
   if base == nil or base == "" then
     return true
   end
+  -- `.<name>.lock` (`fsio.with_lock`) is the LAST event of every locked write: the raw debounce hands over only
+  -- the last name of a burst, so dropping it would drop the write it ends.
+  if base:match("^%..+%.lock$") then
+    return true
+  end
   if base:sub(1, 1) == "." or base:sub(-1) == "~" or base:match("^%d+$") then
     return false
   end

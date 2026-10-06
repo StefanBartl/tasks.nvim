@@ -864,8 +864,17 @@ function M.set(id, patch, opts)
   end
   -- The first member of a plan that goes to `doing` starts the plan: `planning` -> `doing`. Best effort: the task is
   -- already written, a plan file that cannot be updated is not a reason to fail the `set`.
-  if task.plan and patch.status == "doing" then
-    local file = require("tasks_nvim.plans").find(task.plan, { root = root })
+  -- the plan the task belongs to AFTER this patch (`plan=` may change or remove it in the same call)
+  local eff_plan, eff_status = task.plan, nil
+  for _, kv in ipairs(pairs_) do
+    if kv[1] == "plan" then
+      eff_plan = kv[2] ~= M.REMOVE and kv[2] or nil
+    elseif kv[1] == "status" then
+      eff_status = kv[2]
+    end
+  end
+  if eff_plan and eff_status == "doing" then
+    local file = require("tasks_nvim.plans").find(eff_plan, { root = root })
     if file and file.status == "planning" then
       fsio.with_lock(file.path, function()
         return fm.update(file.path, { { "status", "doing" }, { "updated", today } })
@@ -1354,7 +1363,12 @@ local function rollback_done(plan, cp, progress, err)
   end
   -- The README goes back only when it still is exactly what this run wrote: another process may have added its row
   -- since, and a restore of the old snapshot would take it away again.
-  if progress.readme_written == nil or fsio.read(plan.readme_path) ~= progress.readme_written then
+  -- A README that merged ANOTHER run's row in (what was written is not what this finish planned) is theirs too.
+  if
+    progress.readme_written == nil
+    or progress.readme_written ~= plan.readme_new
+    or fsio.read(plan.readme_path) ~= progress.readme_written
+  then
     forget(plan.readme_path)
   end
   local stuck = {}

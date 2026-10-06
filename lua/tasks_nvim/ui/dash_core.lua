@@ -106,7 +106,7 @@ end
 ---@field errors string[]      # Directories that could not be read.
 ---@field stale_report? Tasks.StalenessReport  # With `--stale=refs`: what the check found and what it could not.
 ---@field readiness? Tasks.DashReadiness       # Where each task stands: judged from the SAME scan as the list.
----@field plan? Tasks.Plan                     # The plan of the shown tasks (stages, waits): the stage view reads it.
+---@field plan? Tasks.Plan                     # The plan of the shown tasks (stages, waits); only with `want_plan`.
 
 ---A filter whose `stale_refs` lookup knows the vault root (a copy; the stored
 ---filter stays free of it).
@@ -121,7 +121,7 @@ function M.with_root(f, root)
 end
 
 ---Scan, keep the open tasks, filter and sort -- what `:Tasks list` shows.
----@param opts { root: string, area?: string|nil, filter?: Tasks.Filter, sort?: string, scores?: table<string, number> }
+---@param opts { root: string, area?: string|nil, filter?: Tasks.Filter, sort?: string, scores?: table<string, number>, want_plan?: boolean }
 ---@return Tasks.DashLoad|nil result
 ---@return string|nil err
 function M.load(opts)
@@ -155,6 +155,13 @@ function M.load(opts)
       or filtered
   end
   local tasks = model.sort(filtered, opts.sort, { scores = opts.scores })
+  -- The plan is only for the stage view: building it costs a graph walk per soft edge (seconds for a few hundred
+  -- tasks per stage), which a list refresh must not pay.
+  local built
+  if opts.want_plan and shared then
+    local built_ok, plan_or_err = pcall(plan.build, tasks, shared.index)
+    built = built_ok and plan_or_err or nil
+  end
   return {
     tasks = tasks,
     open = #open,
@@ -162,7 +169,7 @@ function M.load(opts)
     errors = errors,
     stale_report = stale_report,
     readiness = shared and M.readiness(tasks, opts.root, shared) or nil,
-    plan = shared and select(2, pcall(plan.build, tasks, shared.index)) or nil,
+    plan = built,
   },
     nil
 end
@@ -208,13 +215,16 @@ end
 ---@param tasks Tasks.Task[]
 ---@param ready? Tasks.DashReadiness
 ---@return string
-function M.signature(tasks, ready)
+function M.signature(tasks, ready, built)
   local uv = vim.uv or vim.loop
   local out = {}
   for _, t in ipairs(tasks) do
     local st = uv.fs_stat(t.path)
+    local node = built and built.nodes[t.id]
     out[#out + 1] = table.concat({
       t.path,
+      -- the stage view reads these: a plan file that moves a task to another stage changes no task file
+      node and tostring(node.stage) or "",
       M.search_text(t),
       M.blocked_hint(t, ready and ready.open_blockers[t.id]) or "",
       ready and ready.states[t.id] or "",
@@ -769,10 +779,18 @@ function M.stage_rows(built)
     end
   end
   local unsorted = {}
+  -- a task another task names in `after` has a follower: it is part of the order, not "unsorted"
+  local followed = {}
+  for _, nid in ipairs(built.ids) do
+    for _, a in ipairs(built.nodes[nid].task.after or {}) do
+      followed[a] = true
+    end
+  end
   for _, id in ipairs(built.ids) do
     local node = built.nodes[id]
     local t = node.task
     local lone = not t.plan
+      and not followed[id]
       and #(t.blocked_by or {}) == 0
       and #(t.after or {}) == 0
       and node.leverage == 0
@@ -827,19 +845,20 @@ end
 ---@param n number
 ---@return string
 local function fmt_order(n)
-  return (string.format("%.6g", n))
+  return (string.format("%.12g", n))
 end
 
----Move a task one place inside a list of neighbours (`dir` -1 up, +1 down) by giving it an `order` BETWEEN the two
----neighbours it lands between: a fraction, never a renumbering of the others. `order` only breaks ties behind status
----and prio, so the move is visible among tasks of the same status and prio. A neighbour without `order` counts as
----last: moving past one gives the task an order before it, or (down) takes the task's order away.
+---Move a task one place inside a list of neighbours (`dir` -1 up, +1 down). When the two neighbours it lands between
+---have an `order` of their own the task gets a fraction BETWEEN them and nothing else changes. When they do not (the
+---usual start: nobody has an `order`), or two orders are equal or too close for a fraction, the group is made
+---explicit first: every task of it gets its displayed position as `order`, the moved one and its mate swapped. `order`
+---only breaks ties behind status and prio, so the move is visible among tasks of the same status and prio.
 ---@param list Tasks.Task[]   # The tasks in the order shown (of one group).
 ---@param id string
 ---@param dir integer
----@return { id: string, patch: table }|nil step
+---@return { id: string, patch: table }[]|nil steps
 ---@return string|nil why
-function M.order_step(list, id, dir)
+function M.order_steps(list, id, dir)
   local at
   for i, t in ipairs(list) do
     if t.id == id then
@@ -853,25 +872,28 @@ function M.order_step(list, id, dir)
   if not mate then
     return nil, dir < 0 and "already first" or "already last"
   end
+  -- the fast path: a fraction between two neighbours that have an order, in the right sequence, with room between
   local value
-  if dir < 0 then
-    if mate.order == nil then
-      value = (beyond and beyond.order or 0) + 1
-    elseif beyond and beyond.order then
-      value = (beyond.order + mate.order) / 2
-    else
-      value = mate.order - 1
-    end
-  else
-    if mate.order == nil then
-      return { id = id, patch = { order = require("tasks_nvim.mutate").REMOVE } }, nil
-    elseif beyond and beyond.order then
+  if mate.order ~= nil then
+    if beyond == nil then
+      value = mate.order + dir
+    elseif beyond.order ~= nil and (beyond.order - mate.order) * dir > 1e-6 then
       value = (mate.order + beyond.order) / 2
-    else
-      value = mate.order + 1
     end
   end
-  return { id = id, patch = { order = fmt_order(value) } }, nil
+  if value ~= nil then
+    return { { id = id, patch = { order = fmt_order(value) } } }, nil
+  end
+  -- make the group explicit: the displayed position is the order, the task and its mate swapped
+  local arranged = vim.deepcopy(list)
+  arranged[at], arranged[at + dir] = arranged[at + dir], arranged[at]
+  local steps = {}
+  for i, t in ipairs(arranged) do
+    if t.order ~= i then
+      steps[#steps + 1] = { id = t.id, patch = { order = tostring(i) } }
+    end
+  end
+  return steps, nil
 end
 
 ---Steps that give tasks a plan and a stage (`plan_id` / `phase` nil removes the key).

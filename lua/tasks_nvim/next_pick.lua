@@ -39,6 +39,7 @@ local M = {}
 ---@field n? integer                            # Runners-up to return (default 2).
 ---@field cdx? integer                          # Tasks for an AI session to list apart (default 3).
 ---@field unlisted? integer                     # Tasks of a status nobody knows (see `NextEmpty.unlisted`).
+---@field unreadable? integer                   # Folders that could not be read (the answer may be incomplete).
 
 ---@class Tasks.NextPick
 ---@field task? Tasks.Task
@@ -60,6 +61,7 @@ local M = {}
 ---@field blocked_status integer                # `status: blocked` with nothing blocking (set them to open).
 ---@field parked integer
 ---@field unlisted integer                      # Tasks whose `status` is none of the known ones: neither open nor done.
+---@field unreadable integer                    # Folders that could not be read: "everything is done" cannot be said.
 
 ---@type table<string, integer>
 local STATUS_RANK = { doing = 1, open = 2, decision = 3 }
@@ -208,6 +210,7 @@ function M.pick(opts)
     blocked_status = 0,
     parked = 0,
     unlisted = opts.unlisted or 0,
+    unreadable = opts.unreadable or 0,
   }
   for _, id in ipairs(built.ids) do
     local node = built.nodes[id]
@@ -223,7 +226,7 @@ function M.pick(opts)
       empty.for_me = empty.for_me + 1
     end
   end
-  if #opts.tasks == 0 and empty.unlisted == 0 then
+  if #opts.tasks == 0 and empty.unlisted == 0 and empty.unreadable == 0 then
     empty.kind = "all_done"
   elseif not opts.actor and #result.cdx > 0 then
     empty.kind = "only_cdx"
@@ -257,6 +260,7 @@ function M.pick_from_vault(opts)
     is_done = scan.finished_lookup({ root = opts.root }),
     plans = require("tasks_nvim.plans").all({ root = opts.root }) or {},
     unlisted = unlisted,
+    unreadable = type(errors) == "table" and #errors or 0,
     done = opts.done,
     area = opts.area,
     actor = opts.actor,

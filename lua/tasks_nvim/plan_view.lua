@@ -636,6 +636,11 @@ function M.empty_text(empty)
   if empty.parked > 0 then
     waiting[#waiting + 1] = ("%d parked"):format(empty.parked)
   end
+  if (empty.unreadable or 0) > 0 then
+    waiting[#waiting + 1] = ("%d folder(s) could not be read, the list may be incomplete"):format(
+      empty.unreadable
+    )
+  end
   if (empty.unlisted or 0) > 0 then
     waiting[#waiting + 1] = ("%d with a status nobody knows (see check)"):format(empty.unlisted)
   end

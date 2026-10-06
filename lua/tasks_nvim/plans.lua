@@ -553,7 +553,9 @@ function M.close(id, opts)
   ---@param extra? string  # More that could not be undone.
   local function fail(msg, extra)
     -- The snapshot noted `target` as "did not exist": a restore would delete a finished copy this run never created.
-    if not created then
+    -- Nor may it delete the ONLY holder of the plan text: another run that resumed on this run's copy has removed the
+    -- plan file, and the copy is all that is left of the plan.
+    if not created or (not fsio.is_file(plan.path) and fsio.read(target) == new_text) then
       checkpoint.forget(cp, target)
     end
     local _, restore_errors = checkpoint.restore(cp)
@@ -584,6 +586,10 @@ function M.close(id, opts)
     )
   end
   local removed, rm_err = fsio.remove(plan.path)
+  if not removed and not fsio.is_file(plan.path) and fsio.read(target) == new_text then
+    -- an overlapping close removed the plan file first and finished on this copy: carry on to the README
+    removed = true
+  end
   if not removed then
     return fail("cannot remove " .. plan.path .. ": " .. tostring(rm_err))
   end

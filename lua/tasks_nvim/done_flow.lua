@@ -159,6 +159,18 @@ function M.close_plans(plan_ids, opts)
     end
     return out
   end
+  -- A member that could not be read has no `plan:` here, so it cannot be attributed: every plan stays.
+  for _, t in ipairs(all) do
+    if t.error_codes and vim.tbl_contains(t.error_codes, "unreadable") then
+      for _, file in ipairs(files) do
+        out.notes[#out.notes + 1] = ("the plan %s was not closed: %s could not be read"):format(
+          file.id,
+          tostring(t.path)
+        )
+      end
+      return out
+    end
+  end
   for _, file in ipairs(files) do
     local open = 0
     for _, t in ipairs(plans.members(file.id, all)) do

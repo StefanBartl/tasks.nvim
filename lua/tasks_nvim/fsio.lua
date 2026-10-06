@@ -270,17 +270,33 @@ function M.with_lock(path, fn, opts)
     if ok then
       break
     end
-    if not M.is_exists(err) then
+    -- Contention is not only "exists": on Windows a lock that was unlinked a moment ago answers EPERM / EACCES /
+    -- EBUSY to a create until the delete completes. Any other error is real.
+    local exists = M.is_exists(err)
+    local transient = exists
+      or (
+        type(err) == "string"
+        and (
+          err:find("EPERM", 1, true)
+          or err:find("EACCES", 1, true)
+          or err:find("EBUSY", 1, true)
+        )
+      )
+    if not transient then
       return nil, ("cannot lock %s: %s"):format(path, tostring(err))
     end
-    local st = uv.fs_stat(lock)
-    if st and os.time() - st.mtime.sec > stale_s then
-      pcall(uv.fs_unlink, lock)
-    elseif uv.hrtime() > deadline then
-      return nil, ("%s is being written by another process (%s)"):format(path, lock)
-    else
-      vim.wait(10)
+    if exists then
+      local st = uv.fs_stat(lock)
+      if st and os.time() - st.mtime.sec > stale_s then
+        pcall(uv.fs_unlink, lock)
+      end
     end
+    -- the deadline applies on EVERY turn: a stale lock that cannot be deleted must not spin the editor
+    if uv.hrtime() > deadline then
+      return nil,
+        ("%s is being written by another process (%s: %s)"):format(path, lock, tostring(err))
+    end
+    vim.wait(10)
   end
   local ran, res, res2 = pcall(fn)
   pcall(uv.fs_unlink, lock)

@@ -740,7 +740,7 @@ return function(H)
     mk("c", { { "plan", sp.id }, { "phase", "one" }, { "order", "3" } })
     mk("d", { { "plan", sp.id }, { "phase", "two" } })
     mk("loose")
-    local loaded = assert(core.load({ root = sv_root }))
+    local loaded = assert(core.load({ root = sv_root, want_plan = true }))
     local rows = core.stage_rows(loaded.plan)
     local heads, order = {}, {}
     for _, r in ipairs(rows) do
@@ -760,11 +760,36 @@ return function(H)
       return { id = "x/" .. slug, order = ord }
     end
     local list = { task("a", 1), task("b", 2), task("c", 3) }
-    eq(core.order_step(list, "x/c", -1).patch.order, "1.5", "up: between the two above")
-    eq(core.order_step(list, "x/b", -1).patch.order, "0", "to the top: below the first")
-    eq(core.order_step(list, "x/a", 1).patch.order, "2.5", "down: between the two below")
-    eq(core.order_step(list, "x/c", 1), nil, "already last")
-    eq(select(2, core.order_step(list, "x/a", -1)), "already first")
+    eq(core.order_steps(list, "x/c", -1)[1].patch.order, "1.5", "up: between the two above")
+    eq(core.order_steps(list, "x/b", -1)[1].patch.order, "0", "to the top: below the first")
+    eq(core.order_steps(list, "x/a", 1)[1].patch.order, "2.5", "down: between the two below")
+    eq(core.order_steps(list, "x/c", 1), nil, "already last")
+    eq(select(2, core.order_steps(list, "x/a", -1)), "already first")
+    -- nobody has an order (the usual start): the group is made explicit, the task and its mate swapped
+    local plain = { task("a"), task("b"), task("c"), task("d") }
+    local up = core.order_steps(plain, "x/d", -1)
+    local got = {}
+    for _, st in ipairs(up) do
+      got[st.id] = st.patch.order
+    end
+    eq(
+      { got["x/a"], got["x/b"], got["x/d"], got["x/c"] },
+      { "1", "2", "3", "4" },
+      "K on d: a, b, d, c"
+    )
+    local down = core.order_steps(plain, "x/a", 1)
+    got = {}
+    for _, st in ipairs(down) do
+      got[st.id] = st.patch.order
+    end
+    eq(
+      { got["x/b"], got["x/a"], got["x/c"], got["x/d"] },
+      { "1", "2", "3", "4" },
+      "J on a: b, a, c, d"
+    )
+    -- equal neighbour orders have no fraction between them: renumbered too
+    local tied = { task("a", 2), task("b", 2), task("c", 3) }
+    ok(#core.order_steps(tied, "x/c", -1) > 1, "equal orders are renumbered")
 
     -- moving through the real set path
     local state = { root = sv_root, view = "stages", plan = loaded.plan }
@@ -797,8 +822,8 @@ return function(H)
     vim.ui.select = orig_select
     vim.notify = orig_notify
     eq(changed, true)
-    local got = scan.find("lib.nvim/loose", { root = sv_root })
-    eq({ got.plan, got.phase }, { sp.id, "two" })
+    local assigned = scan.find("lib.nvim/loose", { root = sv_root })
+    eq({ assigned.plan, assigned.phase }, { sp.id, "two" })
   end
 
   -- ── the dashboard on lib.nvim's picker (no snacks) ──
@@ -836,5 +861,225 @@ return function(H)
     vim.notify = orig_notify
     dash.config.watch = was_watch
     vim.cmd("stopinsert")
+  end
+
+  -- ── review round 3 ──
+  do
+    local fsio = require("tasks_nvim.fsio")
+    local plans = require("tasks_nvim.plans")
+    local plan_scope = require("tasks_nvim.plan_scope")
+    local scan = require("tasks_nvim.scan")
+    local watch = require("tasks_nvim.ui.dash_watch")
+    local r3 = F.vault(H)
+    local r3o = { root = r3, today = F.TODAY, checkpoint_dir = H.tmpdir() .. "/cp3" }
+
+    -- the lock: a stale lock that cannot be deleted does not spin past the deadline; EPERM is contention
+    local dir = H.tmpdir()
+    local target = dir .. "/spin.md"
+    H.write(target, "x")
+    H.write(dir .. "/.spin.md.lock", "1")
+    local old = os.time() - 120
+    vim.uv.fs_utime(dir .. "/.spin.md.lock", old, old)
+    local real_unlink = vim.uv.fs_unlink
+    vim.uv.fs_unlink = function()
+      return nil, "EBUSY"
+    end
+    local t0 = vim.uv.hrtime()
+    local none, busy = fsio.with_lock(target, function()
+      return "never"
+    end, { wait_ms = 100 })
+    vim.uv.fs_unlink = real_unlink
+    eq(none, nil)
+    has(busy, "being written by another process")
+    ok((vim.uv.hrtime() - t0) / 1e9 < 1.5, "the deadline holds for a lock that cannot be removed")
+    os.remove(dir .. "/.spin.md.lock")
+    local real_create, tries = fsio.create_exclusive, 0
+    fsio.create_exclusive = function(path, text)
+      tries = tries + 1
+      if tries < 3 then
+        return false, "open failed: EPERM: operation not permitted"
+      end
+      return real_create(path, text)
+    end
+    eq(
+      fsio.with_lock(target, function()
+        return "got it"
+      end),
+      "got it",
+      "EPERM from a just-removed lock is waited out"
+    )
+    fsio.create_exclusive = real_create
+
+    -- the watcher: the lock is the last event of a locked write and must count
+    ok(watch.relevant(".x.md.lock"), "a lock file name is relevant")
+    ok(not watch.relevant(".x.md.swp"), "other dotfiles still are not")
+
+    -- set: the plan that starts is the one AFTER the patch
+    local old_plan =
+      assert(plans.new("lib.nvim", vim.tbl_extend("force", r3o, { title = "Old plan" })))
+    local new_plan =
+      assert(plans.new("lib.nvim", vim.tbl_extend("force", r3o, { title = "New plan" })))
+    local mover = assert(
+      mutate.new("lib.nvim", vim.tbl_extend("force", r3o, { title = "Mover", plan = old_plan.id }))
+    )
+    assert(mutate.set(mover.id, { plan = new_plan.id, status = "doing" }, r3o))
+    eq(assert(plans.find(new_plan.id, r3o)).status, "doing", "the new plan starts")
+    eq(assert(plans.find(old_plan.id, r3o)).status, "planning", "the old one does not")
+
+    -- a recorded target that is gone: finished is history, the rest a skip; an unknown area is a skip
+    local doc = H.tmpdir() .. "/RECORDED.md"
+    local ps = plan_view.block_markers("gone-plan", { plan = "lib.nvim/gone-plan" })
+    local as = plan_view.block_markers("mine", { area = "gone.nvim" })
+    local _, pend = plan_view.block_markers("x")
+    H.write(doc, ps .. "\nKEEP\n" .. pend .. "\n" .. as .. "\nHAND KEPT TEXT\n" .. pend .. "\n")
+    local res = assert(plan_scope.refresh_document(doc, r3))
+    eq(#res.skipped, 2, "a missing plan and an unknown area are skips, not rewrites")
+    has(H.read(doc), "HAND KEPT TEXT")
+    -- a plan that was finished: its block is history and says nothing
+    H.write(H.tmpdir() .. "/unused", "")
+    local fin = assert(plans.new("lib.nvim", vim.tbl_extend("force", r3o, { title = "Fin plan" })))
+    assert(plans.close(fin.id, r3o))
+    local fin_doc = H.tmpdir() .. "/FIN.md"
+    H.write(
+      fin_doc,
+      plan_view.block_markers("fin-plan", { plan = fin.id }) .. "\nHISTORY\n" .. pend .. "\n"
+    )
+    local fin_res = assert(plan_scope.refresh_document(fin_doc, r3))
+    eq(#fin_res.skipped, 0, "a finished plan's block is left alone, silently")
+
+    -- a closed plan's text does not overwrite an area block with the same name
+    local area_doc = H.tmpdir() .. "/AREA.md"
+    H.write(area_doc, plan_view.block_markers("lib.nvim") .. "\nAREA OVERVIEW\n" .. pend .. "\n")
+    local ar = assert(
+      plan_scope.refresh_document(
+        area_doc,
+        r3,
+        { ["cascade.nvim/lib.nvim"] = "Plan cascade.nvim/lib.nvim is done" }
+      )
+    )
+    lacks(H.read(area_doc), "is done")
+    ok(ar.changed, "the area block is refreshed as an area")
+
+    -- close: an overlapping close already removed the plan file -- the finished copy survives
+    local race =
+      assert(plans.new("lib.nvim", vim.tbl_extend("force", r3o, { title = "Race close" })))
+    local race_target = r3 .. "/lib.nvim/Backlog/FEATURES/" .. F.TODAY .. "_race-close.md"
+    local real_remove = fsio.remove
+    fsio.remove = function(path)
+      if fsio.norm(path) == fsio.norm(race.path) then
+        real_remove(path) -- the other run removed it first
+        return false, "ENOENT"
+      end
+      return real_remove(path)
+    end
+    local closed = plans.close(race.id, r3o)
+    fsio.remove = real_remove
+    ok(closed ~= nil, "the close carries on to the README")
+    ok(H.exists(race_target), "and the finished copy is there")
+
+    -- the done chain keeps a plan whose member could not be read
+    local done_flow = require("tasks_nvim.done_flow")
+    local keep =
+      assert(plans.new("lib.nvim", vim.tbl_extend("force", r3o, { title = "Keep plan" })))
+    H.write(
+      r3 .. "/lib.nvim/ROADMAP/tasks/unreadable-member.md",
+      string.rep("x", fsio.MAX_READ_BYTES + 1)
+    )
+    local kept = done_flow.close_plans({ keep.id }, r3o)
+    eq(kept.closed, {}, "an unreadable task makes every plan stay")
+    has(kept.notes[1], "could not be read")
+    os.remove(r3 .. "/lib.nvim/ROADMAP/tasks/unreadable-member.md")
+
+    -- same-file: a basename two tasks write is resolved, others never touch the disk
+    local lookups = 0
+    local plan_mod = require("tasks_nvim.plan")
+    local fk_index = plan_mod.index({}, function()
+      return false
+    end, {})
+    fk_index.file_key = function(_, rel)
+      lookups = lookups + 1
+      return rel
+    end
+    local function ft(id, refs)
+      return {
+        id = id,
+        area = "lib.nvim",
+        slug = id,
+        status = "open",
+        title = id,
+        refs = refs,
+        blocked_by = {},
+        after = {},
+        tags = {},
+        valid = true,
+      }
+    end
+    fk_index.open = {}
+    local ts = {
+      ft("lib.nvim/a", { "src/one.lua", "docs/shared.md" }),
+      ft("lib.nvim/b", { "src/two.lua", "other/shared.md" }),
+    }
+    for _, t in ipairs(ts) do
+      fk_index.open[t.id] = t
+    end
+    plan_mod.build(ts, fk_index)
+    eq(lookups, 2, "only the shared basename was looked up")
+
+    -- the stage view: an `after` target is not unsorted; the signature sees a stage change
+    local core = require("tasks_nvim.ui.dash_core")
+    local sv = F.vault(H)
+    F.task(H, sv, "lib.nvim", "first", F.meta("First", "open"))
+    F.task(
+      H,
+      sv,
+      "lib.nvim",
+      "second",
+      F.meta("Second", "open", { { "after", "[lib.nvim/first]" } })
+    )
+    local loaded = assert(core.load({ root = sv, want_plan = true }))
+    local heads = {}
+    for _, row in ipairs(core.stage_rows(loaded.plan)) do
+      if row.header then
+        heads[#heads + 1] = row.header
+      end
+    end
+    eq(#heads, 2, "first and second are both staged")
+    has(heads[1], "Stage 0")
+    has(heads[2], "Stage 1")
+    eq(assert(core.load({ root = sv })).plan, nil, "the list view builds no plan")
+    ok(
+      core.signature(loaded.tasks, loaded.readiness, loaded.plan)
+        ~= core.signature(loaded.tasks, loaded.readiness),
+      "the signature carries the stage"
+    )
+
+    -- the CLI: no-index on migrate-actor, unreadable folders are not "everything is done"
+    F.task(H, r3, "cascade.nvim", "needs-me", F.meta("Needs me", "decision"))
+    local idx = r3 .. "/cascade.nvim/ROADMAP/TASKS.md"
+    local out = {}
+    cli.run({
+      "migrate-actor",
+      "cascade.nvim",
+      "--write",
+      "--no-index",
+      "--vault=" .. r3,
+      "--today=" .. F.TODAY,
+    }, {
+      out = function(x)
+        out[#out + 1] = x
+      end,
+      err = function() end,
+    })
+    ok(not H.exists(idx), "--no-index writes no index")
+    local real_all = scan.all
+    scan.all = function(sopts)
+      local tasks = real_all(sopts)
+      return tasks, { "C:/vault/other/ROADMAP/tasks/locked" }
+    end
+    local empty_root = F.vault(H)
+    local pick = require("tasks_nvim.next_pick").pick_from_vault({ root = empty_root })
+    scan.all = real_all
+    ok(pick.empty.kind ~= "all_done", "an unreadable folder is never 'everything is done'")
+    has(plan_view.empty_text(pick.empty), "could not be read")
   end
 end

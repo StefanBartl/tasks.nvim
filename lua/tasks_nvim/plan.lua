@@ -671,12 +671,34 @@ function M.build(tasks, index)
   local file_key = index.file_key
   for i, members in ipairs(plan.stages) do
     local by_file, shown = {}, {}
+    -- The same file always has the same name: only a name that two tasks of the stage write can be a shared file, so
+    -- only those pay for the lookup on disk (`file_key` stats every base for every ref).
+    local writers = {}
+    if file_key then
+      for _, id in ipairs(members) do
+        local named = {}
+        for _, ref in ipairs(by_id[id].refs or {}) do
+          local kind, rel = staleness.classify(ref)
+          if kind == "path" and rel then
+            local base = (rel:match("([^/]+)$") or rel):lower()
+            if not named[base] then
+              named[base] = true
+              writers[base] = (writers[base] or 0) + 1
+            end
+          end
+        end
+      end
+    end
     for _, id in ipairs(members) do
       local seen_files = {}
       for _, ref in ipairs(by_id[id].refs or {}) do
         local kind, rel = staleness.classify(ref)
         if kind == "path" and rel then
-          local key = file_key and file_key(by_id[id], rel) or rel
+          local base = (rel:match("([^/]+)$") or rel):lower()
+          local key = rel
+          if file_key and (writers[base] or 0) > 1 then
+            key = file_key(by_id[id], rel)
+          end
           if not seen_files[key] then
             seen_files[key] = true
             by_file[key] = by_file[key] or {}

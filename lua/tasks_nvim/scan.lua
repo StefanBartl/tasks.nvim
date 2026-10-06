@@ -284,26 +284,34 @@ end
 function M.finished_lookup(opts)
   opts = opts or {}
   local root = resolve_root(opts)
-  ---@type table<string, table<string, boolean>>
+  ---@type table<string, table<string, boolean>|false>
   local per_area = {}
   return function(id)
     if not root then
       return false
     end
     local area, slug = vault.parse_id(id)
-    if not area or not slug or not vault.dir_listed(root, area) then
+    if not area or not slug then
       return false
     end
     local set = per_area[area]
-    if not set then
-      set = {}
-      for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
-        local dir = vault.backlog_dir(root, area, bucket)
-        for _, entry in ipairs(classify(dir, markdown_files(dir, opts))) do
-          set[model.slug_of(entry.path, "backlog")] = true
+    if set == nil then
+      -- `dir_listed` (a scan of the vault root) once per area spelling, not once per id
+      local found
+      if vault.dir_listed(root, area) then
+        found = {}
+        for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
+          local dir = vault.backlog_dir(root, area, bucket)
+          for _, entry in ipairs(classify(dir, markdown_files(dir, opts))) do
+            found[model.slug_of(entry.path, "backlog")] = true
+          end
         end
       end
+      set = found or false
       per_area[area] = set
+    end
+    if not set then
+      return false
     end
     return set[slug] == true
   end

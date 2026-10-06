@@ -61,6 +61,17 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- Second review round (the fix and feature commits of the first one, ultracode, 27 confirmed findings): `with_lock` keeps
+  its deadline for a stale lock that cannot be deleted and waits out EPERM; the dashboard watcher counts `.<name>.lock`
+  events; an overlapping `plans.close` no longer deletes the only copy of a plan; a `done` rollback leaves a README that
+  merged another run's row; plans with an unreadable member and unreadable folders are never "closed" / "all done";
+  `set plan=<new> status=doing` starts the new plan; recorded `plan=` / `for=` / `area=` marker targets that are gone
+  are history or a skip, never an empty rewrite; a closed plan's text never overwrites an area block; same-file marks
+  look a file up only for names two tasks write; `migrate-actor --no-index`; the stage view moves tasks that have no
+  `order` yet (the group is numbered first), keeps `after` targets out of "Unsorted", knows stage changes in its refresh
+  signature and builds its plan only while it is shown; headings are no rows to open in either picker; the kit picker
+  flushes its debounced filter before it is read, marks in place and reports a failing preview.
+
 - `dashboard.backend = "kit"`: the dashboard on lib.nvim's own picker (marks, highlights, preview, stage view, assign and move), no snacks.nvim needed; `auto` (default) uses snacks when installed and the kit picker otherwise.
 
 - Dashboard stage view (`v`), assigning tasks to a plan and stage (`P`), moving them with `order` (`J` / `K`).
