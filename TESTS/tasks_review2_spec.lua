@@ -171,4 +171,245 @@ return function(H)
     eq(select(2, lines[2]:gsub("\t", "")), 1)
     eq(select(2, lines[4]:gsub("\t", "")), 1)
   end
+
+  -- ── the lock: cooperating writers are serialised, a dead holder does not block for ever ──
+  do
+    local fsio = require("tasks_nvim.fsio")
+    local dir = H.tmpdir()
+    local target = dir .. "/locked.md"
+    H.write(target, "x")
+    local lock = dir .. "/.locked.md.lock"
+    local value, lerr = fsio.with_lock(target, function()
+      ok(H.exists(lock), "the lock file exists while the function runs")
+      return "ran", nil
+    end)
+    eq(value, "ran")
+    eq(lerr, nil)
+    ok(not H.exists(lock), "and is gone afterwards")
+    local raised = pcall(fsio.with_lock, target, function()
+      error("boom")
+    end)
+    eq(raised, false, "an error of the function propagates")
+    ok(not H.exists(lock), "the lock is released on the way out")
+    -- a lock held by someone else: wait, then give up with a message
+    H.write(lock, "1234")
+    local t0 = vim.uv.hrtime()
+    local none, busy = fsio.with_lock(target, function()
+      return "never", nil
+    end, { wait_ms = 80 })
+    eq(none, nil)
+    has(busy, "being written by another process")
+    ok((vim.uv.hrtime() - t0) / 1e9 < 1.5, "the wait is bounded")
+    ok(H.exists(lock), "a lock that is not ours stays")
+    -- one that is older than the stale limit belongs to a process that died: taken over
+    local old = os.time() - 120
+    vim.uv.fs_utime(lock, old, old)
+    eq(
+      fsio.with_lock(target, function()
+        return "took over", nil
+      end),
+      "took over"
+    )
+    ok(not H.exists(lock))
+
+    -- `set` holds the lock while it rewrites the file
+    local locked_task =
+      assert(mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "Lock me" })))
+    local task_lock = fsio.dirname(locked_task.path) .. "/.lock-me.md.lock"
+    local real_update = require("lib.nvim.markdown.frontmatter").update
+    local seen_lock
+    require("lib.nvim.markdown.frontmatter").update = function(...)
+      seen_lock = H.exists(task_lock)
+      return real_update(...)
+    end
+    local set_res = mutate.set(locked_task.id, { effort = "S" }, o)
+    require("lib.nvim.markdown.frontmatter").update = real_update
+    ok(set_res and set_res.changed)
+    eq(seen_lock, true, "the frontmatter is rewritten under the lock")
+    ok(not H.exists(task_lock))
+  end
+
+  -- ── a row another process added to the README while this finish was under way is kept ──
+  do
+    local fsio = require("tasks_nvim.fsio")
+    local first =
+      assert(mutate.new("cascade.nvim", vim.tbl_extend("force", o, { title = "Race one" })))
+    local second =
+      assert(mutate.new("cascade.nvim", vim.tbl_extend("force", o, { title = "Race two" })))
+    local first_target = root .. "/cascade.nvim/Backlog/TASKS/" .. F.TODAY .. "_race-one.md"
+    local real_create = fsio.create_exclusive
+    local nested = false
+    fsio.create_exclusive = function(path, text)
+      if not nested and fsio.norm(path) == fsio.norm(first_target) then
+        -- the other process finishes ITS task in the middle of ours
+        nested = true
+        assert(
+          mutate.done(
+            second.id,
+            vim.tbl_extend("force", o, { checkpoint_dir = H.tmpdir() .. "/cp2" })
+          )
+        )
+      end
+      return real_create(path, text)
+    end
+    local res, derr = mutate.done(first.id, o)
+    fsio.create_exclusive = real_create
+    assert(res, derr)
+    local readme = H.read(root .. "/cascade.nvim/Backlog/README.md")
+    has(readme, "race-one", "the row of this finish")
+    has(readme, "race-two", "and the row the other process added meanwhile")
+    has(readme, "## TASKS (2)", "both counted")
+  end
+
+  -- ── staleness: positions after a drive letter, an invalid date, a repo git cannot use ──
+  do
+    local staleness = require("tasks_nvim.staleness")
+    local function classified(ref, rel)
+      local kind, got = staleness.classify(ref)
+      eq(kind, "path", ref)
+      eq(got, rel, ref)
+    end
+    classified("C:/repos/x/a.lua:42", "C:/repos/x/a.lua")
+    classified("C:\\repos\\x\\a.lua:7", "C:/repos/x/a.lua")
+    classified("lua/a.lua:42:7", "lua/a.lua")
+    classified("lua/a.lua:10-20", "lua/a.lua")
+    classified("C:/x/y.lua", "C:/x/y.lua")
+    eq((staleness.classify("filetree.nvim:cheatsheet-paged")), "skip")
+    eq((staleness.classify("a.lua:b:3")), "skip", "a second colon that is no position is no path")
+
+    -- an invalid `updated` is no date: the file counts as changed, as --stale=<days> counts such a task as stale
+    local top = H.tmpdir()
+    H.write(top .. "/lib.nvim/a.lua", "x")
+    local sopts = {
+      root = root,
+      repo_bases = { top },
+      config_dir = top .. "/none",
+      git_dates = function(_, rels)
+        local out = {}
+        for _, rel in ipairs(rels) do
+          out[rel] = { date = "2026-10-01", file = rel }
+        end
+        return out
+      end,
+    }
+    local report = staleness.compute({
+      { id = "lib.nvim/x", area = "lib.nvim", refs = { "a.lua" }, updated = "2026-9-3" },
+      { id = "lib.nvim/y", area = "lib.nvim", refs = { "a.lua" }, updated = "2026-10-02" },
+    }, sopts)
+    ok(report.stale["lib.nvim/x"] ~= nil, "an invalid updated date does not hide a change")
+    eq(report.stale["lib.nvim/y"], nil, "a real, later date does")
+
+    -- git that cannot be used at all: one probe, not a spawn per path (2n-1 by bisecting)
+    local repo = H.tmpdir()
+    local rels = {}
+    for i = 1, 60 do
+      rels[i] = "f" .. i .. ".lua"
+    end
+    local real_system, spawns = vim.system, 0
+    vim.system = function()
+      spawns = spawns + 1
+      return {
+        wait = function()
+          return { code = 128, stderr = "fatal: kein Git-Repository", stdout = "" }
+        end,
+      }
+    end
+    staleness.reset_cache()
+    local dates, gerr = staleness.git_dates(repo, rels)
+    vim.system = real_system
+    ok(spawns <= 2, ("one log and one probe, not a spawn per path (%d)"):format(spawns))
+    ok(dates == nil or next(dates) == nil)
+    ok(gerr ~= nil, "and it says so")
+    staleness.reset_cache()
+  end
+
+  -- ── the index: a title is capped, a task that cannot be read is no reason to drop the index ──
+  do
+    local index = require("tasks_nvim.index")
+    local fsio = require("tasks_nvim.fsio")
+    local big = string.rep("T", 1024 * 1024)
+    local area_root = F.vault(H)
+    for i = 1, 3 do
+      F.task(H, area_root, "lib.nvim", "big-" .. i, F.meta(big, "open"))
+    end
+    local first = assert(index.write_area("lib.nvim", { root = area_root }))
+    eq(first.action, "written")
+    local size = vim.uv.fs_stat(area_root .. "/lib.nvim/ROADMAP/TASKS.md").size
+    ok(size < 20000, ("the index stays small whatever the titles are (%d bytes)"):format(size))
+    local second = assert(index.write_area("lib.nvim", { root = area_root }))
+    eq(second.action, "unchanged", "and it can be read back and checked again")
+    -- a task file that cannot be read: an error, not a deleted or shrunken index
+    local index_path = area_root .. "/lib.nvim/ROADMAP/TASKS.md"
+    local before = H.read(index_path)
+    H.write(
+      area_root .. "/lib.nvim/ROADMAP/tasks/unreadable.md",
+      string.rep("x", fsio.MAX_READ_BYTES + 1)
+    )
+    local res, rerr = index.write_area("lib.nvim", { root = area_root })
+    eq(res, nil)
+    has(rerr, "cannot read")
+    has(rerr, "unreadable.md")
+    eq(H.read(index_path), before, "the index is as it was")
+  end
+
+  -- ── check: a hard plan gate is a blocker, `blocked` under it is fine ──
+  do
+    local check = require("tasks_nvim.check")
+    local plans = require("tasks_nvim.plans")
+    local gate_root = F.vault(H)
+    local go = { root = gate_root, today = F.TODAY, checkpoint_dir = H.tmpdir() .. "/cp" }
+    local hard = assert(plans.new(
+      "lib.nvim",
+      vim.tbl_extend("force", go, {
+        title = "Hard gate",
+        phases = "one,two",
+        gate = "hard",
+      })
+    ))
+    local soft = assert(plans.new(
+      "lib.nvim",
+      vim.tbl_extend("force", go, {
+        title = "Soft gate",
+        phases = "one,two",
+      })
+    ))
+    for _, p in ipairs({ { hard, "h" }, { soft, "s" } }) do
+      F.task(
+        H,
+        gate_root,
+        "lib.nvim",
+        p[2] .. "-one",
+        F.meta("One", "open", { { "plan", p[1].id }, { "phase", "one" } })
+      )
+      F.task(
+        H,
+        gate_root,
+        "lib.nvim",
+        p[2] .. "-two",
+        F.meta("Two", "blocked", { { "plan", p[1].id }, { "phase", "two" } })
+      )
+    end
+    local res = assert(check.run({ root = gate_root, today = F.TODAY, area = "lib.nvim" }))
+    local without = {}
+    for _, f in ipairs(res.findings) do
+      if f.code == "blocked-without-blocker" then
+        without[#without + 1] = f.id or f.slug or f.path
+      end
+    end
+    eq(#without, 1, "only the task under the SOFT plan is reported")
+    has(tostring(without[1]), "s-two")
+  end
+
+  -- ── same-file: the file a ref means, not the name it is written with ──
+  do
+    local plan_scope = require("tasks_nvim.plan_scope")
+    local same_root = F.vault(H)
+    F.task(H, same_root, "lib.nvim", "l1", F.meta("L1", "open", { { "refs", "[README.md]" } }))
+    F.task(H, same_root, "cascade.nvim", "c1", F.meta("C1", "open", { { "refs", "[README.md]" } }))
+    F.task(H, same_root, "lib.nvim", "l2", F.meta("L2", "open", { { "refs", "[README.md]" } }))
+    local scope = assert(plan_scope.load({ root = same_root }))
+    local node = scope.plan.nodes
+    eq(node["lib.nvim/l1"].same_file, { "lib.nvim/l2" }, "the same repo's README is one file")
+    eq(node["cascade.nvim/c1"].same_file, {}, "another repo's README is another file")
+  end
 end

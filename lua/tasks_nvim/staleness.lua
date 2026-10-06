@@ -96,11 +96,16 @@ function M.classify(ref)
   if s:match("^%a[%w+.-]*://") or s:match("^mailto:") then
     return "skip", nil
   end
-  if s:find(":", 1, true) and not s:match("^%a:[/\\]") then
-    -- `file.lua:42` is a path with a line number.
-    local stripped = s:match("^(.-):%d+$")
+  -- The colon of a drive letter is no separator; the rest of the ref is read on its own.
+  local drive, body = s:match("^(%a:)([/\\].*)$")
+  local rest = body or s
+  if rest:find(":", 1, true) then
+    -- `file.lua:42`, `file.lua:42:7`, `file.lua:10-20`: a path with a position.
+    local stripped = rest:match("^(.-):%d+:%d+$")
+      or rest:match("^(.-):%d+%-%d+$")
+      or rest:match("^(.-):%d+$")
     if stripped and not stripped:find(":", 1, true) then
-      s = stripped
+      s = (drive or "") .. stripped
     else
       return "skip", nil
     end
@@ -236,6 +241,25 @@ function M.reset_cache()
   no_repo = {}
 end
 
+---The environment of every git call: the messages are English, so that "not a git repository" is recognised whatever
+---the user's locale is.
+local GIT_ENV = { LC_ALL = "C" }
+
+---Whether git can answer about `base` AT ALL: one call without a pathspec, decided by its exit code (never by the text
+---of a message, which is localised). When this fails, every path lookup would fail too: bisecting a failing chunk
+---down to single paths would cost 2n-1 spawns for nothing.
+---@param base string
+---@param timeout_ms integer
+---@return boolean
+local function repo_answers(base, timeout_ms)
+  local ok, res = pcall(function()
+    return vim
+      .system({ "git", "-C", base, "log", "-1", "--format=%ct" }, { text = true, env = GIT_ENV })
+      :wait(timeout_ms)
+  end)
+  return ok and res.code == 0
+end
+
 ---One `git log` over `paths` (relative to `base`). `kind` is set when asking
 ---again cannot help: `"no_repo"`, `"stop"` (git does not run, or timed out).
 ---@param base string
@@ -261,7 +285,7 @@ local function log_paths(base, paths, timeout_ms)
   }
   vim.list_extend(cmd, paths)
   local ok, res = pcall(function()
-    return vim.system(cmd, { text = true }):wait(timeout_ms)
+    return vim.system(cmd, { text = true, env = GIT_ENV }):wait(timeout_ms)
   end)
   if not ok then
     return nil, "git could not run: " .. tostring(res), "stop"
@@ -356,6 +380,9 @@ function M.git_dates(base, rels, gopts)
       end
     elseif #paths == 1 then
       failed = failed + 1
+    elseif not repo_answers(base, timeout) then
+      -- not one path git refuses: git cannot be used on this repo at all (broken config, no commit, dubious owner)
+      stopped, failed = true, failed + #paths
     else
       local mid = math.ceil(#paths / 2)
       lookup(vim.list_slice(paths, 1, mid))
@@ -411,6 +438,9 @@ local function bases_for(area, ctx)
   end
   return out
 end
+
+---@type fun(opts: Tasks.StalenessOpts, root: string): { repo_bases: string[], config_dir: string|nil, root: string, extra: string[] }
+local make_ctx
 
 ---The date a task without `updated` and `created` is compared from: before every real day.
 local UNDATED = "0000-00-00"
@@ -579,7 +609,10 @@ local function compare(hits, dated, report)
     local d = dated[h.base] and dated[h.base][h.rel]
     -- A task with neither `updated` nor `created` has no date to compare with: every dated change counts, the same
     -- way `--stale=<days>` counts a task without a date as stale (an unknowable answer is not "fresh").
-    local since = h.task.updated or h.task.created or UNDATED
+    -- An invalid date ("2026-9-3") is no date: it is compared as UNDATED, as `--stale=<days>` counts it as unknowable
+    -- (text comparison would put "2026-9-3" after "2026-10-01").
+    local last = h.task.updated or h.task.created
+    local since = require("tasks_nvim.model").is_date(last) and last or UNDATED
     if d and d.date > since then
       local list = report.stale[h.task.id]
       if not list then
@@ -588,6 +621,56 @@ local function compare(hits, dated, report)
       end
       list[#list + 1] = { ref = h.ref, file = d.file, date = d.date, source = d.source }
     end
+  end
+end
+
+---@param opts Tasks.StalenessOpts
+---@param root string
+---@return { repo_bases: string[], config_dir: string|nil, root: string, extra: string[] }
+function make_ctx(opts, root)
+  return {
+    root = root,
+    repo_bases = opts.repo_bases
+      or (#settings().repo_bases > 0 and settings().repo_bases or default_repo_bases(root)),
+    config_dir = default_config_dir(opts),
+    extra = opts.extra_bases or {},
+  }
+end
+
+---Which FILE a ref of a task means, as a key two refs share exactly when they name one file. A relative ref is
+---looked for where `compute` looks (`<repo base>/<area>`, the config checkout, the vault, ...), so `README.md` of two
+---repos are two files and `docs/ROADMAP/00_ROADMAP.md` found through the config checkout is one. A ref that resolves to
+---nothing is keyed by its area and path (a file of that repo that is not there). Remembered per (area, ref).
+---@param opts? Tasks.StalenessOpts
+---@return (fun(task: Tasks.Task, rel: string): string)|nil resolver  # nil when there is no vault
+function M.file_key(opts)
+  opts = opts or {}
+  local root = opts.root and fsio.norm(opts.root) or vault.root()
+  if not root then
+    return nil
+  end
+  local ctx = make_ctx(opts, root)
+  local bases_of_area, memo = {}, {}
+  return function(task, rel)
+    local memo_key = task.area .. "\0" .. rel
+    local hit = memo[memo_key]
+    if hit then
+      return hit
+    end
+    local bases = bases_of_area[task.area]
+    if not bases then
+      bases = bases_for(task.area, ctx)
+      bases_of_area[task.area] = bases
+    end
+    local _, full = locate(rel, bases)
+    local key = full and collapse_dots(full)
+      or (is_absolute(rel) and rel)
+      or (task.area .. "/" .. rel)
+    if require("lib.nvim.cross.platform.is_windows")() then
+      key = key:lower()
+    end
+    memo[memo_key] = key
+    return key
   end
 end
 
@@ -611,13 +694,7 @@ function M.compute(tasks, opts)
     report.notes[#report.notes + 1] = "vault not found; refs not checked"
     return report
   end
-  local ctx = {
-    root = root,
-    repo_bases = opts.repo_bases
-      or (#settings().repo_bases > 0 and settings().repo_bases or default_repo_bases(root)),
-    config_dir = default_config_dir(opts),
-    extra = opts.extra_bases or {},
-  }
+  local ctx = make_ctx(opts, root)
   local cap = opts.max_refs or M.MAX_REFS
   ---@param text string
   local function note(text)

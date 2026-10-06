@@ -87,6 +87,8 @@ function M.shared(root, scanned)
     end
     return hit
   end, files)
+  -- which file a ref means (the files two tasks "both change" are the same file, not the same name)
+  index.file_key = require("tasks_nvim.staleness").file_key({ root = root })
   return {
     root = root,
     index = index,

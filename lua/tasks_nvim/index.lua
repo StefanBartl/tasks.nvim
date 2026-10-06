@@ -46,6 +46,13 @@ end
 ---Longest summary shown in a table cell, in characters.
 M.MAX_SUMMARY = 160
 
+---Longest title shown in a table cell, in characters: a generated index must stay far below the read limit, or it
+---could not be read back (and so not regenerated) after a few huge titles.
+M.MAX_TITLE = 200
+
+---Most blockers named in one cell; the rest is counted.
+M.MAX_BLOCKERS = 5
+
 ---@param s string
 ---@return string
 local function cell(s)
@@ -104,8 +111,12 @@ local function summary_cell(task, max)
   local text = truncate(task.summary, max)
   if #task.blocked_by > 0 then
     local ids = {}
-    for _, id in ipairs(task.blocked_by) do
-      ids[#ids + 1] = "`" .. id .. "`"
+    for i, id in ipairs(task.blocked_by) do
+      if i > M.MAX_BLOCKERS then
+        ids[#ids + 1] = ("+%d weitere"):format(#task.blocked_by - M.MAX_BLOCKERS)
+        break
+      end
+      ids[#ids + 1] = "`" .. truncate(id, M.MAX_TITLE) .. "`"
     end
     local note = "(blockiert durch " .. table.concat(ids, ", ") .. ")"
     text = text == "" and note or (text .. " " .. note)
@@ -151,7 +162,7 @@ function M.render(area, tasks, opts)
       t.status,
       t.prio and tostring(t.prio) or EN_DASH,
       t.effort and cell(t.effort) or EN_DASH,
-      link_text(t.title),
+      link_text(truncate(t.title, M.MAX_TITLE)),
       task_link(t),
       summary_cell(t, max)
     )
@@ -195,6 +206,13 @@ function M.write_area(area, opts)
   end
   if type(errors) == "table" and #errors > 0 then
     return nil, "cannot list " .. area .. ": " .. errors[1]
+  end
+  -- A task file that could not be read has no status here: it would silently drop out of the index (or the index
+  -- would be deleted as "no open task"), a locked or oversized file costing the area its overview.
+  for _, t in ipairs(tasks) do
+    if t.error_codes and vim.tbl_contains(t.error_codes, "unreadable") then
+      return nil, ("cannot read %s: %s"):format(t.path, tostring(t.errors and t.errors[1]))
+    end
   end
 
   local path = vault.index_path(root, area)
@@ -389,7 +407,7 @@ function M.render_global(tasks, opts)
   lines[#lines + 1] = "|---|---|---|---|---|---|"
   for i = 1, shown do
     local t = open[i]
-    local title = link_text(t.title)
+    local title = link_text(truncate(t.title, M.MAX_TITLE))
     if links then
       title = ("[%s](%s%s/ROADMAP/tasks/%s)"):format(
         title,

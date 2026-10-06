@@ -213,7 +213,8 @@ local function plan_findings(findings, open_ids, names, scan_opts)
           t,
           "status is doing but " .. table.concat(waits, ", ") .. " is still open"
         )
-      elseif t.status == "blocked" and #(t.blocked_by or {}) == 0 then
+      elseif t.status == "blocked" and #(t.blocked_by or {}) == 0 and #node.open_blockers == 0 then
+        -- no `blocked_by` AND no plan gate holding it (a `gate: hard` stage is a blocker of the engine's own)
         add(
           findings,
           "warn",

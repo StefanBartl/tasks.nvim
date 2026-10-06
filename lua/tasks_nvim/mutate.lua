@@ -854,7 +854,11 @@ function M.set(id, patch, opts)
   end
 
   pairs_[#pairs_ + 1] = { "updated", today }
-  local ok, werr = fm.update(task.path, pairs_)
+  -- Under the lock: `fm.update` reads the file again and patches only these keys, so a second process changing OTHER
+  -- keys of the same task at the same moment is not undone.
+  local ok, werr = fsio.with_lock(task.path, function()
+    return fm.update(task.path, pairs_)
+  end)
   if not ok then
     return nil, "cannot write " .. task.path .. ": " .. tostring(werr)
   end
@@ -896,6 +900,34 @@ end
 
 ---@see readme_row
 M.readme_row = readme_row
+
+---Add `row` to the README of a Backlog, read and written under a lock: the text the row is added to is the one on disk
+---NOW, not the one a `done` read a while ago (two processes finishing different tasks of one area would both start from
+---the same text and the later write would drop the other's row).
+---@param path string
+---@param bucket Tasks.Bucket
+---@param rel string
+---@param row string
+---@return { state: "updated"|"unchanged", text: string }|nil result   # `text`: the README as it stands afterwards.
+---@return string|nil err
+function M.readme_update(path, bucket, rel, row)
+  local res, err = fsio.with_lock(path, function()
+    local text, rd_err = fsio.read(path)
+    if not text then
+      return nil, "cannot read " .. path .. ": " .. tostring(rd_err)
+    end
+    local fresh, changed = M.readme_add_row(text, bucket, rel, row)
+    if not changed then
+      return { state = "unchanged", text = text }, nil
+    end
+    local ok, werr = fsio.write_atomic(path, fresh)
+    if not ok then
+      return nil, "cannot write " .. path .. ": " .. tostring(werr)
+    end
+    return { state = "updated", text = fresh }, nil
+  end)
+  return res, err
+end
 
 ---Add `row` to the `## <bucket> (N)` section of a `Backlog/README.md` text.
 ---
@@ -1040,6 +1072,7 @@ end
 ---@field readme_path string
 ---@field readme_old? string
 ---@field readme_new? string
+---@field readme_row string          # The row this finish adds: `readme_update` adds it to the README as it stands THEN.
 ---@field readme_state "missing"|"updated"|"unchanged"
 ---@field steps_ticked integer        # Plan steps ticked in the finished copy.
 ---@field index boolean              # Regenerate the area index afterwards.
@@ -1049,6 +1082,7 @@ end
 ---@field moved boolean              # The folder was renamed.
 ---@field removed_original boolean   # The plain task file was removed.
 ---@field created_target boolean     # This run created `target` (as opposed to finding another process's).
+---@field readme_written? string     # The README text this run wrote (nil: it did not write the README).
 
 ---Validate and compute: no file is written. `nil, err` when the task cannot be finished;
 ---`{ already = true }` (a finished task) as the first result when there is nothing to do.
@@ -1149,11 +1183,11 @@ local function plan_done(id, opts)
     end
     readme_old = text
   end
+  local row = readme_row(bucket, rel, task, date)
   local readme_new, readme_state = readme_old, "missing"
   if readme_old then
     local changed
-    readme_new, changed =
-      M.readme_add_row(readme_old, bucket, rel, readme_row(bucket, rel, task, date))
+    readme_new, changed = M.readme_add_row(readme_old, bucket, rel, row)
     readme_state = changed and "updated" or "unchanged"
   end
 
@@ -1176,6 +1210,7 @@ local function plan_done(id, opts)
     readme_path = readme_path,
     readme_old = readme_old,
     readme_new = readme_new,
+    readme_row = row,
     readme_state = readme_state,
     index = opts.index ~= false,
   }
@@ -1262,10 +1297,11 @@ local function execute_done(plan, progress)
     progress.removed_original = true
   end
   if plan.readme_old and plan.readme_new ~= plan.readme_old then
-    local ok, err = fsio.write_atomic(plan.readme_path, plan.readme_new)
-    if not ok then
-      return nil, "cannot write " .. plan.readme_path .. ": " .. tostring(err)
+    local res, err = M.readme_update(plan.readme_path, plan.bucket, plan.rel, plan.readme_row)
+    if not res then
+      return nil, tostring(err)
     end
+    progress.readme_written = res.state == "updated" and res.text or nil
   end
   if plan.index then
     local res, ierr = index.write_area(plan.area, { root = plan.root })
@@ -1299,6 +1335,11 @@ local function rollback_done(plan, cp, progress, err)
     for i = #cp.entries, 1, -1 do
       forget(cp.entries[i].path)
     end
+  end
+  -- The README goes back only when it still is exactly what this run wrote: another process may have added its row
+  -- since, and a restore of the old snapshot would take it away again.
+  if progress.readme_written == nil or fsio.read(plan.readme_path) ~= progress.readme_written then
+    forget(plan.readme_path)
   end
   local stuck = {}
   if progress.moved then

@@ -247,6 +247,49 @@ function M.create_exclusive(path, content)
   return true, nil
 end
 
+---Run `fn` while holding an advisory lock on `path`: a hidden `.<name>.lock` file next to it, created exclusively. Every
+---tasks.nvim process that read-modify-writes the same file (the Backlog README, a task's frontmatter) goes through it,
+---so two of them (an agent's CLI and the dashboard) never start from the same text and drop each other's change. It
+---serialises the cooperating writers only; an editor with the file open is not one of them.
+---
+---A holder that died leaves its file behind: a lock older than `opts.stale_s` (10 s; a locked write takes
+---milliseconds) is taken over. Waiting is bounded (`opts.wait_ms`, 2 s), then `nil, err`.
+---@generic R
+---@param path string
+---@param fn fun(): R, string|nil
+---@param opts? { wait_ms?: integer, stale_s?: integer }
+---@return R|nil result
+---@return string|nil err
+function M.with_lock(path, fn, opts)
+  opts = opts or {}
+  local lock = M.dirname(path) .. "/." .. path:match("([^/\\]+)$") .. ".lock"
+  local deadline = uv.hrtime() + (opts.wait_ms or 2000) * 1000000
+  local stale_s = opts.stale_s or 10
+  while true do
+    local ok, err = M.create_exclusive(lock, tostring(uv.os_getpid()))
+    if ok then
+      break
+    end
+    if not M.is_exists(err) then
+      return nil, ("cannot lock %s: %s"):format(path, tostring(err))
+    end
+    local st = uv.fs_stat(lock)
+    if st and os.time() - st.mtime.sec > stale_s then
+      pcall(uv.fs_unlink, lock)
+    elseif uv.hrtime() > deadline then
+      return nil, ("%s is being written by another process (%s)"):format(path, lock)
+    else
+      vim.wait(10)
+    end
+  end
+  local ran, res, res2 = pcall(fn)
+  pcall(uv.fs_unlink, lock)
+  if not ran then
+    error(res, 0)
+  end
+  return res, res2
+end
+
 ---Rename a file or folder (one filesystem, so atomic). The target must not exist.
 ---Goes through `lib.nvim.cross.fs.mutate`, which retries a Windows sharing violation (an
 ---indexer or virus scanner holding a handle on a freshly written asset for a moment) instead

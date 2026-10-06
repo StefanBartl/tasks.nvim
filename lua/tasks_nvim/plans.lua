@@ -534,15 +534,11 @@ function M.close(id, opts)
     end
     readme_old = text
   end
+  local readme_row = mutate.readme_row("FEATURES", rel, plan, date)
   local readme_new, readme_state = readme_old, "missing"
   if readme_old then
     local changed
-    readme_new, changed = mutate.readme_add_row(
-      readme_old,
-      "FEATURES",
-      rel,
-      mutate.readme_row("FEATURES", rel, plan, date)
-    )
+    readme_new, changed = mutate.readme_add_row(readme_old, "FEATURES", rel, readme_row)
     readme_state = changed and "updated" or "unchanged"
   end
 
@@ -592,7 +588,8 @@ function M.close(id, opts)
     return fail("cannot remove " .. plan.path .. ": " .. tostring(rm_err))
   end
   if readme_old and readme_new ~= readme_old then
-    local wrote, rwerr = fsio.write_atomic(readme_path, readme_new)
+    -- under the lock and onto the README as it is NOW (another run may have added its row since it was read)
+    local wrote, rwerr = mutate.readme_update(readme_path, "FEATURES", rel, readme_row)
     if not wrote then
       -- the plan file is gone and the finished copy is there: put the plan file back before the restore drops it
       local back, b_err = fsio.create_exclusive(plan.path, old_text)

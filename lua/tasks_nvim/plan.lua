@@ -665,29 +665,38 @@ function M.build(tasks, index)
     end
   end
   -- Same-file: tasks of one stage that name the same file are not parallel work.
+  -- The file is told by `index.file_key` when there is one (the file a ref RESOLVES to: `README.md` of two repos are
+  -- two files); the pure engine, without it, keys by the ref's path.
+  local file_key = index.file_key
   for i, members in ipairs(plan.stages) do
-    local by_file = {}
+    local by_file, shown = {}, {}
     for _, id in ipairs(members) do
       local seen_files = {}
       for _, ref in ipairs(by_id[id].refs or {}) do
         local kind, rel = staleness.classify(ref)
-        if kind == "path" and rel and not seen_files[rel] then
-          seen_files[rel] = true
-          by_file[rel] = by_file[rel] or {}
-          table.insert(by_file[rel], id)
+        if kind == "path" and rel then
+          local key = file_key and file_key(by_id[id], rel) or rel
+          if not seen_files[key] then
+            seen_files[key] = true
+            by_file[key] = by_file[key] or {}
+            shown[key] = shown[key] or rel
+            table.insert(by_file[key], id)
+          end
         end
       end
     end
     local files = {}
-    for file, list in pairs(by_file) do
+    for key, list in pairs(by_file) do
       if #list > 1 then
-        files[#files + 1] = file
+        files[#files + 1] = key
       end
     end
-    table.sort(files)
-    for _, file in ipairs(files) do
-      local list = by_file[file]
-      plan.conflicts[#plan.conflicts + 1] = { stage = i - 1, file = file, ids = list }
+    table.sort(files, function(a, b)
+      return shown[a] < shown[b] or (shown[a] == shown[b] and a < b)
+    end)
+    for _, key in ipairs(files) do
+      local list = by_file[key]
+      plan.conflicts[#plan.conflicts + 1] = { stage = i - 1, file = shown[key], ids = list }
       for _, id in ipairs(list) do
         for _, other in ipairs(list) do
           if other ~= id and not vim.tbl_contains(plan.nodes[id].same_file, other) then
