@@ -43,6 +43,9 @@ the version is not tagged yet (the repository is not published).
 - `tasks_nvim.batch` (`set_many`, `done_many`): several changes with one index write per area; the dashboard uses it.
 - `tasks_nvim.filter_opts`: the option-to-filter parsing, shared by the CLI, the commands and the dashboard.
 - Help texts of the dashboard and the form are generated from the keys in force.
+- Every flag and `key=` of `:Tasks` (and of the nested routes a host mounts, e.g. `:MyPlugins tasks ...`) has a one-line
+  `desc` for lib.nvim's option float, and `enum_desc` for the values that need a word (`--sort=`, `--format=`,
+  `--action=`, `actor=`, `status=`); `TESTS/tasks_usrcmds_help_spec.lua` fails for an option without one.
 - Specs: 26 files, including a seeded fuzz/property spec; `scripts/gen_map.lua` (module map with the engine/UI layer
   rule); docs: README, `doc/tasks_nvim.txt`, `docs/{ENGINE,COMMANDS,BINDINGS,WORKFLOWS}.md`.
 

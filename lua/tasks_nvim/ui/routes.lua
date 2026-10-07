@@ -312,30 +312,132 @@ function M.register_types()
   })
 end
 
+-- Every flag and `key=` below carries a one-line `desc` (and, where the values are not self-explanatory, an
+-- `enum_desc`): lib.nvim's option float shows them next to the option, and `TESTS/tasks_usrcmds_help_spec.lua` fails
+-- for one that has none. The same word can mean something else on another route (`to`, `format`, `status`, ...): each
+-- route words its own.
+
+---The `--force` of every route that can write a `--to=file:` target.
+local FORCE_DESC = "Overwrite an existing --to=file: target"
+
+---Who can do a task, with what each value means (`model.ACTORS`; `none` only filters).
+---@type table<string, string>
+local ACTOR_VALUES = {
+  cdx = "an AI session alone",
+  me = "only you",
+  pair = "the AI drafts, you decide",
+}
+
+---What each status of an open task says.
+---@type table<string, string>
+local STATUS_VALUES = {
+  doing = "being worked on now",
+  decision = "waits for your decision",
+  blocked = "waits on another task",
+  open = "not started yet",
+  parked = "set aside for now",
+}
+
+---`--for=<id>` of `plan` and `estimate`: one task and what has to happen before it.
+---@type table
+local FOR_FLAG = {
+  name = "for",
+  type = "TASK_ID",
+  desc = "Only this task and everything that must finish before it",
+}
+
+---`--plan=<id>` of `plan` and `estimate`: the tasks that name a plan file.
+---@type table
+local PLAN_FLAG =
+  { name = "plan", type = "TASK_PLAN", desc = "Only the tasks of this plan file (area/slug)" }
+
 ---@type table[]
 local LIST_FLAGS = {
-  { name = "status", type = "STRING", values = model.OPEN_STATUSES },
-  { name = "prio", type = "STRING", values = { "1", "2", "3", "<=2" } },
-  { name = "effort", type = "STRING", values = { "XS", "S", "M", "L", "XL", "<=S", "<=M" } },
-  { name = "kind", type = "STRING", values = model.KINDS },
-  { name = "category", type = "STRING", values = model.CATEGORIES },
-  { name = "severity", type = "STRING", values = model.SEVERITIES },
-  { name = "value", type = "STRING", values = { "1", "2", "3", "4", "5", ">=4" } },
-  { name = "actor", type = "STRING", values = { "cdx", "me", "pair", "none" } },
-  { name = "tag", type = "TASK_TAGS" },
-  { name = "stale", type = "STRING", values = { "7", "30", "90", "refs" } },
-  { name = "blocked", bool = true },
-  { name = "ready", bool = true },
-  { name = "waiting", bool = true },
-  { name = "unestimated", bool = true },
-  { name = "sort", type = "STRING", enum = model.SORTS },
+  {
+    name = "status",
+    type = "STRING",
+    values = model.OPEN_STATUSES,
+    desc = "Only tasks with one of these statuses",
+  },
+  {
+    name = "prio",
+    type = "STRING",
+    values = { "1", "2", "3", "<=2" },
+    desc = "Only these priorities, or <=N for N and more urgent",
+  },
+  {
+    name = "effort",
+    type = "STRING",
+    values = { "XS", "S", "M", "L", "XL", "<=S", "<=M" },
+    desc = "Only these efforts, or <=M for M and smaller",
+  },
+  { name = "kind", type = "STRING", values = model.KINDS, desc = "Only tasks of these kinds" },
+  {
+    name = "category",
+    type = "STRING",
+    values = model.CATEGORIES,
+    desc = "Only tasks in these categories; kind bug counts as bug",
+  },
+  {
+    name = "severity",
+    type = "STRING",
+    values = model.SEVERITIES,
+    desc = "Only tasks with one of these severities",
+  },
+  {
+    name = "value",
+    type = "STRING",
+    values = { "1", "2", "3", "4", "5", ">=4" },
+    desc = "Only these values (1-5), or >=N for N and above",
+  },
+  {
+    name = "actor",
+    type = "STRING",
+    values = { "cdx", "me", "pair", "none" },
+    desc = "Only tasks for these actors; none = unclassified",
+  },
+  { name = "tag", type = "TASK_TAGS", desc = "Only tasks carrying one of these tags" },
+  {
+    name = "stale",
+    type = "STRING",
+    values = { "7", "30", "90", "refs" },
+    desc = "Only tasks untouched for N days; refs = a ref file changed",
+  },
+  {
+    name = "blocked",
+    bool = true,
+    desc = "Only tasks with status blocked or a blocked_by list",
+  },
+  { name = "ready", bool = true, desc = "Only tasks that can start now (no open blocker)" },
+  { name = "waiting", bool = true, desc = "Only tasks that wait on an open blocker" },
+  { name = "unestimated", bool = true, desc = "Only tasks missing an effort or a value" },
+  {
+    name = "sort",
+    type = "STRING",
+    enum = model.SORTS,
+    desc = "How to order the list (default: status, prio, area, slug)",
+    enum_desc = {
+      default = "status, then prio, area, slug",
+      ["prio-effort"] = "like default, small effort first within a prio",
+      severity = "critical first, then high, medium, low",
+      frecency = "most opened or changed in the dashboard first",
+      roi = "highest value per effort first",
+    },
+  },
   {
     name = "to",
     type = "TASK_TARGET",
     values = { "buffer", "clipboard", "qf", "file:", "echo", "mdview" },
+    desc = "Deliver the list here instead of the dashboard",
   },
-  { name = "format", type = "STRING", enum = { "md", "csv" } },
-  { name = "force", bool = true },
+  {
+    name = "format",
+    type = "STRING",
+    enum = { "md", "csv" },
+    desc = "Markdown table or CSV with extra columns; skips the dashboard",
+    enum_desc = { md = "Markdown table", csv = "one row per task, more columns" },
+  },
+  { name = "force", bool = true, desc = FORCE_DESC },
 }
 
 ---The filter flags of `list`, for the commands that take the same filters (`plan`, `estimate`).
@@ -353,6 +455,28 @@ local function filter_flags(extra)
   return out
 end
 
+---The texts of the task fields, for `task set` and (where the field is the same) `task new`. `status` and `title`
+---differ between the two and are worded where they are used.
+---@type table<string, string>
+local FIELD_DESC = {
+  kind = "What sort of work it is; picks the Backlog folder on done",
+  prio = "Urgency from 1 (most urgent) to 3",
+  effort = "Size: XS to XL, or days such as 0.5d",
+  tags = "Free labels, comma-separated; filter with --tag",
+  category = "Concerns the task serves; several allowed, comma list",
+  severity = "How serious a bug or security task is",
+  value = "Expected benefit from 1 (little) to 5 (a lot)",
+  actor = "Who can take the task on: an AI session, you or both",
+  after = "Tasks it should come after, without waiting (ids)",
+  order = "Tie-breaker within a stage; 2.5 sorts between 2 and 3",
+  plan = "Plan file this task belongs to (area/slug)",
+  phase = "Stage of that plan the task belongs to",
+}
+
+---The values worth a word of their own in the option float, per `key=`.
+---@type table<string, table<string, string>>
+local FIELD_VALUES = { actor = ACTOR_VALUES, status = STATUS_VALUES }
+
 ---The `key=` completions of `task set`: every settable key, with value hints.
 ---@return table[]
 local function set_kv()
@@ -366,6 +490,16 @@ local function set_kv()
     value = { "1", "2", "3", "4", "5" },
     actor = model.ACTORS,
   }
+  local descs = vim.tbl_extend("force", FIELD_DESC, {
+    title = "New title (the file name stays)",
+    status = "Move the task to this status (not done: use task done)",
+    summary = "One-line summary shown in the index",
+    blocked_by = "Tasks that must finish first (ids, comma-separated)",
+    refs = "Files the task is about; --stale=refs watches them",
+    rules = "Rule ids a ruleset task brings code in line with",
+    done_in = "Commit(s) that delivered the task",
+    created = "Creation date, YYYY-MM-DD",
+  })
   local out = {}
   for _, key in ipairs(mutate.SETTABLE) do
     local kind = "STRING"
@@ -374,7 +508,13 @@ local function set_kv()
     elseif key == "blocked_by" then
       kind = "TASK_IDS"
     end
-    out[#out + 1] = { key = key, type = kind, values = hints[key] }
+    out[#out + 1] = {
+      key = key,
+      type = kind,
+      values = hints[key],
+      desc = descs[key],
+      enum_desc = FIELD_VALUES[key],
+    }
   end
   return out
 end
@@ -396,7 +536,14 @@ local function nested_routes()
     {
       path = { "tasks", "index" },
       args = { { name = "area", type = "TASK_AREA", optional = true } },
-      flags = { { name = "check", bool = true }, { name = "all", bool = true } },
+      flags = {
+        {
+          name = "check",
+          bool = true,
+          desc = "Only report rule findings and stale indexes, write nothing",
+        },
+        { name = "all", bool = true, desc = "Index every area (overrides a named area)" },
+      },
       desc = "(Re)write ROADMAP/TASKS.md of one area (default: every area); --check writes nothing and reports rule findings and stale indexes",
       run = function(ctx)
         cmd().index(ctx)
@@ -407,21 +554,54 @@ local function nested_routes()
       path = { "task", "new" },
       args = { { name = "area", type = "TASK_AREA", optional = true } },
       kv = {
-        { key = "kind", type = "STRING", values = model.KINDS },
-        { key = "prio", type = "STRING", values = { "1", "2", "3" } },
-        { key = "effort", type = "STRING", values = model.EFFORTS },
-        { key = "tags", type = "TASK_TAGS" },
-        { key = "category", type = "STRING", values = model.CATEGORIES },
-        { key = "severity", type = "STRING", values = model.SEVERITIES },
-        { key = "value", type = "STRING", values = { "1", "2", "3", "4", "5" } },
-        { key = "actor", type = "STRING", values = model.ACTORS },
-        { key = "after", type = "TASK_IDS" },
-        { key = "order", type = "STRING" },
-        { key = "plan", type = "TASK_PLAN" },
-        { key = "phase", type = "STRING" },
-        { key = "status", type = "STRING", values = model.OPEN_STATUSES },
+        { key = "kind", type = "STRING", values = model.KINDS, desc = FIELD_DESC.kind },
+        { key = "prio", type = "STRING", values = { "1", "2", "3" }, desc = FIELD_DESC.prio },
+        { key = "effort", type = "STRING", values = model.EFFORTS, desc = FIELD_DESC.effort },
+        { key = "tags", type = "TASK_TAGS", desc = FIELD_DESC.tags },
+        {
+          key = "category",
+          type = "STRING",
+          values = model.CATEGORIES,
+          desc = FIELD_DESC.category,
+        },
+        {
+          key = "severity",
+          type = "STRING",
+          values = model.SEVERITIES,
+          desc = FIELD_DESC.severity,
+        },
+        {
+          key = "value",
+          type = "STRING",
+          values = { "1", "2", "3", "4", "5" },
+          desc = FIELD_DESC.value,
+        },
+        {
+          key = "actor",
+          type = "STRING",
+          values = model.ACTORS,
+          desc = FIELD_DESC.actor,
+          enum_desc = ACTOR_VALUES,
+        },
+        { key = "after", type = "TASK_IDS", desc = FIELD_DESC.after },
+        { key = "order", type = "STRING", desc = FIELD_DESC.order },
+        { key = "plan", type = "TASK_PLAN", desc = FIELD_DESC.plan },
+        { key = "phase", type = "STRING", desc = FIELD_DESC.phase },
+        {
+          key = "status",
+          type = "STRING",
+          values = model.OPEN_STATUSES,
+          desc = "Status to start in (default: open)",
+          enum_desc = STATUS_VALUES,
+        },
       },
-      flags = { { name = "folder", bool = true } },
+      flags = {
+        {
+          name = "folder",
+          bool = true,
+          desc = "Create a folder task (<slug>/<slug>.md) that can hold assets",
+        },
+      },
       range = true,
       desc = "Without arguments: a Markdown form (tick kind, prio, effort, category, severity, status; <C-s> submits) and the question whether to attach assets. With an area: create ROADMAP/tasks/<slug>.md in it and open it; the words after the area are the title (asked for when missing); --folder makes a folder task that can hold assets",
       run = function(ctx)
@@ -443,10 +623,18 @@ local function nested_routes()
       path = { "task", "done" },
       args = { { name = "id", type = "TASK_ID", allow_done = true } },
       kv = {
-        { key = "done_in", type = "STRING" },
-        { key = "date", type = "STRING" },
+        {
+          key = "done_in",
+          type = "STRING",
+          desc = "Commit(s) that delivered it, recorded in the finished file",
+        },
+        {
+          key = "date",
+          type = "STRING",
+          desc = "Date prefix of the Backlog file (YYYY-MM-DD, default today)",
+        },
       },
-      flags = { { name = "yes", bool = true } },
+      flags = { { name = "yes", bool = true, desc = "Finish without asking for confirmation" } },
       desc = "Finish a task after confirmation: status done, moved to Backlog/FEATURES|TASKS with a date prefix, Backlog README and index updated; --yes skips the question",
       run = function(ctx)
         cmd().task_done(ctx)
@@ -459,7 +647,13 @@ local function nested_routes()
         { name = "id", type = "TASK_ID" },
         { name = "file", type = "FILE" },
       },
-      kv = { { key = "name", type = "STRING" } },
+      kv = {
+        {
+          key = "name",
+          type = "STRING",
+          desc = "Name for the copy in assets/ (default: the file's name)",
+        },
+      },
       desc = "Copy a file (screenshot, log) into the task's assets/ folder, turning a plain task into a folder task, and put the Markdown link in the + register; name=<file name> renames the copy",
       run = function(ctx)
         cmd().task_attach(ctx)
@@ -478,9 +672,18 @@ local function nested_routes()
     {
       path = { "task", "template" },
       flags = {
-        { name = "to", type = "TASK_TARGET", values = { "clipboard", "buffer", "file:" } },
-        { name = "force", bool = true },
-        { name = "with-plan", bool = true },
+        {
+          name = "to",
+          type = "TASK_TARGET",
+          values = { "clipboard", "buffer", "file:" },
+          desc = "Where the template goes (default: clipboard)",
+        },
+        { name = "force", bool = true, desc = FORCE_DESC },
+        {
+          name = "with-plan",
+          bool = true,
+          desc = "Add the optional ## Plan section with checkbox steps",
+        },
       },
       desc = "Copy the task file template to the + register (--to=buffer|file:<path> for the other targets; --with-plan adds the optional ## Plan section)",
       run = function(ctx)
@@ -492,20 +695,47 @@ local function nested_routes()
       path = { "task", "plan" },
       args = { { name = "area", type = "TASK_AREA", allow_all = true, optional = true } },
       flags = filter_flags({
-        { name = "for", type = "TASK_ID" },
-        { name = "plan", type = "TASK_PLAN" },
-        { name = "ready", bool = true },
-        { name = "with-steps", bool = true },
-        { name = "write", type = "STRING" },
-        { name = "scope", type = "STRING" },
-        { name = "check", bool = true },
-        { name = "format", type = "STRING", enum = { "md", "tsv", "ids" } },
+        FOR_FLAG,
+        PLAN_FLAG,
+        { name = "ready", bool = true, desc = "Show only the part that can be started now" },
+        {
+          name = "with-steps",
+          bool = true,
+          desc = "Show each task's ## Plan steps and their progress",
+        },
+        {
+          name = "write",
+          type = "STRING",
+          desc = "Replace the generated plan block in this Markdown file",
+        },
+        {
+          name = "scope",
+          type = "STRING",
+          desc = "Block name for --write (default: derived from the scope)",
+        },
+        {
+          name = "check",
+          bool = true,
+          desc = "With --write: only say whether the block is out of date",
+        },
+        {
+          name = "format",
+          type = "STRING",
+          enum = { "md", "tsv", "ids" },
+          desc = "How the plan is written: Markdown, tab-separated or ids",
+          enum_desc = {
+            md = "readable plan with stages",
+            tsv = "one tab-separated row per task",
+            ids = "task ids only, in plan order",
+          },
+        },
         {
           name = "to",
           type = "TASK_TARGET",
           values = { "buffer", "clipboard", "file:", "echo", "mdview" },
+          desc = "Deliver the plan here (default: a scratch buffer)",
         },
-        { name = "force", bool = true },
+        { name = "force", bool = true, desc = FORCE_DESC },
       }),
       desc = "The plan of the open tasks of an area (default: all) or of one task and everything before it (--for=<id>): what is ready now, decisions by leverage, stages, critical path, an estimate line; filters like list; --ready shows only what can be started",
       run = function(ctx)
@@ -517,11 +747,30 @@ local function nested_routes()
       path = { "task", "planfile" },
       args = { { name = "area", type = "TASK_AREA" } },
       flags = {
-        { name = "areas", type = "STRING" },
-        { name = "target", type = "TASK_ID" },
-        { name = "phases", type = "STRING" },
-        { name = "gate", type = "STRING", enum = { "hard" } },
-        { name = "status", type = "STRING", enum = { "planning", "doing", "parked" } },
+        {
+          name = "areas",
+          type = "STRING",
+          desc = "Areas whose tasks may belong to the plan (comma list)",
+        },
+        {
+          name = "target",
+          type = "TASK_ID",
+          desc = "The task that means the plan is done (area/slug)",
+        },
+        { name = "phases", type = "STRING", desc = "Names of the stages in order (comma list)" },
+        {
+          name = "gate",
+          type = "STRING",
+          enum = { "hard" },
+          desc = "Make the stage order a hard rule instead of a hint",
+          enum_desc = { hard = "a stage waits until the earlier ones are finished" },
+        },
+        {
+          name = "status",
+          type = "STRING",
+          enum = { "planning", "doing", "parked" },
+          desc = "Status the new plan starts in (default: planning)",
+        },
       },
       desc = "Create a plan file ROADMAP/plans/<slug>.md in an area (the words after the area are the title): the undertaking that tasks join with plan=<id> phase=<word>; --areas=a,b lists the areas whose tasks belong, --phases=a,b,c names the stages in order, --gate=hard forbids starting a stage before the earlier ones are finished, --target=<task> is the task that means done",
       run = function(ctx)
@@ -533,8 +782,18 @@ local function nested_routes()
       path = { "task", "next" },
       args = { { name = "area", type = "TASK_AREA", allow_all = true, optional = true } },
       flags = {
-        { name = "n", type = "STRING", values = { "1", "2", "3", "5" } },
-        { name = "actor", type = "STRING", values = { "cdx", "me", "pair", "none" } },
+        {
+          name = "n",
+          type = "STRING",
+          values = { "1", "2", "3", "5" },
+          desc = "How many ready tasks to show, best first (default 3)",
+        },
+        {
+          name = "actor",
+          type = "STRING",
+          values = { "cdx", "me", "pair", "none" },
+          desc = "Show the queue of this actor instead of yours",
+        },
       },
       desc = "What to start next: the best ready task with the reason, and a dialog to jump into it; --actor=cdx asks for the AI queue instead of yours",
       run = function(ctx)
@@ -546,9 +805,13 @@ local function nested_routes()
       path = { "task", "estimate" },
       args = { { name = "area", type = "TASK_AREA", allow_all = true, optional = true } },
       flags = filter_flags({
-        { name = "for", type = "TASK_ID" },
-        { name = "plan", type = "TASK_PLAN" },
-        { name = "walk", bool = true },
+        FOR_FLAG,
+        PLAN_FLAG,
+        {
+          name = "walk",
+          bool = true,
+          desc = "Ask for each missing effort or value, one task at a time",
+        },
       }),
       desc = "Sums of effort and value of an area (default: all) or of one task and everything before it, with what is missing; --walk goes through the tasks without effort or value and asks for them one by one",
       run = function(ctx)
@@ -586,10 +849,25 @@ local function nested_routes()
         },
       },
       flags = {
-        { name = "action", type = "STRING", enum = { "files", "grep", "smart" } },
-        { name = "list", bool = true },
-        { name = "to", type = "TASK_TARGET", values = { "buffer", "clipboard", "file:", "echo" } },
-        { name = "force", bool = true },
+        {
+          name = "action",
+          type = "STRING",
+          enum = { "files", "grep", "smart" },
+          desc = "What the picker searches: file names, content or both",
+          enum_desc = {
+            files = "pick a file by name",
+            grep = "search the content of the files",
+            smart = "names and content in one live picker",
+          },
+        },
+        { name = "list", bool = true, desc = "Print the file list instead of opening a picker" },
+        {
+          name = "to",
+          type = "TASK_TARGET",
+          values = { "buffer", "clipboard", "file:", "echo" },
+          desc = "Deliver the file list to a target instead of a picker",
+        },
+        { name = "force", bool = true, desc = FORCE_DESC },
       },
       desc = "Picker over the files of one folder of an area (tasks|roadmap|backlog|handover|notes|all, default all) through pickers.nvim; --action=grep|smart searches content, --list or --to= delivers the file list",
       run = function(ctx)
