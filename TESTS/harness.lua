@@ -68,12 +68,14 @@ function H.lacks(haystack, needle, msg)
   end
 end
 
---- A fresh empty directory (forward slashes), removed by `H.cleanup()`.
+--- A fresh empty directory (forward slashes, symlinks resolved), removed by `H.cleanup()`.
+--- Resolved because the code under test reports real paths (a buffer's name, `fs_realpath`):
+--- on macOS the temp dir is /var/folders/..., which is /private/var/folders/... for real.
 ---@return string
 function H.tmpdir()
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, "p")
-  dir = dir:gsub("\\", "/")
+  dir = (vim.uv.fs_realpath(dir) or dir):gsub("\\", "/")
   H._dirs = H._dirs or {}
   H._dirs[#H._dirs + 1] = dir
   return dir
