@@ -1,10 +1,12 @@
--- TESTS/tasks_usrcmds_help_spec.lua -- every flag and key=value pair of :Tasks, and of the nested routes a
--- host mounts under its own verb (`:MyPlugins tasks|task|open ...`), has a line in lib.nvim's option float.
+-- TESTS/tasks_usrcmds_help_spec.lua -- every flag, key=value pair and positional argument of :Tasks, and of the
+-- nested routes a host mounts under its own verb (`:MyPlugins tasks|task|open ...`), has a line in lib.nvim's option
+-- float.
 --
--- The text is the `desc` of each FlagSpec / KvSpec in `tasks_nvim.ui.routes` (a few values carry an `enum_desc`).
--- An option without one shows up as a bare row in the cheatsheet, so this fails until it is described. The same
--- word means different things on different routes (`to`, `format`, `status`, `actor`, ...): `undocumented` is asked
--- per route, so each route needs its own, correct text.
+-- The text is the `desc` of each FlagSpec / KvSpec / ArgSpec in `tasks_nvim.ui.routes` (a few values carry an
+-- `enum_desc`); an argument without a `desc` of its own gets the one of its type (`register_type`). An option without
+-- one shows up as a bare row in the cheatsheet, so this fails until it is described. The same word means different
+-- things on different routes (`to`, `format`, `status`, `actor`, `area`, ...): `undocumented` is asked per route, so
+-- each route needs its own, correct text.
 
 return function(H)
   local ok, eq = H.ok, H.eq
@@ -29,8 +31,13 @@ return function(H)
 
   for _, verb in ipairs({ "Tasks", "TaskHelpNested" }) do
     local missing = {}
-    for _, m in ipairs(composer.help.undocumented(verb)) do
-      local option = m.kind == "flag" and "--" .. m.name or m.name .. "="
+    for _, m in ipairs(composer.help.undocumented(verb, { args = true })) do
+      local option = m.name .. "="
+      if m.kind == "flag" then
+        option = "--" .. m.name
+      elseif m.kind == "arg" then
+        option = "<" .. m.name .. ">"
+      end
       missing[#missing + 1] = ("%s %s"):format(m.route, option)
     end
     eq(
@@ -44,16 +51,20 @@ return function(H)
   -- `enum_desc` only for values the option really has, and only where the float would show it (flags: `enum`).
   local seen = 0
   ---@param label string
-  ---@param text any
-  local function check_text(label, text)
-    ok(type(text) == "string" and text ~= "", label .. " has a desc of its own")
-    if type(text) ~= "string" then
-      return
-    end
+  ---@param text string
+  local function check_style(label, text)
     ok(not text:find("[\r\n]"), label .. ": the desc is one line")
     ok(not text:find("%.$"), label .. ": the desc has no closing full stop")
     ok(#text >= 12 and #text <= 80, ("%s: the desc is %d characters long"):format(label, #text))
     seen = seen + 1
+  end
+  ---@param label string
+  ---@param text any
+  local function check_text(label, text)
+    ok(type(text) == "string" and text ~= "", label .. " has a desc of its own")
+    if type(text) == "string" then
+      check_style(label, text)
+    end
   end
   ---@param label string
   ---@param values string[]|nil
@@ -89,6 +100,31 @@ return function(H)
   end
   -- the check above must not pass for the wrong reason (a route table without options)
   ok(seen >= 100, "the route tree carries the options of all subcommands, saw " .. seen)
+
+  -- Positional arguments: the text is the argument's own `desc`, else the one of its (custom) type. A built-in type
+  -- (`FILE`) explains itself, so a text there is optional -- but if there is one it has the same shape.
+  local types_ok, argtypes = pcall(require, "lib.nvim.bindings.usercmd.composer.argtypes")
+  ok(types_ok, "the composer argument types load")
+  local args_seen = 0
+  for _, route in ipairs(routes.routes({ flat = true })) do
+    for _, arg in ipairs(route.args or {}) do
+      local label = ("%s <%s>"):format(table.concat(route.path, " "), arg.name)
+      local def = arg.type and argtypes.get(arg.type) or nil
+      local text = arg.desc or (def and def.desc)
+      if text ~= nil then
+        check_text(label, text)
+        args_seen = args_seen + 1
+      end
+      -- shown by the float for `enum` and `values` alike
+      check_enum_desc(label, arg.enum or arg.values, arg.enum_desc)
+    end
+  end
+  ok(args_seen >= 15, "the route tree carries the arguments of all subcommands, saw " .. args_seen)
+
+  -- the two types the arguments share say what they are once, for every argument without a text of its own
+  for _, name in ipairs({ "TASK_AREA", "TASK_ID" }) do
+    check_text("type " .. name, argtypes.get(name).desc)
+  end
 
   pcall(vim.api.nvim_del_user_command, "TaskHelpNested")
 end

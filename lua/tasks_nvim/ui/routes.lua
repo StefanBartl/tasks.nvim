@@ -204,7 +204,10 @@ end
 ---Register `TASK_AREA` and `TASK_ID` with the composer. Safe to call twice.
 ---@return nil
 function M.register_types()
+  -- `desc`: the line lib.nvim's option float shows for a positional argument of this type that has no text of its
+  -- own. A route whose argument plays another role words its own (`TESTS/tasks_usrcmds_help_spec.lua` checks both).
   composer.register_type("TASK_AREA", {
+    desc = "Area of the vault (a folder with ROADMAP/ or Backlog/)",
     validate = function(raw, spec)
       if spec and spec.allow_all and raw == "all" then
         return true, "all", nil
@@ -230,6 +233,7 @@ function M.register_types()
   })
 
   composer.register_type("TASK_ID", {
+    desc = "Id of an open task, as area/slug",
     validate = function(raw, spec)
       local root, err = vault.root()
       if not root then
@@ -312,13 +316,16 @@ function M.register_types()
   })
 end
 
--- Every flag and `key=` below carries a one-line `desc` (and, where the values are not self-explanatory, an
--- `enum_desc`): lib.nvim's option float shows them next to the option, and `TESTS/tasks_usrcmds_help_spec.lua` fails
--- for one that has none. The same word can mean something else on another route (`to`, `format`, `status`, ...): each
--- route words its own.
+-- Every flag, `key=` and positional argument below carries a one-line `desc` (and, where the values are not
+-- self-explanatory, an `enum_desc`; an argument may rely on the `desc` of its type instead): lib.nvim's option float
+-- shows them next to the option, and `TESTS/tasks_usrcmds_help_spec.lua` fails for one that has none. The same word
+-- can mean something else on another route (`to`, `format`, `status`, `area`, ...): each route words its own.
 
 ---The `--force` of every route that can write a `--to=file:` target.
 local FORCE_DESC = "Overwrite an existing --to=file: target"
+
+---The `<id>` of the routes that also take a finished task (`allow_done`) and only read it.
+local ANY_TASK_DESC = "Id of a task, open or finished, as area/slug"
 
 ---Who can do a task, with what each value means (`model.ACTORS`; `none` only filters).
 ---@type table<string, string>
@@ -525,7 +532,15 @@ local function nested_routes()
   return {
     {
       path = { "tasks" },
-      args = { { name = "area", type = "TASK_AREA", allow_all = true, optional = true } },
+      args = {
+        {
+          name = "area",
+          type = "TASK_AREA",
+          allow_all = true,
+          optional = true,
+          desc = "Area to list, or all (default: all areas)",
+        },
+      },
       flags = LIST_FLAGS,
       desc = "List the open tasks of one area (default: all) as a Markdown table in a scratch buffer; filter with --status= --prio= --effort=S,M|<=M --kind= --category=bug|security|performance|docs|ruleset --severity=low|medium|high|critical --tag= --stale=<days>|refs (refs: a file named in refs: changed since updated) --blocked, order with --sort=default|prio-effort|severity|frecency, deliver with --to=buffer|clipboard|qf|file:<path>|mdview (a browser preview through mdview.nvim, Markdown only) and --format=md|csv",
       run = function(ctx)
@@ -535,7 +550,14 @@ local function nested_routes()
 
     {
       path = { "tasks", "index" },
-      args = { { name = "area", type = "TASK_AREA", optional = true } },
+      args = {
+        {
+          name = "area",
+          type = "TASK_AREA",
+          optional = true,
+          desc = "Area to index (default: every area)",
+        },
+      },
       flags = {
         {
           name = "check",
@@ -552,7 +574,14 @@ local function nested_routes()
 
     {
       path = { "task", "new" },
-      args = { { name = "area", type = "TASK_AREA", optional = true } },
+      args = {
+        {
+          name = "area",
+          type = "TASK_AREA",
+          optional = true,
+          desc = "Area to create the task in (none: open the form)",
+        },
+      },
       kv = {
         { key = "kind", type = "STRING", values = model.KINDS, desc = FIELD_DESC.kind },
         { key = "prio", type = "STRING", values = { "1", "2", "3" }, desc = FIELD_DESC.prio },
@@ -621,7 +650,14 @@ local function nested_routes()
 
     {
       path = { "task", "done" },
-      args = { { name = "id", type = "TASK_ID", allow_done = true } },
+      args = {
+        {
+          name = "id",
+          type = "TASK_ID",
+          allow_done = true,
+          desc = "Id of the task to finish, as area/slug",
+        },
+      },
       kv = {
         {
           key = "done_in",
@@ -644,8 +680,12 @@ local function nested_routes()
     {
       path = { "task", "attach" },
       args = {
-        { name = "id", type = "TASK_ID" },
-        { name = "file", type = "FILE" },
+        {
+          name = "id",
+          type = "TASK_ID",
+          desc = "Id of the task to attach the file to, as area/slug",
+        },
+        { name = "file", type = "FILE", desc = "File to copy into the task's assets/ folder" },
       },
       kv = {
         {
@@ -693,7 +733,15 @@ local function nested_routes()
 
     {
       path = { "task", "plan" },
-      args = { { name = "area", type = "TASK_AREA", allow_all = true, optional = true } },
+      args = {
+        {
+          name = "area",
+          type = "TASK_AREA",
+          allow_all = true,
+          optional = true,
+          desc = "Area to plan, or all (default: all areas)",
+        },
+      },
       flags = filter_flags({
         FOR_FLAG,
         PLAN_FLAG,
@@ -745,7 +793,9 @@ local function nested_routes()
 
     {
       path = { "task", "planfile" },
-      args = { { name = "area", type = "TASK_AREA" } },
+      args = {
+        { name = "area", type = "TASK_AREA", desc = "Area to create the plan file in" },
+      },
       flags = {
         {
           name = "areas",
@@ -780,7 +830,15 @@ local function nested_routes()
 
     {
       path = { "task", "next" },
-      args = { { name = "area", type = "TASK_AREA", allow_all = true, optional = true } },
+      args = {
+        {
+          name = "area",
+          type = "TASK_AREA",
+          allow_all = true,
+          optional = true,
+          desc = "Area to pick from, or all (default: all areas)",
+        },
+      },
       flags = {
         {
           name = "n",
@@ -803,7 +861,15 @@ local function nested_routes()
 
     {
       path = { "task", "estimate" },
-      args = { { name = "area", type = "TASK_AREA", allow_all = true, optional = true } },
+      args = {
+        {
+          name = "area",
+          type = "TASK_AREA",
+          allow_all = true,
+          optional = true,
+          desc = "Area to total up, or all (default: all areas)",
+        },
+      },
       flags = filter_flags({
         FOR_FLAG,
         PLAN_FLAG,
@@ -821,7 +887,7 @@ local function nested_routes()
 
     {
       path = { "task", "open" },
-      args = { { name = "id", type = "TASK_ID", allow_done = true } },
+      args = { { name = "id", type = "TASK_ID", allow_done = true, desc = ANY_TASK_DESC } },
       desc = "Open the file of a task (an open one, else its finished copy in Backlog/)",
       run = function(ctx)
         cmd().task_open(ctx)
@@ -830,7 +896,7 @@ local function nested_routes()
 
     {
       path = { "task", "preview" },
-      args = { { name = "id", type = "TASK_ID", allow_done = true } },
+      args = { { name = "id", type = "TASK_ID", allow_done = true, desc = ANY_TASK_DESC } },
       desc = "Show the file of a task (an open one, else its finished copy in Backlog/) rendered in the browser through mdview.nvim; the file is opened as it is, nothing is written to the vault",
       run = function(ctx)
         cmd().task_preview(ctx)
@@ -840,12 +906,19 @@ local function nested_routes()
     {
       path = { "open" },
       args = {
-        { name = "area", type = "TASK_AREA" },
+        { name = "area", type = "TASK_AREA", desc = "Area whose files to pick from" },
         {
           name = "folder",
           type = "STRING",
           enum = { "tasks", "roadmap", "backlog", "handover", "notes", "all" },
           optional = true,
+          desc = "Folder of the area to look in (default: all)",
+          enum_desc = {
+            tasks = "the open task files",
+            roadmap = "the whole ROADMAP/ folder",
+            backlog = "the finished tasks",
+            all = "everything in the area",
+          },
         },
       },
       flags = {
