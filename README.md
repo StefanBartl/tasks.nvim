@@ -163,8 +163,10 @@ scripts/test.sh --json ir.json      # also write the machine-readable result
 
 The specs run on [testing.nvim](https://github.com/StefanBartl/testing.nvim) (configured in `.testing.lua`) against a
 temporary fixture vault, never a real one. testing.nvim and lib.nvim are looked up in `$TESTING_NVIM_DIR` / `$LIB_NVIM_DIR`,
-`.deps/<name>`, next to this repository and in lazy.nvim's data folder. The dashboard specs need snacks.nvim
-(`$SNACKS_DIR`, `.deps/snacks.nvim` or lazy.nvim's data folder); without it they skip the picker part.
+`.deps/<name>`, next to this repository and in lazy.nvim's data folder. The dashboard specs also drive snacks.nvim's
+picker: `scripts/test.sh` looks for it in the same places (override `$SNACKS_DIR`) and passes the folder on, because the
+runner gives every spec its own sandboxed data folder. Without snacks.nvim the script says so and the specs skip the
+picker part (CI requires it).
 
 ## License
 

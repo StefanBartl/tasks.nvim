@@ -53,7 +53,7 @@ the version is not tagged yet (the repository is not published).
 
 ### Changed
 
-- The specs run on testing.nvim (`.testing.lua`, `scripts/test.sh`, CI); `TESTS/run.lua` is gone, the specs and `TESTS/harness.lua` are unchanged. All testing.nvim guards (fs, state, scheduled errors, prompts, deprecations, processes) fail the run; only `nvim` and `git` may be started.
+- The specs run on testing.nvim (`.testing.lua`, `scripts/test.sh`, CI); `TESTS/run.lua` is gone, the specs and `TESTS/harness.lua` are unchanged. All testing.nvim guards (fs, state, scheduled errors, prompts, deprecations, processes) fail the run; only `nvim`, `git` and (for the `scripts/test.sh` spec) `bash` may be started.
 - `done` is split into plan, execute and rollback (same behaviour and messages); `staleness.compute` into resolve,
   date and compare.
 - A task with neither `updated` nor `created` counts as stale for `--stale=refs` (as it already did for
@@ -67,6 +67,10 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- `scripts/test.sh` finds snacks.nvim (`$SNACKS_DIR`, `.deps/`, beside the repository, the plugin manager's data folder)
+  and hands it to the specs: the runner gives every spec a sandboxed data folder, so the picker part of the dashboard
+  specs no longer stops running on a local machine. Without snacks.nvim the script says so first and the specs report a
+  `skip`; the paths of a "not found" message are computed only when it is shown (a run starts fewer processes).
 - Second review round (the fix and feature commits of the first one, ultracode, 27 confirmed findings): `with_lock` keeps
   its deadline for a stale lock that cannot be deleted and waits out EPERM; the dashboard watcher counts `.<name>.lock`
   events; an overlapping `plans.close` no longer deletes the only copy of a plan; a `done` rollback leaves a README that

@@ -312,10 +312,13 @@ return function(H)
     if not snacks_dir then
       -- A silent skip made this spec pass with no picker assertion at all. CI sets TASKS_REQUIRE_SNACKS and
       -- checks snacks.nvim out into .deps/, so there a missing snacks is a failure; locally it is a visible skip.
+      -- scripts/test.sh finds snacks.nvim and hands it over in $SNACKS_DIR.
       if vim.env.TASKS_REQUIRE_SNACKS == "1" then
         error("snacks.nvim is required here (TASKS_REQUIRE_SNACKS=1) but was not found")
       end
-      io.stdout:write("      (snacks.nvim not found: the picker part of this spec is skipped)\n")
+      io.stdout:write(
+        "skip  tasks_dash_picker_spec.lua: snacks.nvim not found, only the fallback was checked (set $SNACKS_DIR)\n"
+      )
       return
     end
     vim.opt.rtp:append(snacks_dir)

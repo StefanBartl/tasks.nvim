@@ -17,7 +17,8 @@ return {
   -- one editor per file keeps that from piling up (and keeps the state guard quiet) at the same total run time.
   isolated = "file",
   -- Environment variables the specs read; a child editor inherits an allowlist only (never secrets).
-  -- SNACKS_DIR: the dashboard specs find snacks.nvim there (the runner isolates stdpath('data')).
+  -- SNACKS_DIR: the dashboard specs find snacks.nvim there (the runner isolates stdpath('data'), so scripts/test.sh
+  -- looks snacks.nvim up and sets it).
   env_allow = { "REPOS_DIR", "SNACKS_DIR", "TASKS_REQUIRE_SNACKS" },
   -- The guards (docs/GUARDS.md of testing.nvim). The suite is clean on all of them, so they all fail the run.
   guards = {
@@ -35,6 +36,8 @@ return {
       "nvim",
       -- the staleness spec builds throwaway git repos in a temp folder and reads their history
       "git",
+      -- the test-script spec runs scripts/test.sh in a throwaway project with a stand-in nvim
+      "bash",
     },
   },
 }
