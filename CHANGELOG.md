@@ -69,8 +69,12 @@ the version is not tagged yet (the repository is not published).
 
 - `scripts/test.sh` finds snacks.nvim (`$SNACKS_DIR`, `.deps/`, beside the repository, the plugin manager's data folder)
   and hands it to the specs: the runner gives every spec a sandboxed data folder, so the picker part of the dashboard
-  specs no longer stops running on a local machine. Without snacks.nvim the script says so first and the specs report a
-  `skip`; the paths of a "not found" message are computed only when it is shown (a run starts fewer processes).
+  specs no longer stops running on a local machine. Without snacks.nvim the script says so first and
+  `tasks_dash_picker_spec` / `tasks_dash_refresh_spec` report a `skip` (the skip line comes before their first
+  assertion, otherwise testing.nvim would keep a green PASS); the dashboard's plain `vim.ui.select` fallback moved into
+  its own spec, `tasks_dash_fallback_spec`, which always runs. `tasks_test_script_spec` skips the same way when no POSIX
+  bash is usable (WSL's `bash.exe` is not). The paths of a "not found" message are computed only when it is shown (a
+  run starts fewer processes).
 - Second review round (the fix and feature commits of the first one, ultracode, 27 confirmed findings): `with_lock` keeps
   its deadline for a stale lock that cannot be deleted and waits out EPERM; the dashboard watcher counts `.<name>.lock`
   events; an overlapping `plans.close` no longer deletes the only copy of a plan; a `done` rollback leaves a README that

@@ -4,14 +4,12 @@
 -- picker part of tasks_dash_picker_spec / tasks_dash_refresh_spec silently stopped running on a local machine.
 -- The real script runs in throw-away projects with a stand-in `nvim` that prints what it was given. A run of the
 -- script starts a handful of processes (slow under Git Bash), so all runs are started first and waited for after.
+-- Skipped (reported, not failed) when no POSIX bash is usable (on Windows `bash` can be WSL's bash.exe).
 
 return function(H)
   local eq, ok, has, lacks = H.eq, H.ok, H.has, H.lacks
 
   local repo = vim.fs.dirname(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)))
-  local script_text = H.read(repo .. "/scripts/test.sh")
-  ok(script_text, "scripts/test.sh is readable")
-
   local is_win = vim.fn.has("win32") == 1
 
   --- A POSIX bash this spec can drive: on Windows Git Bash (it has cygpath), not WSL's bash.exe.
@@ -25,10 +23,15 @@ return function(H)
     return r.code == 0
   end
 
+  -- This sits before the first assertion on purpose: testing.nvim turns a printed `skip` line into a SKIP only for a
+  -- spec that has asserted nothing (a spec that asserted first keeps its verdict, a green PASS).
   if not bash_usable() then
     io.stdout:write("skip  tasks_test_script_spec.lua: no POSIX bash on PATH\n")
     return
   end
+
+  local script_text = H.read(repo .. "/scripts/test.sh")
+  ok(script_text, "scripts/test.sh is readable")
 
   --- The spelling of an environment variable name that the process environment already uses (Windows: `Path`).
   ---@param name string

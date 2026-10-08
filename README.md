@@ -165,8 +165,9 @@ The specs run on [testing.nvim](https://github.com/StefanBartl/testing.nvim) (co
 temporary fixture vault, never a real one. testing.nvim and lib.nvim are looked up in `$TESTING_NVIM_DIR` / `$LIB_NVIM_DIR`,
 `.deps/<name>`, next to this repository and in lazy.nvim's data folder. The dashboard specs also drive snacks.nvim's
 picker: `scripts/test.sh` looks for it in the same places (override `$SNACKS_DIR`) and passes the folder on, because the
-runner gives every spec its own sandboxed data folder. Without snacks.nvim the script says so and the specs skip the
-picker part (CI requires it).
+runner gives every spec its own sandboxed data folder. Without snacks.nvim the script says so and the two picker specs
+(`tasks_dash_picker_spec`, `tasks_dash_refresh_spec`) report a skip (CI requires it); the dashboard's plain
+`vim.ui.select` fallback has its own spec that always runs.
 
 ## License
 

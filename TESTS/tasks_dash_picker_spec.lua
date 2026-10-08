@@ -2,13 +2,44 @@
 -- opens the real Snacks.picker headless against a fixture vault, feeds keys with nvim_feedkeys and
 -- asserts the resulting file changes, notifications and re-opened pickers. Prompts (confirm, select,
 -- input) are stubbed with scripted answers. Skipped (reported, not failed) when snacks.nvim is not
--- installed; the plain vim.ui.select fallback is covered either way.
+-- installed; the plain vim.ui.select fallback is checked by tasks_dash_fallback_spec.lua, which always runs.
 
 ---@diagnostic disable: duplicate-set-field, param-type-mismatch
 -- Why: specs replace module functions with test doubles on purpose.
 
 return function(H)
   local eq, ok, has, lacks = H.eq, H.ok, H.has, H.lacks
+
+  -- ── locate snacks, or skip ──────────────────────────────────────────────
+  local function find_snacks()
+    -- No ipairs: the first candidate is nil when $SNACKS_DIR is unset.
+    local candidates = {
+      vim.env.SNACKS_DIR or "",
+      vim.fn.stdpath("data") .. "/lazy/snacks.nvim",
+      vim.fs.dirname(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2))) .. "/.deps/snacks.nvim",
+    }
+    for _, dir in ipairs(candidates) do
+      if dir ~= "" and vim.fn.isdirectory(dir .. "/lua/snacks/picker") == 1 then
+        return dir
+      end
+    end
+    return nil
+  end
+
+  local snacks_dir = find_snacks()
+  if not snacks_dir then
+    -- A silent skip made this spec pass with no picker assertion at all. CI sets TASKS_REQUIRE_SNACKS and checks
+    -- snacks.nvim out into .deps/, so there a missing snacks is a failure; locally it is a skip. scripts/test.sh
+    -- finds snacks.nvim and hands it over in $SNACKS_DIR.
+    -- This sits before the first assertion on purpose: testing.nvim turns a printed `skip` line into a SKIP only
+    -- for a spec that has asserted nothing (a spec that asserted first keeps its verdict, a green PASS).
+    if vim.env.TASKS_REQUIRE_SNACKS == "1" then
+      error("snacks.nvim is required here (TASKS_REQUIRE_SNACKS=1) but was not found")
+    end
+    io.stdout:write("skip  tasks_dash_picker_spec.lua: snacks.nvim not found (set $SNACKS_DIR)\n")
+    return
+  end
+
   local F = dofile(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)) .. "/fixture.lua")
 
   local dash = require("tasks_nvim.ui.dash")
@@ -135,161 +166,6 @@ return function(H)
     return t and t.status or nil
   end
 
-  -- ── the plain fallback (vim.ui.select), no snacks needed ────────────────
-  local function fallback_checks()
-    reset()
-    -- pick the first row (alpha, doing), advance its prio 1 -> 2, then leave the reopened list
-    select_queue = {
-      function(items)
-        eq(#items, 4, "the plain list shows every open task")
-        eq(items[1].id, "lib.nvim/alpha", "sorted like the dashboard")
-        return items[1]
-      end,
-      pick("advance prio"),
-      function()
-        return nil
-      end,
-    }
-    dash.open({ tasks = {}, root = root, filter = {} }, { persist = false, backend = "select" })
-    flush()
-    has(H.read(alpha), "prio: 2", "the fallback advanced the prio of the chosen task")
-    has(said(), "prio: 1 changed", "one summary notification")
-    eq(#asked, 3, "list, menu, list again")
-    has(asked[1].opts.prompt, "4 open", "the prompt carries the header")
-
-    -- the menu offers the single-task actions
-    reset()
-    select_queue = {
-      function(items)
-        return items[1]
-      end,
-      function(items)
-        local labels = vim.tbl_map(function(m)
-          return m.label
-        end, items)
-        eq(labels, {
-          "open the file",
-          "preview the file (mdview)",
-          "advance status",
-          "advance prio",
-          "finish",
-          "filter ...",
-          "next sort order",
-          "export the list ...",
-          "Backlog of the area",
-          "ROADMAP.md of the area",
-        })
-        return nil
-      end,
-    }
-    dash.open({ tasks = {}, root = root, filter = {} }, { persist = false, backend = "select" })
-    flush()
-
-    -- an empty result says so instead of opening an empty list
-    reset()
-    dash.open({ tasks = {}, root = root, filter = { status = { "parked" } } }, {
-      persist = false,
-      backend = "select",
-    })
-    flush()
-    has(said(), "no open task matches")
-    eq(#asked, 0)
-
-    -- the default seam: `tasks_cmd.dashboard == nil` opens the dashboard, `false` the scratch buffer
-    reset()
-    local opened
-    local orig_open = dash.open
-    dash.open = function(v)
-      opened = v
-    end
-    cmd.dashboard = nil
-    cmd.list({ flags = {}, args = {} })
-    ok(opened, "no --to/--format: the dashboard opens by default")
-    eq(opened.root, root)
-    eq(#opened.tasks, 4)
-    opened = nil
-    cmd.list({ flags = { to = "buffer" }, args = {} })
-    eq(opened, nil, "--to=buffer keeps the old behaviour")
-    vim.cmd("silent! bwipeout!")
-    cmd.dashboard = false
-    cmd.list({ flags = {}, args = {} })
-    eq(opened, nil, "dashboard = false means the scratch buffer")
-    vim.cmd("silent! bwipeout!")
-    dash.open = orig_open
-    cmd.dashboard = nil
-
-    -- ── export: the path typed at the prompt goes as typed ───────────────
-    -- `vim.fn.expand` on it would turn the wildcard in `report[1].csv` into the existing
-    -- `report1.csv` (which the export then overwrote), run backticks through the shell, ...
-    reset()
-    local out_dir = H.tmpdir()
-    H.write(out_dir .. "/report1.csv", "precious\n")
-    local export_state = { root = root, filter = {}, sort = "default" }
-    local export_tasks = scan.all({ root = root })
-    local delivered
-    select_queue = { pick("File ... (CSV)") }
-    input_queue = { out_dir .. "/report[1].csv" }
-    dash.export(export_state, export_tasks, function(d)
-      delivered = d
-    end)
-    eq(delivered, true, "the export went through: " .. said())
-    eq(
-      H.read(out_dir .. "/report1.csv"),
-      "precious\n",
-      "the file the wildcard matches is untouched"
-    )
-    has(H.read(out_dir .. "/report[1].csv") or "", "Task,Status", "the literal name was written")
-
-    -- ── an unexpected error in a batch still ends the progress it started ──
-    -- (a statusline progress that is never finished keeps its timer running for good)
-    local core = require("tasks_nvim.ui.dash_core")
-    local progress = require("lib.nvim.progress")
-    local real_create, real_apply_set, real_apply_done =
-      progress.create, core.apply_set, core.apply_done
-    local finished = {}
-    progress.create = function()
-      return {
-        update = function() end,
-        finish = function(_, text)
-          finished[#finished + 1] = text
-        end,
-      }
-    end
-    core.apply_set = function()
-      error("engine exploded", 0)
-    end
-    core.apply_done = function()
-      error("engine exploded again", 0)
-    end
-    local alpha_task = assert(scan.find("lib.nvim/alpha", { root = root }))
-    local raised, raised_err = pcall(dash.cycle, export_state, { alpha_task }, "status")
-    eq(raised, false, "the error still propagates")
-    has(raised_err, "engine exploded")
-    eq(#finished, 1, "but the progress of `s` was finished")
-    yesno_answer = true
-    local fin_raised, fin_err = pcall(dash.finish, export_state, { alpha_task }, function() end)
-    eq(fin_raised, false)
-    has(fin_err, "engine exploded again")
-    eq(#finished, 2, "and the progress of `D` too")
-    progress.create, core.apply_set, core.apply_done = real_create, real_apply_set, real_apply_done
-  end
-
-  -- ── locate snacks ───────────────────────────────────────────────────────
-  local function find_snacks()
-    -- No ipairs: the first candidate is nil when $SNACKS_DIR is unset.
-    local candidates = {
-      vim.env.SNACKS_DIR or "",
-      vim.fn.stdpath("data") .. "/lazy/snacks.nvim",
-      vim.fs.dirname(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2))) .. "/.deps/snacks.nvim",
-    }
-    for _, dir in ipairs(candidates) do
-      if dir ~= "" and vim.fn.isdirectory(dir .. "/lua/snacks/picker") == 1 then
-        return dir
-      end
-    end
-    return nil
-  end
-
   local function restore()
     vim.notify, vim.ui.select, vim.ui.input = orig.notify, orig.select, orig.input
     confirm.yesno = orig.yesno
@@ -305,22 +181,7 @@ return function(H)
     pcall(vim.cmd, "silent! %bwipeout!")
   end
 
-  local snacks_dir = find_snacks()
   local ok_run, err = pcall(function()
-    fallback_checks()
-    reset_fixture()
-    if not snacks_dir then
-      -- A silent skip made this spec pass with no picker assertion at all. CI sets TASKS_REQUIRE_SNACKS and
-      -- checks snacks.nvim out into .deps/, so there a missing snacks is a failure; locally it is a visible skip.
-      -- scripts/test.sh finds snacks.nvim and hands it over in $SNACKS_DIR.
-      if vim.env.TASKS_REQUIRE_SNACKS == "1" then
-        error("snacks.nvim is required here (TASKS_REQUIRE_SNACKS=1) but was not found")
-      end
-      io.stdout:write(
-        "skip  tasks_dash_picker_spec.lua: snacks.nvim not found, only the fallback was checked (set $SNACKS_DIR)\n"
-      )
-      return
-    end
     vim.opt.rtp:append(snacks_dir)
     local Snacks = require("snacks")
     ok(Snacks.picker, "Snacks.picker loads")

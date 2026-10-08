@@ -144,7 +144,8 @@ return function(H)
     if not snacks_dir then
       -- A silent skip made this spec pass with no picker assertion at all. CI sets TASKS_REQUIRE_SNACKS and
       -- checks snacks.nvim out into .deps/, so there a missing snacks is a failure; locally it is a visible skip
-      -- (a line that starts with `skip`: testing.nvim reports the file as skipped, not as "made no assertions").
+      -- (a line that starts with `skip`: testing.nvim reports the file as skipped, not as "made no assertions";
+      -- that holds only while nothing was asserted before this line, so keep it ahead of the first assertion).
       -- scripts/test.sh finds snacks.nvim and hands it over in $SNACKS_DIR.
       if vim.env.TASKS_REQUIRE_SNACKS == "1" then
         error("snacks.nvim is required here (TASKS_REQUIRE_SNACKS=1) but was not found")
