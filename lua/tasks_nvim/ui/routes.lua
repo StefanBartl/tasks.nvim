@@ -205,7 +205,8 @@ end
 ---@return nil
 function M.register_types()
   -- `desc`: the line lib.nvim's option float shows for a positional argument of this type that has no text of its
-  -- own. A route whose argument plays another role words its own (`TESTS/tasks_usrcmds_help_spec.lua` checks both).
+  -- own. A route whose argument plays another role words its own (`TESTS/tasks_usrcmds_help_spec.lua` and
+  -- `TESTS/tasks_usrcmds_help_style_spec.lua` check both).
   composer.register_type("TASK_AREA", {
     desc = "Area of the vault (a folder with ROADMAP/ or Backlog/)",
     validate = function(raw, spec)
@@ -318,7 +319,8 @@ end
 
 -- Every flag, `key=` and positional argument below carries a one-line `desc` (and, where the values are not
 -- self-explanatory, an `enum_desc`; an argument may rely on the `desc` of its type instead): lib.nvim's option float
--- shows them next to the option, and `TESTS/tasks_usrcmds_help_spec.lua` fails for one that has none. The same word
+-- shows them next to the option, and `TESTS/tasks_usrcmds_help_spec.lua` (on a lib.nvim that can list the undescribed
+-- options) and `TESTS/tasks_usrcmds_help_style_spec.lua` (on any) fail for one that has none. The same word
 -- can mean something else on another route (`to`, `format`, `status`, `area`, ...): each route words its own.
 
 ---The `--force` of every route that can write a `--to=file:` target.

@@ -75,6 +75,11 @@ the version is not tagged yet (the repository is not published).
   its own spec, `tasks_dash_fallback_spec`, which always runs. `tasks_test_script_spec` skips the same way when no POSIX
   bash is usable (WSL's `bash.exe` is not). The paths of a "not found" message are computed only when it is shown (a
   run starts fewer processes).
+- `tasks_usrcmds_help_spec` (the option-float texts) no longer ends in a silent green PASS on a lib.nvim without
+  `composer.help.undocumented`: the guard comes before the first assertion, so the runner reports a SKIP, and it also
+  covers a lib.nvim that has no `composer.help` at all (that used to raise "attempt to index nil"). The shape checks
+  (one line, no closing full stop, 12 to 80 characters, `enum_desc` keys, the text of `TASK_AREA` / `TASK_ID`) moved into
+  `tasks_usrcmds_help_style_spec`, which needs no `undocumented` and always runs.
 - Second review round (the fix and feature commits of the first one, ultracode, 27 confirmed findings): `with_lock` keeps
   its deadline for a stale lock that cannot be deleted and waits out EPERM; the dashboard watcher counts `.<name>.lock`
   events; an overlapping `plans.close` no longer deletes the only copy of a plan; a `done` rollback leaves a README that
