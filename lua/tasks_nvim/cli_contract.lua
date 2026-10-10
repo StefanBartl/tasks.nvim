@@ -12,7 +12,7 @@
 ---  - `--capabilities`: the `tasks.hello` document (`call hello`)
 ---  - `list --format=json [--limit=N] [--offset=N]`: the `tasks.list` document of the same filters as the text form; the
 ---    order is the plan's, `--sort` has no meaning there and is refused
----  - `next --format=json`, `areas [--format=json|tsv]`, `show <id> [--format=json|text]`, `plans [area]`
+---  - `next --format=json`, `areas --format=json|tsv`, `show <id> [--format=json|text]`, `plans [area]`
 ---  - `list --done`: the finished tasks of the Backlogs (tab-separated, like the open ones)
 ---
 --- Only reads. Not its job: the documents (`contract`), the request check (`api`).
@@ -113,14 +113,11 @@ end
 
 -- ── areas, show, plans ───────────────────────────────────────────────────────
 
+---`areas --format=tsv|json` (the plain list of names is `cli.lua`'s).
 ---@param ctx Tasks.CliCtx
+---@param format "tsv"|"json"
 ---@return integer
-local function run_areas(ctx)
-  local format = ctx.args.opt.format or "tsv"
-  if format ~= "tsv" and format ~= "json" then
-    ctx.warn("error: --format must be tsv or json")
-    return 2
-  end
+function M.areas(ctx, format)
   if #ctx.args.pos > 0 then
     ctx.warn("error: areas takes no argument")
     return 2
@@ -354,8 +351,6 @@ end
 function M.register(commands, specs, helpers)
   specs.call = { value = { "params" }, flag = { "pretty" } }
   commands.call = run_call
-  specs.areas = { value = { "format" }, flag = {} }
-  commands.areas = run_areas
   specs.show = { value = { "format" }, flag = {} }
   commands.show = run_show
   specs.plans = { value = {}, flag = {} }

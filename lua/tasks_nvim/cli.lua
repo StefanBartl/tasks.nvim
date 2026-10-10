@@ -80,7 +80,6 @@ commands:
   call <method> [--params=<json>] [--pretty]   the machine contract (tasks-export/1): hello, snapshot, list, task, next,
                                           areas; the document on stdout, a tasks.error on failure (exit 1, 2 for a bad request)
   --capabilities                          the handshake document (call hello)
-  areas [--format=tsv|json]               the areas with their open counts
   show <area>/<slug> [--format=text|json]   one task: fields, readiness, body
   plans [<area>]                          the plan files: id, status, location, title
   estimate [<area>] [--for=<id>] [filters as for list]   sums of effort and value, what is missing, quick wins
@@ -114,7 +113,7 @@ commands:
                                           generated indexes; exit 0/1 (--strict: warnings fail too).
                                           md_lint is a script RUN from the vault (TOOLS/scripts/md_lint.lua): it runs only with
                                           --trust-vault-lint (or TASKS_TRUST_VAULT_LINT=1); else --md-lint=<own copy> or --no-lint
-  areas                                  list the vault's areas
+  areas [--format=names|tsv|json]        list the vault's areas (tsv: with the open counts; json: the tasks.areas document)
   export [--top=N] [--no-links]           all-areas overview as Markdown on stdout (never written)
 
 global options: --vault=<dir> (default: $TASKS_VAULT; no built-in default path)
@@ -274,7 +273,7 @@ local SPECS = {
     value = { "title", "kind", "prio", "effort", "tags", "lang" },
     flag = { "with-plan" },
   },
-  areas = { value = {}, flag = {} },
+  areas = { value = { "format" }, flag = {} },
   export = { value = { "top", "link-prefix" }, flag = { "no-links" } },
 }
 
@@ -1432,6 +1431,18 @@ function commands.template(ctx)
 end
 
 function commands.areas(ctx)
+  local format = ctx.args.opt.format or "names"
+  if format ~= "names" and format ~= "tsv" and format ~= "json" then
+    ctx.warn("error: --format must be names, tsv or json")
+    return 2
+  end
+  if #ctx.args.pos > 0 then
+    ctx.warn("error: areas takes no argument")
+    return 2
+  end
+  if format ~= "names" then
+    return contract_cli.areas(ctx, format)
+  end
   local root, err = vault.root(ctx.eo)
   if not root then
     ctx.warn("error: " .. tostring(err))
