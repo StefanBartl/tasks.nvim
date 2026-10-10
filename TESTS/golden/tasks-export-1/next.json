@@ -1,0 +1,64 @@
+{
+  "alternatives": [
+    {
+      "effort": "S",
+      "id": "cascade.nvim/zeta",
+      "prio": 2,
+      "status": "open",
+      "title": "Zeta builds"
+    },
+    {
+      "effort": "M",
+      "id": "lib.nvim/order-a",
+      "prio": 2,
+      "status": "open",
+      "title": "Größe 日本 😀"
+    },
+    {
+      "effort": "S",
+      "id": "cascade.nvim/eta",
+      "status": "open",
+      "title": "Eta tests"
+    }
+  ],
+  "cdx": [
+    {
+      "effort": "S",
+      "id": "lib.nvim/alpha",
+      "prio": 1,
+      "status": "open",
+      "title": "Alpha \u003cscript>alert(1)\u003c/script> & \"quotes\" \\ slash"
+    }
+  ],
+  "digest": "sha256:906bfed25eb5520f",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "freed": [],
+  "generated_at": "2026-01-01T00:00:00Z",
+  "incomplete": [],
+  "kind": "tasks.next",
+  "open": {
+    "area": 0,
+    "vault": 14
+  },
+  "plugin": "tasks.nvim",
+  "ready": {
+    "area": 0,
+    "vault": 6
+  },
+  "schema": 1,
+  "task": {
+    "effort": "XS",
+    "id": "lib.nvim/alpha-twin",
+    "prio": 1,
+    "reason": "vault",
+    "status": "open",
+    "title": "Twin of alpha (same file)"
+  },
+  "vault": {
+    "id": "vault"
+  }
+}

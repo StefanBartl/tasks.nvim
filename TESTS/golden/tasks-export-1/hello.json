@@ -1,0 +1,87 @@
+{
+  "capabilities": [
+    "areas",
+    "etag",
+    "hello",
+    "list",
+    "next",
+    "snapshot",
+    "task"
+  ],
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "enums": {
+    "actor": [
+      "cdx",
+      "me",
+      "pair"
+    ],
+    "category": [
+      "bug",
+      "security",
+      "performance",
+      "docs",
+      "ruleset"
+    ],
+    "effort": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "\u003cn>d"
+    ],
+    "kind": [
+      "feature",
+      "task",
+      "bug",
+      "idea",
+      "research"
+    ],
+    "prio": [
+      1,
+      2,
+      3
+    ],
+    "severity": [
+      "low",
+      "medium",
+      "high",
+      "critical"
+    ],
+    "status": [
+      "doing",
+      "decision",
+      "blocked",
+      "open",
+      "parked"
+    ],
+    "value": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "kind": "tasks.hello",
+  "limits": {
+    "batch_ops": 100,
+    "body_bytes": 262144,
+    "list_items": 100,
+    "summary": 1000,
+    "title": 300
+  },
+  "plugin": "tasks.nvim",
+  "schema": 1,
+  "schemas": [
+    1
+  ],
+  "vault": {
+    "id": "vault"
+  }
+}

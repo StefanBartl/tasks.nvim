@@ -1,0 +1,51 @@
+{
+  "areas": [
+    {
+      "by_status": {},
+      "name": "ALL",
+      "open": 0
+    },
+    {
+      "by_status": {
+        "blocked": 1,
+        "open": 3
+      },
+      "name": "cascade.nvim",
+      "open": 4
+    },
+    {
+      "by_status": {
+        "blocked": 1,
+        "decision": 1,
+        "doing": 1,
+        "open": 6,
+        "parked": 1
+      },
+      "name": "lib.nvim",
+      "open": 10
+    },
+    {
+      "by_status": {},
+      "name": "migrate.nvim",
+      "open": 0
+    },
+    {
+      "by_status": {},
+      "name": "nvim-config",
+      "open": 0
+    }
+  ],
+  "digest": "sha256:0cfc43b00ec75682",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "kind": "tasks.areas",
+  "plugin": "tasks.nvim",
+  "schema": 1,
+  "vault": {
+    "id": "vault"
+  }
+}

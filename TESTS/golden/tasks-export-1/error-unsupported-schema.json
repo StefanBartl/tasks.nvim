@@ -1,0 +1,17 @@
+{
+  "code": "unsupported_schema",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "kind": "tasks.error",
+  "message": "the request asks for schema 2, this engine speaks 1: update the engine",
+  "plugin": "tasks.nvim",
+  "retryable": false,
+  "schema": 1,
+  "vault": {
+    "id": "vault"
+  }
+}

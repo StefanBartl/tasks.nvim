@@ -1,0 +1,660 @@
+{
+  "areas": [
+    {
+      "by_status": {},
+      "name": "ALL",
+      "open": 0
+    },
+    {
+      "by_status": {
+        "blocked": 1,
+        "open": 3
+      },
+      "name": "cascade.nvim",
+      "open": 4
+    },
+    {
+      "by_status": {
+        "blocked": 1,
+        "decision": 1,
+        "doing": 1,
+        "open": 6,
+        "parked": 1
+      },
+      "name": "lib.nvim",
+      "open": 10
+    },
+    {
+      "by_status": {},
+      "name": "migrate.nvim",
+      "open": 0
+    },
+    {
+      "by_status": {},
+      "name": "nvim-config",
+      "open": 0
+    }
+  ],
+  "counts": {
+    "by_status": {
+      "blocked": 2,
+      "decision": 1,
+      "doing": 1,
+      "open": 9,
+      "parked": 1
+    },
+    "listed": 14,
+    "unlisted": 2
+  },
+  "digest": "sha256:4a2757fc147a4cc5",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "estimate": {
+    "days": 4.75,
+    "n_with_effort": 6,
+    "n_with_value": 3,
+    "n_without_effort": 8,
+    "quick_wins": [
+      "lib.nvim/alpha",
+      "cascade.nvim/zeta"
+    ],
+    "roi": 9,
+    "tasks": 14,
+    "unestimated": [
+      "cascade.nvim/eta",
+      "cascade.nvim/iota",
+      "cascade.nvim/theta",
+      "lib.nvim/alpha-twin",
+      "lib.nvim/beta",
+      "lib.nvim/broken",
+      "lib.nvim/cyc-a",
+      "lib.nvim/cyc-b",
+      "lib.nvim/delta",
+      "lib.nvim/epsilon",
+      "lib.nvim/gamma",
+      "lib.nvim/order-a"
+    ],
+    "value": 11
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "incomplete": [],
+  "kind": "tasks.snapshot",
+  "plan": {
+    "conflict_groups": [
+      {
+        "file": "docs/shared.md",
+        "ids": [
+          "lib.nvim/alpha",
+          "lib.nvim/alpha-twin"
+        ],
+        "stage": 0
+      }
+    ],
+    "critical_path": {
+      "days": 2.5,
+      "path": [
+        "lib.nvim/alpha",
+        "lib.nvim/beta"
+      ],
+      "unknown_effort": 0
+    },
+    "cycles": [
+      [
+        "lib.nvim/cyc-a",
+        "lib.nvim/cyc-b"
+      ]
+    ],
+    "stage_sizes": [
+      8,
+      4
+    ],
+    "summary": {
+      "decision": 1,
+      "freed": 1,
+      "parked": 1,
+      "ready": 6,
+      "stuck": 3,
+      "tasks": 14,
+      "waiting": 2
+    },
+    "warnings": [
+      {
+        "code": "blocked-by-cycle",
+        "id": "lib.nvim/cyc-a",
+        "msg": "blocked_by forms a cycle: lib.nvim/cyc-a -> lib.nvim/cyc-b"
+      },
+      {
+        "code": "blocked-by-parked",
+        "id": "lib.nvim/epsilon",
+        "msg": "lib.nvim/epsilon waits on lib.nvim/delta, which is parked"
+      }
+    ]
+  },
+  "plans": [
+    {
+      "areas": [
+        "lib.nvim",
+        "cascade.nvim"
+      ],
+      "id": "lib.nvim/the-plan",
+      "phase_order": [
+        "build",
+        "test"
+      ],
+      "status": "doing",
+      "title": "The plan",
+      "valid": true
+    }
+  ],
+  "plugin": "tasks.nvim",
+  "rev": "rev:b010ad",
+  "schema": 1,
+  "tasks": [
+    {
+      "actor": "me",
+      "after": [],
+      "area": "lib.nvim",
+      "blocked_by": [],
+      "category": [],
+      "created": "2026-01-01",
+      "etag": "sha256:e0f5beeee8b836de",
+      "file": "lib.nvim/ROADMAP/tasks/gamma.md",
+      "folder": false,
+      "group": "decision|3",
+      "id": "lib.nvim/gamma",
+      "prio": 3,
+      "problems": [],
+      "readiness": {
+        "eff_prio": 3,
+        "leverage": 0,
+        "open_blockers": [],
+        "rank": 1,
+        "stage": 0,
+        "state": "decision"
+      },
+      "refs": [],
+      "slug": "gamma",
+      "status": "decision",
+      "summary": "A summary line for gamma.",
+      "tags": [],
+      "title": "Gamma is a decision",
+      "updated": "2026-01-01",
+      "valid": true,
+      "value": 2
+    },
+    {
+      "actor": "cdx",
+      "actor_written": true,
+      "after": [],
+      "area": "lib.nvim",
+      "blocked_by": [],
+      "category": [
+        "docs"
+      ],
+      "created": "2026-01-01",
+      "effort": "S",
+      "effort_days": 0.5,
+      "etag": "sha256:e1e83d9a74e1f427",
+      "file": "lib.nvim/ROADMAP/tasks/alpha.md",
+      "folder": false,
+      "group": "open|1",
+      "id": "lib.nvim/alpha",
+      "kind": "feature",
+      "prio": 1,
+      "problems": [],
+      "readiness": {
+        "eff_prio": 1,
+        "leverage": 2,
+        "open_blockers": [],
+        "rank": 2,
+        "same_file": [
+          "lib.nvim/alpha-twin"
+        ],
+        "stage": 0,
+        "state": "ready"
+      },
+      "refs": [
+        "docs/shared.md",
+        "\u003cexternal>/secret.md",
+        "\u003cexternal>/notes.md",
+        "repo@abc1234"
+      ],
+      "roi": 10,
+      "slug": "alpha",
+      "status": "open",
+      "steps": {
+        "dropped": 1,
+        "ticked": 1,
+        "total": 2
+      },
+      "summary": "The body of alpha.",
+      "tags": [
+        "ui",
+        "docs"
+      ],
+      "title": "Alpha \u003cscript>alert(1)\u003c/script> & \"quotes\" \\ slash",
+      "updated": "2026-01-01",
+      "valid": true,
+      "value": 5
+    },
+    {
+      "after": [],
+      "area": "lib.nvim",
+      "blocked_by": [],
+      "category": [],
+      "created": "2026-01-01",
+      "effort": "XS",
+      "effort_days": 0.25,
+      "etag": "sha256:c337ac829c9ce237",
+      "file": "lib.nvim/ROADMAP/tasks/alpha-twin.md",
+      "folder": false,
+      "group": "open|1",
+      "id": "lib.nvim/alpha-twin",
+      "prio": 1,
+      "problems": [],
+      "readiness": {
+        "eff_prio": 1,
+        "leverage": 0,
+        "open_blockers": [],
+        "rank": 3,
+        "same_file": [
+          "lib.nvim/alpha"
+        ],
+        "stage": 0,
+        "state": "ready"
+      },
+      "refs": [
+        "docs/shared.md"
+      ],
+      "slug": "alpha-twin",
+      "status": "open",
+      "summary": "A summary line for alpha-twin.",
+      "tags": [],
+      "title": "Twin of alpha (same file)",
+      "updated": "2026-01-01",
+      "valid": true
+    },
+    {
+      "after": [],
+      "area": "lib.nvim",
+      "blocked_by": [],
+      "category": [],
+      "created": "2026-01-01",
+      "effort": "M",
+      "effort_days": 1,
+      "etag": "sha256:fa1178ce10a3ef46",
+      "file": "lib.nvim/ROADMAP/tasks/order-a.md",
+      "folder": false,
+      "group": "open|2",
+      "id": "lib.nvim/order-a",
+      "order": 1.5,
+      "prio": 2,
+      "problems": [],
+      "readiness": {
+        "eff_prio": 2,
+        "leverage": 0,
+        "open_blockers": [],
+        "rank": 4,
+        "stage": 0,
+        "state": "ready"
+      },
+      "refs": [],
+      "slug": "order-a",
+      "status": "open",
+      "summary": "A summary line for order-a.",
+      "tags": [],
+      "title": "Größe 日本 😀",
+      "updated": "2026-01-01",
+      "valid": true
+    },
+    {
+      "actor": "me",
+      "actor_written": true,
+      "after": [],
+      "area": "cascade.nvim",
+      "blocked_by": [],
+      "category": [],
+      "created": "2026-01-01",
+      "effort": "S",
+      "effort_days": 0.5,
+      "etag": "sha256:206982c0530f30de",
+      "file": "cascade.nvim/ROADMAP/tasks/zeta.md",
+      "folder": false,
+      "group": "open|2",
+      "id": "cascade.nvim/zeta",
+      "phase": "build",
+      "plan": "lib.nvim/the-plan",
+      "prio": 2,
+      "problems": [],
+      "readiness": {
+        "eff_prio": 2,
+        "leverage": 0,
+        "open_blockers": [],
+        "rank": 5,
+        "stage": 0,
+        "state": "ready"
+      },
+      "refs": [],
+      "roi": 8,
+      "slug": "zeta",
+      "status": "open",
+      "summary": "A summary line for zeta.",
+      "tags": [],
+      "title": "Zeta builds",
+      "updated": "2026-01-01",
+      "valid": true,
+      "value": 4
+    },
+    {
+      "after": [],
+      "area": "lib.nvim",
+      "blocked_by": [],
+      "category": [],
+      "created": "2026-01-01",
+      "etag": "sha256:acf9de9ab4da0793",
+      "file": "lib.nvim/ROADMAP/tasks/broken.md",
+      "folder": false,
+      "group": "open|-",
+      "id": "lib.nvim/broken",
+      "problems": [
+        {
+          "code": "bad-prio",
+          "msg": "prio must be 1, 2 or 3, got \"9\""
+        },
+        {
+          "code": "bad-effort",
+          "msg": "effort 'huge' is neither XS..XL nor days like 0.5d"
+        }
+      ],
+      "readiness": {
+        "leverage": 0,
+        "open_blockers": [],
+        "rank": 6,
+        "stage": 0,
+        "state": "ready"
+      },
+      "refs": [],
+      "slug": "broken",
+      "status": "open",
+      "summary": "A summary line for broken.",
+      "tags": [],
+      "title": "Broken task",
+      "updated": "2026-01-01",
+      "valid": false
+    },
+    {
+      "after": [],
+      "area": "cascade.nvim",
+      "blocked_by": [
+        "lib.nvim/old-done"
+      ],
+      "category": [],
+      "created": "2026-01-01",
+      "etag": "sha256:75c1ec6cbcc23dad",
+      "file": "cascade.nvim/ROADMAP/tasks/theta.md",
+      "folder": false,
+      "group": "blocked|-",
+      "id": "cascade.nvim/theta",
+      "problems": [],
+      "readiness": {
+        "leverage": 0,
+        "open_blockers": [],
+        "rank": 7,
+        "stage": 0,
+        "state": "freed"
+      },
+      "refs": [],
+      "slug": "theta",
+      "status": "blocked",
+      "summary": "A summary line for theta.",
+      "tags": [],
+      "title": "Theta was blocked by a finished task",
+      "updated": "2026-01-01",
+      "valid": true
+    },
+    {
+      "after": [],
+      "area": "lib.nvim",
+      "blocked_by": [],
+      "category": [],
+      "created": "2026-01-01",
+      "etag": "sha256:6c4aef85fbbd3fff",
+      "file": "lib.nvim/ROADMAP/tasks/delta.md",
+      "folder": false,
+      "group": "parked|3",
+      "id": "lib.nvim/delta",
+      "prio": 3,
+      "problems": [],
+      "readiness": {
+        "eff_prio": 3,
+        "leverage": 1,
+        "open_blockers": [],
+        "rank": 8,
+        "stage": 0,
+        "state": "parked"
+      },
+      "refs": [],
+      "slug": "delta",
+      "status": "parked",
+      "summary": "A summary line for delta.",
+      "tags": [],
+      "title": "Delta is parked",
+      "updated": "2026-01-01",
+      "valid": true
+    },
+    {
+      "after": [],
+      "area": "lib.nvim",
+      "blocked_by": [
+        "lib.nvim/alpha"
+      ],
+      "category": [],
+      "created": "2026-01-01",
+      "effort": "2d",
+      "effort_days": 2,
+      "etag": "sha256:612aad15dc987038",
+      "file": "lib.nvim/ROADMAP/tasks/beta.md",
+      "folder": false,
+      "group": "doing|2",
+      "id": "lib.nvim/beta",
+      "prio": 2,
+      "problems": [],
+      "readiness": {
+        "eff_prio": 2,
+        "leverage": 0,
+        "open_blockers": [
+          "lib.nvim/alpha"
+        ],
+        "rank": 9,
+        "stage": 1,
+        "state": "waiting"
+      },
+      "refs": [],
+      "slug": "beta",
+      "status": "doing",
+      "summary": "A summary line for beta.",
+      "tags": [],
+      "title": "Beta waits for alpha",
+      "updated": "2026-01-01",
+      "valid": true
+    },
+    {
+      "after": [],
+      "area": "cascade.nvim",
+      "blocked_by": [],
+      "category": [],
+      "created": "2026-01-01",
+      "effort": "S",
+      "effort_days": 0.5,
+      "etag": "sha256:a62f0b463bd31a5e",
+      "file": "cascade.nvim/ROADMAP/tasks/eta.md",
+      "folder": false,
+      "group": "open|-",
+      "id": "cascade.nvim/eta",
+      "phase": "test",
+      "plan": "lib.nvim/the-plan",
+      "problems": [],
+      "readiness": {
+        "leverage": 0,
+        "open_blockers": [],
+        "rank": 10,
+        "stage": 1,
+        "state": "ready"
+      },
+      "refs": [],
+      "slug": "eta",
+      "status": "open",
+      "summary": "A summary line for eta.",
+      "tags": [],
+      "title": "Eta tests",
+      "updated": "2026-01-01",
+      "valid": true
+    },
+    {
+      "after": [],
+      "area": "cascade.nvim",
+      "blocked_by": [
+        "lib.nvim/alpha"
+      ],
+      "category": [],
+      "created": "2026-01-01",
+      "etag": "sha256:ced00be7e0993e05",
+      "file": "cascade.nvim/ROADMAP/tasks/iota.md",
+      "folder": false,
+      "group": "open|-",
+      "id": "cascade.nvim/iota",
+      "problems": [],
+      "readiness": {
+        "leverage": 0,
+        "open_blockers": [
+          "lib.nvim/alpha"
+        ],
+        "rank": 11,
+        "stage": 1,
+        "state": "waiting"
+      },
+      "refs": [],
+      "slug": "iota",
+      "status": "open",
+      "summary": "A summary line for iota.",
+      "tags": [],
+      "title": "Iota waits across areas",
+      "updated": "2026-01-01",
+      "valid": true
+    },
+    {
+      "after": [],
+      "area": "lib.nvim",
+      "blocked_by": [
+        "lib.nvim/delta"
+      ],
+      "category": [],
+      "created": "2026-01-01",
+      "etag": "sha256:ee2c2e7ac87e7bf5",
+      "file": "lib.nvim/ROADMAP/tasks/epsilon.md",
+      "folder": false,
+      "group": "blocked|-",
+      "id": "lib.nvim/epsilon",
+      "problems": [],
+      "readiness": {
+        "leverage": 0,
+        "open_blockers": [
+          "lib.nvim/delta"
+        ],
+        "rank": 12,
+        "stage": 1,
+        "state": "stuck"
+      },
+      "refs": [],
+      "slug": "epsilon",
+      "status": "blocked",
+      "summary": "A summary line for epsilon.",
+      "tags": [],
+      "title": "Epsilon is stuck behind a parked task",
+      "updated": "2026-01-01",
+      "valid": true
+    },
+    {
+      "after": [],
+      "area": "lib.nvim",
+      "blocked_by": [
+        "lib.nvim/cyc-b"
+      ],
+      "category": [],
+      "created": "2026-01-01",
+      "etag": "sha256:8d08a9d432207977",
+      "file": "lib.nvim/ROADMAP/tasks/cyc-a.md",
+      "folder": false,
+      "group": "open|-",
+      "id": "lib.nvim/cyc-a",
+      "problems": [],
+      "readiness": {
+        "in_cycle": true,
+        "leverage": 0,
+        "open_blockers": [
+          "lib.nvim/cyc-b"
+        ],
+        "rank": 13,
+        "state": "stuck"
+      },
+      "refs": [],
+      "slug": "cyc-a",
+      "status": "open",
+      "summary": "A summary line for cyc-a.",
+      "tags": [],
+      "title": "Cycle A",
+      "updated": "2026-01-01",
+      "valid": true
+    },
+    {
+      "after": [],
+      "area": "lib.nvim",
+      "blocked_by": [
+        "lib.nvim/cyc-a"
+      ],
+      "category": [],
+      "created": "2026-01-01",
+      "etag": "sha256:cd98e18158850e82",
+      "file": "lib.nvim/ROADMAP/tasks/cyc-b.md",
+      "folder": false,
+      "group": "open|-",
+      "id": "lib.nvim/cyc-b",
+      "problems": [],
+      "readiness": {
+        "in_cycle": true,
+        "leverage": 0,
+        "open_blockers": [
+          "lib.nvim/cyc-a"
+        ],
+        "rank": 14,
+        "state": "stuck"
+      },
+      "refs": [],
+      "slug": "cyc-b",
+      "status": "open",
+      "summary": "A summary line for cyc-b.",
+      "tags": [],
+      "title": "Cycle B",
+      "updated": "2026-01-01",
+      "valid": true
+    }
+  ],
+  "unlisted": [
+    {
+      "code": "done-in-roadmap",
+      "id": "lib.nvim/done-here",
+      "status": "done"
+    },
+    {
+      "code": "unknown-status",
+      "id": "lib.nvim/odd-status",
+      "status": "wip"
+    }
+  ],
+  "vault": {
+    "id": "vault"
+  }
+}

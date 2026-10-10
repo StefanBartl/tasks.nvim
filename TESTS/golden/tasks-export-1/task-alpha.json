@@ -1,0 +1,93 @@
+{
+  "body": "\nThe body of alpha.\n\n## Plan\n\n- [x] 1. first\n- [ ] 2. second\n- [ ] 3. third (dropped)\n",
+  "body_truncated": false,
+  "digest": "sha256:e99ce2a7e3af461c",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "kind": "tasks.task",
+  "plugin": "tasks.nvim",
+  "rev": "rev:9f2ae5",
+  "schema": 1,
+  "steps": [
+    {
+      "dropped": false,
+      "n": 1,
+      "text": "1. first",
+      "ticked": true
+    },
+    {
+      "dropped": false,
+      "n": 2,
+      "text": "2. second",
+      "ticked": false
+    },
+    {
+      "dropped": true,
+      "n": 3,
+      "text": "3. third (dropped)",
+      "ticked": false
+    }
+  ],
+  "task": {
+    "actor": "cdx",
+    "actor_written": true,
+    "after": [],
+    "area": "lib.nvim",
+    "blocked_by": [],
+    "category": [
+      "docs"
+    ],
+    "created": "2026-01-01",
+    "effort": "S",
+    "effort_days": 0.5,
+    "etag": "sha256:e1e83d9a74e1f427",
+    "file": "lib.nvim/ROADMAP/tasks/alpha.md",
+    "folder": false,
+    "group": "open|1",
+    "id": "lib.nvim/alpha",
+    "kind": "feature",
+    "prio": 1,
+    "problems": [],
+    "readiness": {
+      "eff_prio": 1,
+      "leverage": 2,
+      "open_blockers": [],
+      "rank": 2,
+      "same_file": [
+        "lib.nvim/alpha-twin"
+      ],
+      "stage": 0,
+      "state": "ready"
+    },
+    "refs": [
+      "docs/shared.md",
+      "\u003cexternal>/secret.md",
+      "\u003cexternal>/notes.md",
+      "repo@abc1234"
+    ],
+    "roi": 10,
+    "slug": "alpha",
+    "status": "open",
+    "steps": {
+      "dropped": 1,
+      "ticked": 1,
+      "total": 2
+    },
+    "summary": "The body of alpha.",
+    "tags": [
+      "ui",
+      "docs"
+    ],
+    "title": "Alpha \u003cscript>alert(1)\u003c/script> & \"quotes\" \\ slash",
+    "updated": "2026-01-01",
+    "valid": true,
+    "value": 5
+  },
+  "vault": {
+    "id": "vault"
+  }
+}
