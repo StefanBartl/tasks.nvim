@@ -71,6 +71,12 @@ return function(H)
   eq(json.encode({ "\1\31" }), '["\\u0001\\u001f"]', "control bytes")
   eq(json.encode({ "a\127b" }), '["a\\u007fb"]', "DEL")
   eq(
+    json.encode({ "a\194\155b\194\128" }),
+    '["a\\u009bb\\u0080"]',
+    "the C1 controls, CSI among them"
+  )
+  eq(json.encode({ "\194\160" }), '["\194\160"]', "U+00A0 (no-break space) is no control")
+  eq(
     json.encode({ "</script><!--" }),
     '["\\u003c/script>\\u003c!--"]',
     "safe inside a <script> block"

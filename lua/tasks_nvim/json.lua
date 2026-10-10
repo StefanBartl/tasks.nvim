@@ -10,8 +10,9 @@
 ---  - numbers: a whole number below 2^53 is written without a fraction, any other number with the fewest digits that
 ---    read back as the same number; `NaN`, `inf` and a whole number of 2^53 or more are an ERROR (a silent loss of
 ---    digits is the worst answer a contract can give); `-0` is `0`
----  - strings: valid UTF-8 (a bad byte becomes U+FFFD), every control byte, `"`, `\`, U+2028, U+2029 and `<` escaped:
----    the text can sit inside a `<script>` block as it is
+---  - strings: valid UTF-8 (a bad byte becomes U+FFFD), every control byte (the C1 controls U+0080 to U+009F too),
+---    `"`, `\`, U+2028, U+2029 and `<` escaped: the text can sit inside a `<script>` block and be printed to a terminal
+---    as it is
 ---  - no whitespace (the form that is hashed); `indent` gives the same document readable (golden files)
 ---  - a table that is neither a list nor an object (holes, mixed keys) is an error that names the path
 ---
@@ -146,6 +147,10 @@ local function string_(s)
   end)
   s = s:gsub("\226\128[\168\169]", function(c)
     return c:byte(3) == 168 and "\\u2028" or "\\u2029"
+  end)
+  -- the 8-bit C1 controls (CSI is U+009B) are two bytes in UTF-8; a terminal may act on them
+  s = s:gsub("\194[\128-\159]", function(c)
+    return ("\\u%04x"):format(c:byte(2))
   end)
   return '"' .. s .. '"'
 end

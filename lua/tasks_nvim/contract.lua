@@ -325,6 +325,7 @@ end
 ---@field rank table<string, integer>       # 1-based position in plan order.
 ---@field errors string[]                   # Folders that could not be read (relative).
 ---@field all Tasks.Task[]
+---@field shared Tasks.PlanShared           # What `plan_scope` read: the readiness filters ask it again.
 
 ---Scan the vault once and compute the plan once.
 ---@param opts? { root?: string }
@@ -378,6 +379,7 @@ function M.view(opts)
     rank = rank,
     errors = rel_errors,
     all = all,
+    shared = shared,
   },
     nil
 end
@@ -566,9 +568,10 @@ function M.snapshot(opts)
   return seal(doc, rev_of(view, entries)), nil
 end
 
----A page of tasks in plan order, optionally of one area or status.
+---A page of tasks in plan order, optionally of one area or status. The command line adds what the dispatcher does not
+---offer (`opts.filter`: every filter of `list`; `opts.readiness`: `ready` or `waiting`).
 ---@param params? { area?: string, status?: string[], limit?: integer, offset?: integer }
----@param opts? { root?: string, view?: Tasks.ContractView }
+---@param opts? { root?: string, view?: Tasks.ContractView, filter?: Tasks.Filter, readiness?: "ready"|"waiting" }
 ---@return table|nil doc
 ---@return Tasks.ContractError|string|nil err
 function M.list(params, opts)
@@ -623,6 +626,16 @@ function M.list(params, opts)
     if (params.area == nil or t.area == params.area) and (want == nil or want[t.status]) then
       matching[#matching + 1] = t
     end
+  end
+  if opts and opts.filter and next(opts.filter) ~= nil then
+    matching = (model.filter(matching, opts.filter))
+  end
+  if opts and opts.readiness then
+    local kept, kerr = plan_scope.filter_readiness(matching, opts.readiness, view.root, view.shared)
+    if not kept then
+      return nil, kerr
+    end
+    matching = kept
   end
   local items = {}
   for i = offset + 1, math.min(offset + limit, #matching) do

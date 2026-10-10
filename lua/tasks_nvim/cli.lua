@@ -24,6 +24,9 @@ local index = require("tasks_nvim.index")
 local model = require("tasks_nvim.model")
 local done_flow = require("tasks_nvim.done_flow")
 local estimate = require("tasks_nvim.estimate")
+local contract_cli = require("tasks_nvim.cli_contract")
+---@type Tasks.CliContractHelpers
+local contract_helpers = {}
 local lists = require("tasks_nvim.lists")
 local quick_wins = require("tasks_nvim.quick_wins")
 local fsio = require("tasks_nvim.fsio")
@@ -58,7 +61,8 @@ commands:
   list [<area>] [--status=a,b] [--prio=1,2|<=2] [--effort=S,M|<=M] [--kind=k] [--tag=t]
        [--category=c,d] [--severity=high,critical] [--value=4,5|>=4] [--actor=cdx,me,pair,none]
        [--stale=<days>|refs] [--stale-refs] [--blocked] [--ready|--waiting] [--unestimated] [--quick-win]
-       [--sort=default|prio-effort|severity|frecency|roi] [--format=tsv|ids]   open tasks, sorted; one line each
+       [--sort=default|prio-effort|severity|frecency|roi] [--format=tsv|ids|json] [--done]   open tasks, sorted; one line each
+       (--format=json: the tasks.list document in plan order, with [--limit=1..100] [--offset=N]; --done: the finished tasks)
        (categories: bug security performance docs ruleset; --category=bug also finds kind=bug;
         --sort=prio-effort: small first within a prio; --sort=severity: critical first;
         --sort=roi: most value per effort first, tasks without value or effort last;
@@ -72,7 +76,13 @@ commands:
        [--write=<file> [--scope=<name>] [--check] ]   replace only the generated block of a document
                                           stages, ready tasks, decisions by leverage, critical path
                                           (--for: the task and everything that has to be finished before it)
-  next [<area>] [--n=3] [--actor=cdx|me|pair|none]   the best ready tasks, with the reason
+  next [<area>] [--n=3] [--actor=cdx|me|pair|none] [--format=text|json]   the best ready tasks, with the reason
+  call <method> [--params=<json>] [--pretty]   the machine contract (tasks-export/1): hello, snapshot, list, task, next,
+                                          areas; the document on stdout, a tasks.error on failure (exit 1, 2 for a bad request)
+  --capabilities                          the handshake document (call hello)
+  areas [--format=tsv|json]               the areas with their open counts
+  show <area>/<slug> [--format=text|json]   one task: fields, readiness, body
+  plans [<area>]                          the plan files: id, status, location, title
   estimate [<area>] [--for=<id>] [filters as for list]   sums of effort and value, what is missing, quick wins
   list|plan|estimate @<name> [more options]   run a named list (see `lists`); options you give override its own
   lists [save <name>|delete <name>|rename <old> <new>|show <name>] [filters] [--sort=] [--area=] [--desc=]
@@ -133,8 +143,19 @@ local SPECS = {
       "phase",
       "sort",
       "format",
+      "limit",
+      "offset",
     },
-    flag = { "blocked", "all", "stale-refs", "ready", "waiting", "unestimated", "quick-win" },
+    flag = {
+      "blocked",
+      "all",
+      "done",
+      "stale-refs",
+      "ready",
+      "waiting",
+      "unestimated",
+      "quick-win",
+    },
   },
   plan = {
     value = {
@@ -213,7 +234,7 @@ local SPECS = {
     },
     flag = { "blocked", "stale-refs", "unestimated", "by-actor", "paths" },
   },
-  next = { value = { "n", "actor" }, flag = {} },
+  next = { value = { "n", "actor", "format" }, flag = {} },
   ["plan-new"] = {
     value = { "areas", "target", "phases", "gate", "status", "summary", "slug", "title" },
     flag = {},
@@ -418,16 +439,32 @@ function commands.list(ctx)
     return 2
   end
   local format = args.opt.format or "tsv"
-  if format ~= "tsv" and format ~= "ids" then
-    ctx.warn("error: --format must be tsv or ids")
+  if format ~= "tsv" and format ~= "ids" and format ~= "json" then
+    ctx.warn("error: --format must be tsv, ids or json")
     return 2
   end
   if #args.pos > 1 then
     ctx.warn("error: list takes at most one area")
     return 2
   end
+  if format ~= "json" and (args.opt.limit ~= nil or args.opt.offset ~= nil) then
+    ctx.warn("error: --limit and --offset go with --format=json")
+    return 2
+  end
+  if
+    args.opt.done and (format == "json" or args.opt.ready or args.opt.waiting or args.opt.sort)
+  then
+    ctx.warn(
+      "error: --done lists the finished tasks as tsv or ids; it takes no --sort, --ready, --waiting or json form"
+    )
+    return 2
+  end
 
   local area
+  -- `all` means every area, as it does for plan, next and estimate
+  if args.pos[1] == "all" then
+    args.pos[1] = nil
+  end
   if args.pos[1] and not args.opt.all then
     local root, rerr = vault.root(eo)
     if not root then
@@ -439,6 +476,12 @@ function commands.list(ctx)
       return 1
     end
     area = args.pos[1]
+  end
+  if args.opt.done then
+    return contract_cli.list_done(ctx, filter, area, format, contract_helpers)
+  end
+  if format == "json" then
+    return contract_cli.list_json(ctx, filter, area, contract_helpers)
   end
   local open, skipped, errors = scan.open_tasks(vim.tbl_extend("force", eo, { area = area }))
   if not open then
@@ -971,6 +1014,14 @@ commands["next"] = function(ctx)
     ctx.warn("error: unknown actor in --actor: " .. actor .. " (expected cdx, me, pair or none)")
     return 2
   end
+  local format = ctx.args.opt.format or "text"
+  if format ~= "text" and format ~= "json" then
+    ctx.warn("error: --format must be text or json")
+    return 2
+  end
+  if format == "json" then
+    return contract_cli.next_json(ctx, area, count, actor)
+  end
   local pick, err = next_pick.pick_from_vault({
     root = ctx.eo.root,
     area = area,
@@ -1431,6 +1482,12 @@ end
 ---@param argv string[]
 ---@param io? Tasks.CliIO  defaults to stdout/stderr
 ---@return integer exit_code
+contract_helpers.area_arg = area_arg
+contract_helpers.filter_from = filter_from
+contract_helpers.to_int = to_int
+contract_helpers.cellv = cellv
+contract_cli.register(commands, SPECS, contract_helpers)
+
 function M.run(argv, io)
   io = io or M.stdio
   local function say(line)
@@ -1456,6 +1513,15 @@ function M.run(argv, io)
       moved[#moved + 1] = argv[i]
     end
     for i = 1, lead do
+      moved[#moved + 1] = argv[i]
+    end
+    argv = moved
+  end
+
+  if argv[1] == "--capabilities" then
+    -- the handshake: `call hello` under a name that needs no method word
+    local moved = { "call", "hello" }
+    for i = 2, #argv do
       moved[#moved + 1] = argv[i]
     end
     argv = moved
