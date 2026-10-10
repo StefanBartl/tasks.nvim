@@ -48,6 +48,7 @@ blockers, plan or estimate is valid and stays visible everywhere.
     chain = { marker_docs = {} },
     steps = { ask_finish = false },
     quick_wins = { min_value = 4, max_effort = "S" },
+    lists = {},
   })
 <
 
@@ -72,6 +73,10 @@ blockers, plan or estimate is valid and stays visible everywhere.
                            headless CLI reads `$TASKS_MARKER_DOCS` (comma separated).
   quick_wins.min_value     A quick win has at least this value (1-5) ...
   quick_wins.max_effort    ... and at most this effort (`XS`..`XL` or days like `0.5d`).
+  lists                    Named lists, `{ ["name"] = { effort = "<=S", value = ">=4",
+                           sort = "roi", desc = "..." } }`: the option words of
+                           `:Tasks list`. Run with `--list={name}` or `tasks list @name`.
+                           A later `setup()` replaces the set; see :Tasks lists.
   steps.ask_finish         In a task buffer, ticking the last `## Plan` step asks to finish
                            the task (off by default: it adds an autocommand).
   keys.dashboard           Dashboard list keys: action = key, or false.
@@ -115,6 +120,8 @@ A wrong key or value is ignored with a message and listed in
   :Tasks estimate [{area}|all] [--for={id}] [filters] [--walk]
                                          Sums of effort and value, what is
                                          missing; `--walk` asks for them.
+  :Tasks lists                           Pick a named list and open it as the dashboard.
+  :Tasks list --list={name} [more options]   Run a named list; options you give win.
   :Tasks quickwins [{area}|all] [filters] [--to=] [--format=md|tsv|ids] [--by-actor] [--paths] [--report={file}]
                                          The quick wins, best return first, and the
                                          small tasks that miss a value.
@@ -139,8 +146,9 @@ No global key is mapped. In the dashboard list (`g?` shows this):
 
   <CR> open   <Tab> mark   s status   p prio   D finish   f filter chip
   o sort      e export     gp preview  r rescan  gb backlog  gr roadmap
+  gl lists (apply, save the current view as a list, delete a saved one)
 
-In the input window the same actions are on `<M-s> <M-p> <M-d> <M-f> <M-o>
+In the input window the same actions are on `<M-s> <M-p> <M-d> <M-f> <M-l> <M-o>
 <M-e> <M-r> <M-b> <M-m> <M-v> <M-?>` (they shadow some snacks defaults).
 
 In the task form: `<Space>`/`<CR>` tick a line, `<C-s>` submit, `q`/`<C-q>`

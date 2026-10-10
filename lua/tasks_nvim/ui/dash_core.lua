@@ -434,16 +434,10 @@ function M.cycle_sort(cur)
   return model.SORTS[2]
 end
 
----The filter is exactly the quick-win definition in force (a value bound and an effort bound at the thresholds, no
----list of exact values beside them): it is shown, and toggled, as ONE chip.
 ---@param f Tasks.Filter|nil
 ---@return boolean
 function M.is_quick_win_filter(f)
-  if not f or not f.value_min or not f.effort_max then
-    return false
-  end
-  local th = require("tasks_nvim.estimate").thresholds()
-  return f.value_min == th.value and f.effort_max == th.effort and not f.value and not f.effort
+  return require("tasks_nvim.estimate").is_quick_win_filter(f)
 end
 
 ---One chip per active filter dimension, in a fixed order.

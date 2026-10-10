@@ -307,6 +307,24 @@ function M.register_types()
     end,
   })
 
+  composer.register_type("TASK_LIST", {
+    desc = "Name of a list (built in, saved, or from setup({ lists }))",
+    validate = function(raw)
+      local entry, err = require("tasks_nvim.lists").get(raw)
+      if entry then
+        return true, raw, nil
+      end
+      return false, nil, err
+    end,
+    complete = function(arg_lead)
+      local names = {}
+      for _, e in ipairs(require("tasks_nvim.lists").all()) do
+        names[#names + 1] = e.name
+      end
+      return prefix_ci(names, arg_lead)
+    end,
+  })
+
   composer.register_type("TASK_IDS", {
     validate = function(raw)
       return true, raw, nil
@@ -406,6 +424,11 @@ local LIST_FLAGS = {
     desc = "Only tasks for these actors; none = unclassified",
   },
   { name = "tag", type = "TASK_TAGS", desc = "Only tasks carrying one of these tags" },
+  {
+    name = "list",
+    type = "TASK_LIST",
+    desc = "Start from a named list; the options you give win",
+  },
   {
     name = "stale",
     type = "STRING",
@@ -889,6 +912,16 @@ local function nested_routes()
       desc = "Sums of effort and value of an area (default: all) or of one task and everything before it, with what is missing; --walk goes through the tasks without effort or value and asks for them one by one",
       run = function(ctx)
         cmd().estimate(ctx)
+      end,
+    },
+
+    {
+      path = { "task", "lists" },
+      args = {},
+      flags = {},
+      desc = "Pick a named list (built in, saved, or from setup({ lists })) and open it as the task dashboard; save and delete lists with the dashboard key gl or `tasks lists`",
+      run = function(ctx)
+        cmd().lists(ctx)
       end,
     },
 

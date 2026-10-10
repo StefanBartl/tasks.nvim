@@ -24,6 +24,7 @@ local index = require("tasks_nvim.index")
 local model = require("tasks_nvim.model")
 local done_flow = require("tasks_nvim.done_flow")
 local estimate = require("tasks_nvim.estimate")
+local lists = require("tasks_nvim.lists")
 local quick_wins = require("tasks_nvim.quick_wins")
 local fsio = require("tasks_nvim.fsio")
 local mutate = require("tasks_nvim.mutate")
@@ -73,6 +74,10 @@ commands:
                                           (--for: the task and everything that has to be finished before it)
   next [<area>] [--n=3] [--actor=cdx|me|pair|none]   the best ready tasks, with the reason
   estimate [<area>] [--for=<id>] [filters as for list]   sums of effort and value, what is missing, quick wins
+  list|plan|estimate @<name> [more options]   run a named list (see `lists`); options you give override its own
+  lists [save <name>|delete <name>|rename <old> <new>|show <name>] [filters] [--sort=] [--area=] [--desc=]
+                                          the named lists (built in, saved, from setup({ lists })); `save` stores the
+                                          filters you give under a name, `delete` / `rename` change saved lists only
   quickwins [<area>] [--status=a,b] [--prio=..] [--kind=k] [--tag=t] [--category=c,d] [--actor=..] [--stale=..] [--plan=<id>]
        [--min-value=1..5] [--max-effort=XS..XL|0.5d] [--format=tsv|md|ids] [--by-actor] [--paths] [--report=<file>]
                                           the quick wins (value >= 4 and effort <= S, both written; thresholds from
@@ -124,6 +129,8 @@ local SPECS = {
       "value",
       "actor",
       "stale",
+      "plan",
+      "phase",
       "sort",
       "format",
     },
@@ -145,6 +152,7 @@ local SPECS = {
       "value",
       "actor",
       "stale",
+      "phase",
       "format",
     },
     flag = { "blocked", "stale-refs", "ready", "unestimated", "with-steps", "check", "quick-win" },
@@ -165,6 +173,26 @@ local SPECS = {
       "stale",
     },
     flag = { "blocked", "stale-refs", "unestimated", "quick-win" },
+  },
+  lists = {
+    value = {
+      "status",
+      "prio",
+      "effort",
+      "kind",
+      "category",
+      "severity",
+      "value",
+      "actor",
+      "tag",
+      "stale",
+      "plan",
+      "phase",
+      "sort",
+      "desc",
+      "area",
+    },
+    flag = { "blocked", "stale-refs", "unestimated", "quick-win", "ready", "waiting" },
   },
   quickwins = {
     value = {
@@ -328,6 +356,8 @@ local function filter_option_map(opt)
     actor = opt.actor --[[@as string|nil]],
     stale = opt.stale --[[@as string|nil]],
     stale_refs = opt["stale-refs"] == true,
+    plan = opt.plan --[[@as string|nil]],
+    phase = opt.phase --[[@as string|nil]],
     blocked = opt.blocked == true,
     unestimated = opt.unestimated == true,
     quick_win = opt["quick-win"] == true,
@@ -707,6 +737,160 @@ function commands.quickwins(ctx)
     end
   end
   return rc
+end
+
+---The list a `lists save` stores: the filter words of the command line as a definition.
+---@param opt table<string, string|boolean>
+---@return Tasks.ListDef
+local function def_from_options(opt)
+  local def = {}
+  for _, key in ipairs({
+    "status",
+    "prio",
+    "effort",
+    "kind",
+    "category",
+    "severity",
+    "value",
+    "actor",
+    "tag",
+    "stale",
+    "plan",
+    "phase",
+    "sort",
+    "desc",
+    "area",
+  }) do
+    if opt[key] ~= nil then
+      def[key] = tostring(opt[key])
+    end
+  end
+  def.blocked = opt.blocked == true or nil
+  def.unestimated = opt.unestimated == true or nil
+  def.stale_refs = opt["stale-refs"] == true or nil
+  def.quick_win = opt["quick-win"] == true or nil
+  if opt.ready and opt.waiting then
+    def.readiness = "both"
+  else
+    def.readiness = (opt.ready and "ready") or (opt.waiting and "waiting") or nil
+  end
+  return def
+end
+
+---`list|plan|estimate @<name>`: the named list's options under the ones given on the command line (a word you
+---typed wins), its area when no area was typed.
+---@param args { pos: string[], opt: table }
+---@param name string
+---@return string|nil err
+local function apply_list(args, name)
+  local entry, err = lists.get(name)
+  if not entry then
+    return err
+  end
+  local resolved, rerr = lists.resolve(entry.def)
+  if not resolved then
+    return rerr
+  end
+  table.remove(args.pos, 1)
+  for key, value in pairs(entry.def) do
+    if key == "readiness" then
+      if args.opt.ready == nil and args.opt.waiting == nil then
+        args.opt[value] = true
+      end
+    elseif key == "area" then
+      if args.pos[1] == nil then
+        args.pos[1] = value
+      end
+    elseif key ~= "desc" then
+      local flag = key:gsub("_", "-")
+      if args.opt[flag] == nil then
+        args.opt[flag] = value == true and true or tostring(value)
+      end
+    end
+  end
+  return nil
+end
+
+---@param ctx Tasks.CliCtx
+---@return integer code
+function commands.lists(ctx)
+  local args = ctx.args
+  local sub = args.pos[1]
+  if sub == nil or sub == "ls" then
+    local entries, notes = lists.all()
+    for _, e in ipairs(entries) do
+      ctx.say(table.concat({ e.name, e.source, lists.summary(e.def) }, "	"))
+    end
+    for _, n in ipairs(notes) do
+      ctx.warn("warn: " .. n)
+    end
+    return 0
+  end
+  local name = args.pos[2]
+  if sub == "show" then
+    if not name or #args.pos > 2 then
+      ctx.warn("error: usage: lists show <name>")
+      return 2
+    end
+    local entry, err = lists.get(name)
+    if not entry then
+      ctx.warn("error: " .. err)
+      return 1
+    end
+    ctx.say(("%s	%s"):format(entry.name, entry.source))
+    if entry.def.desc then
+      ctx.say("desc: " .. fsio.clean(entry.def.desc))
+    end
+    ctx.say(
+      "tasks list "
+        .. (entry.def.area and (entry.def.area .. " ") or "")
+        .. table.concat(lists.words(entry.def), " ")
+    )
+    return 0
+  elseif sub == "save" then
+    if not name or #args.pos > 2 then
+      ctx.warn("error: usage: lists save <name> [filters] [--sort=] [--area=] [--desc=]")
+      return 2
+    end
+    local def = def_from_options(args.opt)
+    if def.readiness == "both" then
+      ctx.warn("error: --ready and --waiting exclude each other")
+      return 2
+    end
+    local saved, err = lists.save(name, def)
+    if not saved then
+      ctx.warn("error: " .. tostring(err))
+      return 1
+    end
+    ctx.say(("saved	%s	%s"):format(name, lists.path()))
+    return 0
+  elseif sub == "delete" then
+    if not name or #args.pos > 2 then
+      ctx.warn("error: usage: lists delete <name>")
+      return 2
+    end
+    local deleted, err = lists.delete(name)
+    if not deleted then
+      ctx.warn("error: " .. tostring(err))
+      return 1
+    end
+    ctx.say(("deleted	%s"):format(name))
+    return 0
+  elseif sub == "rename" then
+    if not name or not args.pos[3] or #args.pos > 3 then
+      ctx.warn("error: usage: lists rename <old> <new>")
+      return 2
+    end
+    local renamed, err = lists.rename(name, args.pos[3])
+    if not renamed then
+      ctx.warn("error: " .. tostring(err))
+      return 1
+    end
+    ctx.say(("renamed	%s	%s"):format(name, args.pos[3]))
+    return 0
+  end
+  ctx.warn("error: unknown lists command: " .. tostring(sub) .. " (save, delete, rename, show)")
+  return 2
 end
 
 commands["plan-new"] = function(ctx)
@@ -1272,6 +1456,18 @@ function M.run(argv, io)
   if args.opt.help then
     io.out(USAGE)
     return 0
+  end
+
+  if
+    (name == "list" or name == "plan" or name == "estimate")
+    and args.pos[1]
+    and args.pos[1]:sub(1, 1) == "@"
+  then
+    local lerr = apply_list(args, args.pos[1]:sub(2))
+    if lerr then
+      warn("error: " .. lerr)
+      return 2
+    end
   end
 
   ---@type Tasks.CliCtx

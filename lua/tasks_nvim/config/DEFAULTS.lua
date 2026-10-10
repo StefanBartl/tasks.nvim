@@ -50,6 +50,7 @@
 ---@field next Tasks.NextConfig
 ---@field chain Tasks.ChainConfig
 ---@field quick_wins Tasks.QuickWinsConfig
+---@field lists table<string, Tasks.ListDef>  Named lists (a filter combination plus a sort order): `{ ["my-list"] = { effort = "<=S", value = ">=4", sort = "roi" } }`. See `tasks_nvim.lists`.
 ---@field steps Tasks.StepsConfig
 ---@field keys Tasks.KeysConfig
 
@@ -63,6 +64,7 @@ return {
   next = { popup = true, cdx_hint = true },
   chain = { marker_docs = {} },
   quick_wins = { min_value = 4, max_effort = "S" },
+  lists = {},
   steps = { ask_finish = false },
   keys = {
     dashboard = {
@@ -70,6 +72,7 @@ return {
       prio = "p",
       done = "D",
       filter = "f",
+      lists = "gl",
       sort = "o",
       export = "e",
       rescan = "r",
@@ -87,6 +90,7 @@ return {
       prio = "<M-p>",
       done = "<M-d>",
       filter = "<M-f>",
+      lists = "<M-l>",
       sort = "<M-o>",
       export = "<M-e>",
       rescan = "<M-r>",

@@ -153,6 +153,7 @@ return function(H)
           "advance prio",
           "finish",
           "filter ...",
+          "lists ...",
           "next sort order",
           "export the list ...",
           "Backlog of the area",

@@ -7,6 +7,9 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Named lists: `setup({ lists = {...} })`, saved lists (a state file, written from the dashboard menu `gl` or by
+  `tasks lists save`), three built-in lists, `:Tasks lists`, `--list=<name>` / `tasks list @<name>` (also for `plan`,
+  `estimate`, `quickwins`), `:checkhealth` reports skipped lists.
 - Quick wins: `setup({ quick_wins = { min_value, max_effort } })` (default value 4, effort S), the filter `--quick-win` for
   `list`, `plan` and `estimate`, and `:Tasks quickwins` / `tasks quickwins` (best return first, the small tasks that miss a
   value named apart, `--by-actor`, `--paths`, `--report=<file>`).

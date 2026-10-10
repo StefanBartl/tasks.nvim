@@ -71,6 +71,18 @@ end
 ---@field days number      # Effort of those with a known effort.
 ---@field n_without_effort integer
 
+---The filter is exactly the quick-win definition in force: a value bound and an effort bound at the thresholds and no
+---list of exact values beside them. A front end shows and toggles it as ONE chip / saves it as `quick_win = true`.
+---@param f Tasks.Filter|nil
+---@return boolean
+function M.is_quick_win_filter(f)
+  if not f or not f.value_min or not f.effort_max then
+    return false
+  end
+  local th = M.thresholds()
+  return f.value_min == th.value and f.effort_max == th.effort and not f.value and not f.effort
+end
+
 ---@class Tasks.Rollup
 ---@field n integer
 ---@field days number                      # Sum of the known efforts (scale).

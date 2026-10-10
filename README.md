@@ -122,9 +122,24 @@ require("tasks_nvim").setup({
   next = { popup = true, cdx_hint = true },                                     -- the dialog after done
   chain = { marker_docs = {} },                                                 -- documents with generated plan blocks
   steps = { ask_finish = false },                                               -- ask to finish when the last step is ticked
+  lists = {},                                                                   -- named lists, see below
   quick_wins = { min_value = 4, max_effort = "S" },                              -- what counts as a quick win (both written on the task)
 })
 ```
+
+**Named lists.** A list is a filter combination plus a sort order under a name, so you do not type
+`--effort=<=S --value=>=4 --sort=roi` twice. Write them in the spec, save them from the dashboard (`gl`) or with
+`tasks lists save`, and run them with `:Tasks list --list=<name>` / `tasks list @<name>`:
+
+```lua
+lists = {
+  ["small-and-good"] = { effort = "<=S", value = ">=4", sort = "roi", desc = "worth doing in an hour" },
+  ["my-bugs"] = { kind = "bug", actor = "me", status = "open,doing" },
+}
+```
+
+Three are built in (`quick-wins`, `small-and-important`, `unestimated`); a saved list of the same name replaces a
+built-in one, a list of `setup()` replaces a saved one ([docs/COMMANDS.md](docs/COMMANDS.md#tasks-lists)).
 
 A wrong key or value is reported (and listed in `:checkhealth`) and the default stays. Every key of the
 dashboard and the form can be moved or switched off with `keys = { dashboard = {...}, dashboard_input = {...},

@@ -531,6 +531,130 @@ local function set_filter(state, after)
   end)
 end
 
+---Make a named list the view: its filter, its sort order and, when it names one, its area.
+---@param state Tasks.DashState
+---@param entry Tasks.ListEntry
+---@return boolean ok
+local function apply_list(state, entry)
+  local resolved, err = require("tasks_nvim.lists").resolve(entry.def)
+  if not resolved then
+    notify.error(tostring(err))
+    return false
+  end
+  state.filter = resolved.filter
+  state.sort = resolved.sort
+  if resolved.area then
+    state.area = resolved.area
+  end
+  state.preload = nil
+  persist(state)
+  return true
+end
+
+---`gl`: the named lists: apply one, save the current filter and sort as one, delete a saved one. `after` is called
+---once, whatever happened (the dashboard reopens from it).
+---@param state Tasks.DashState
+---@param after fun()
+function M.lists_menu(state, after)
+  local lists = require("tasks_nvim.lists")
+  local entries, notes = lists.all()
+  for _, n in ipairs(notes) do
+    notify.warn(n)
+  end
+  ---@type { label: string, run: fun() }[]
+  local items = {}
+  for _, e in ipairs(entries) do
+    items[#items + 1] = {
+      label = ("%s  [%s]  %s"):format(e.name, e.source, lists.summary(e.def)),
+      run = function()
+        apply_list(state, e)
+        after()
+      end,
+    }
+  end
+  items[#items + 1] = {
+    label = "Save the current filter and sort as a list ...",
+    run = function()
+      vim.ui.input({ prompt = "Save the list as: " }, function(name)
+        if not name or vim.trim(name) == "" then
+          after()
+          return
+        end
+        name = vim.trim(name)
+        local def = lists.from_filter(state.filter, state.sort, state.area)
+        local function store()
+          local ok, err = lists.save(name, def)
+          if ok then
+            notify.info(("saved list '%s' (%s)"):format(name, lists.path()))
+          else
+            notify.error(tostring(err))
+          end
+          after()
+        end
+        local existing = lists.get(name)
+        if existing and existing.source == "saved" then
+          confirm.yesno(("Replace the saved list '%s'?"):format(name), "replace", function(yes)
+            if yes then
+              store()
+            else
+              after()
+            end
+          end)
+        else
+          store()
+        end
+      end)
+    end,
+  }
+  items[#items + 1] = {
+    label = "Delete a saved list ...",
+    run = function()
+      local saved = vim.tbl_filter(function(e)
+        return e.source == "saved"
+      end, entries)
+      if #saved == 0 then
+        notify.info("no saved list to delete (lists of setup() are changed in your config)")
+        after()
+        return
+      end
+      vim.ui.select(saved, {
+        prompt = "Delete which list?",
+        format_item = function(e)
+          return e.name .. "  " .. lists.summary(e.def)
+        end,
+      }, function(e)
+        if not e then
+          after()
+          return
+        end
+        confirm.yesno(("Delete the saved list '%s'?"):format(e.name), "delete", function(yes)
+          if yes then
+            local ok, err = lists.delete(e.name)
+            if ok then
+              notify.info(("deleted list '%s'"):format(e.name))
+            else
+              notify.error(tostring(err))
+            end
+          end
+          after()
+        end)
+      end)
+    end,
+  }
+  vim.ui.select(items, {
+    prompt = "Task lists",
+    format_item = function(item)
+      return item.label
+    end,
+  }, function(item)
+    if not item then
+      after()
+      return
+    end
+    item.run()
+  end)
+end
+
 ---`o`: the next sort order (default -> prio-effort -> severity -> frecency -> default).
 ---@param state Tasks.DashState
 ---@param count? integer  steps to advance (`3o`)
@@ -669,6 +793,11 @@ local ACTIONS = {
     name = "filter",
     action = "tasks_filter",
     text = "set a filter chip (" .. table.concat(core.FILTER_DIMS, " ") .. ")",
+  },
+  {
+    name = "lists",
+    action = "tasks_lists",
+    text = "named lists: apply one, save the current filter and sort as one, delete a saved one",
   },
   {
     name = "sort",
@@ -1049,6 +1178,11 @@ local function open_picker(engine, Snacks, state)
         set_filter(state, reopen)
       end)
     end,
+    tasks_lists = function(picker)
+      detour(picker, function(reopen)
+        M.lists_menu(state, reopen)
+      end)
+    end,
     tasks_export = function(picker)
       local tasks = targets(picker, false)
       if #tasks == 0 then
@@ -1354,6 +1488,12 @@ local function open_select(state)
         label = "filter ...",
         run = function()
           set_filter(state, again)
+        end,
+      },
+      {
+        label = "lists ...",
+        run = function()
+          M.lists_menu(state, again)
         end,
       },
       {

@@ -86,6 +86,7 @@ counts, the active filter chips and, when it is not the default, the sort order:
 | `f` | set a filter chip: pick `status`, `prio`, `effort` (`XS`..`XL`, `<=S`, `<=M`), `kind`, `category`, `severity`, `value`, `actor`, `tag`, `blocked`, `unestimated`, `quick-win` (toggle: value and effort at the quick-win thresholds, shown as the one chip `[quick-win]`), `stale-refs` (toggle: shows the chip `[stale: refs]`),
 `plan` and `phase` (the plans and stages in use), `readiness` (`ready` / `waiting`: the same cut as `list --ready` / `--waiting`, which the dashboard keeps when it was
 opened with them) or "clear all", then a value (`(any)` clears one chip) |
+| `gl` (input window `<M-l>`) | named lists: pick one to make it the view (its filter, sort and area), `Save the current filter and sort as a list ...` (asks for a name; replacing a saved list asks first), `Delete a saved list ...`. Lists of `setup()` and built-in lists cannot be deleted here |
 | `o` | cycle the sort order: `default` -> `prio-effort` (small first within a prio) -> `severity` (critical first) -> `frecency` (most opened / changed first) -> `default`; a non-default order shows as `[sort: ...]` in the title |
 | `e` | export the marked (else all shown) tasks: scratch buffer, clipboard, quickfix or a file, as Markdown or CSV, or "Preview in browser (mdview)" -- the `--to=` sinks |
 | `v` | switch to the **stage view**: tasks grouped by stage ("Stage 1 · 5 tasks · not parallel"), what each waits for, tasks without plan, edge or dependants in an "Unsorted" block; `v` again returns to the list (marks and filter stay) |
@@ -345,6 +346,49 @@ its low and its high end (a T-shirt size is not a number). The return on effort 
 numbers. Quick wins (value 4 or more, effort S or less) are named. `--walk` goes through the tasks that miss an effort
 or a value, asks for them one by one (`Skip` first; `Stop`, and a dismissed dialog (Esc), end the walk and keep what was given)
 and writes everything in one batch.
+
+### Tasks lists
+
+A **list** is a filter combination plus a sort order (and optionally one area) under a name. Its fields are the option
+words of `:Tasks list`, written as strings: `status prio effort kind category severity value actor tag stale plan phase`,
+the booleans `blocked unestimated stale_refs quick_win`, `readiness` (`ready` or `waiting`), `sort`, `area` and a one-line
+`desc`. A list is checked by the same parser as the command line and a complaint names the list; an unknown key is an
+error, never ignored.
+
+Three sources, the later one wins by name:
+
+1. **built in**: `quick-wins` (the quick-win definition, best return first), `small-and-important` (prio 1-2, effort S
+   or less, startable now), `unestimated` (missing an effort or a value);
+2. **saved**: a small state file (`stdpath("state")/tasks/lists.json`, or `$TASKS_LISTS_FILE`), written from the
+   dashboard (`gl`) or by `tasks lists save`. A saved list may replace a built-in one;
+3. **`setup({ lists = {...} })`**: your config, which cannot be changed or deleted from the dashboard or the CLI (edit
+   the config). A saved list of the same name is shadowed and `:checkhealth` says so; a later `setup()` replaces the
+   whole set.
+
+```lua
+require("tasks_nvim").setup({
+  lists = {
+    ["small-and-good"] = { effort = "<=S", value = ">=4", sort = "roi", desc = "worth doing in an hour" },
+    ["my-bugs"] = { kind = "bug", actor = "me", status = "open,doing" },
+  },
+})
+```
+
+Running one: `:Tasks list --list=small-and-good` opens the dashboard on it; every option you type on top wins over the
+list (`:Tasks list --list=my-bugs --prio=1`); `--list=` also works for `plan`, `estimate` and `quickwins`. `:Tasks lists`
+opens a menu of all of them. A saved file that cannot be read is never written over (the dashboard menu says why), and a
+single broken list in it is skipped and named, the rest stays.
+
+Headless:
+
+```sh
+nvim --headless -u NONE -l scripts/tasks.lua lists                                  # name, source, what it selects
+nvim --headless -u NONE -l scripts/tasks.lua lists save worth --effort='<=S' --value='>=4' --sort=roi --desc='worth an hour'
+nvim --headless -u NONE -l scripts/tasks.lua lists show worth                       # the equivalent command line
+nvim --headless -u NONE -l scripts/tasks.lua list @worth --prio=1                   # run it, with an override
+nvim --headless -u NONE -l scripts/tasks.lua lists rename worth worthy
+nvim --headless -u NONE -l scripts/tasks.lua lists delete worthy
+```
 
 ### `:Tasks quickwins [<area>|all] [filters] [--to=] [--format=md|tsv|ids] [--by-actor] [--paths] [--report=<file>]`
 

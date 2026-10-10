@@ -289,6 +289,23 @@ area, and a click on an id copies it. It only *reads* what `list`, `plan --forma
 exactly what the CLI shows. Run the script again and press "Neu laden" to refresh. Titles are untrusted: the page
 builds its DOM with `textContent` and the inlined data has every `<` escaped.
 
+### 14e. A list I use again and again — works today
+
+```vim
+:Tasks list --effort=<=S --value=>=4 --sort=roi     " tune the dashboard to it, then press gl -> Save the current filter ...
+:Tasks lists                                         " pick one of the lists
+:Tasks list --list=small-and-good --prio=1           " run one, with an override
+```
+
+```sh
+tasks lists save small-and-good --effort='<=S' --value='>=4' --sort=roi
+tasks list @small-and-good
+```
+
+A list is a name for a filter and a sort order. Three are built in (`quick-wins`, `small-and-important`,
+`unestimated`); keep your own in `setup({ lists = {...} })` (they live in your dotfiles) or save them from the
+dashboard (they live in a state file on that machine). A list of the config shadows a saved one of the same name.
+
 ### 15. Who can do this — works today
 
 ```vim

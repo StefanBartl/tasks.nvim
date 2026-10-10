@@ -13,7 +13,7 @@ local M = {}
 ---@type Tasks.Opts
 local state = vim.deepcopy(DEFAULTS)
 
----@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"|"value"|"effort"
+---@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"|"value"|"effort"|"lists"
 
 ---@type table<string, Tasks.ConfigType|table<string, Tasks.ConfigType>>
 local SCHEMA = {
@@ -25,6 +25,7 @@ local SCHEMA = {
   next = { popup = "boolean", cdx_hint = "boolean" },
   chain = { marker_docs = "string_list" },
   quick_wins = { min_value = "value", max_effort = "effort" },
+  lists = "lists",
   steps = { ask_finish = "boolean" },
   keys = { dashboard = "keymap", dashboard_input = "keymap", form = "keymap" },
 }
@@ -97,6 +98,12 @@ local function check(kind, value)
       return true, value, nil
     end
     return false, nil, 'one of "auto", "snacks", "kit", "select"'
+  elseif kind == "lists" then
+    -- Only the shape here; every list is checked, and named in its complaint, by `tasks_nvim.lists`.
+    if type(value) == "table" and (next(value) == nil or not vim.islist(value)) then
+      return true, vim.deepcopy(value), nil
+    end
+    return false, nil, "a table of name = list definition"
   elseif kind == "value" then
     if type(value) == "number" and value >= 1 and value <= 5 and value == math.floor(value) then
       return true, value, nil
@@ -199,7 +206,12 @@ end
 function M.merge(opts)
   -- What any `setup()` threw away stays listed for `:checkhealth`: a second call that ignores nothing
   -- must not erase the first call's messages.
-  state = vim.tbl_deep_extend("force", state, M.validate(opts))
+  local checked = M.validate(opts)
+  state = vim.tbl_deep_extend("force", state, checked)
+  if checked.lists then
+    -- The named lists are replaced as a whole, not merged: a later `setup({ lists })` is the complete set.
+    state.lists = checked.lists
+  end
   return vim.deepcopy(state)
 end
 

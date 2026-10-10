@@ -124,6 +124,51 @@ local function unquote(s)
   return inner and vim.trim(inner) or s
 end
 
+---`--list=<name>`: the named list's options under the ones typed (a flag you gave wins), its area when no area was
+---typed. Reports the problem and returns false when the list is unknown or broken.
+---@param ctx table  composer context
+---@return boolean ok
+local function apply_list(ctx)
+  local name = ctx.flags and ctx.flags.list
+  if name == nil then
+    return true
+  end
+  local lists = require("tasks_nvim.lists")
+  local entry, err = lists.get(name)
+  if not entry then
+    notify.error(tostring(err))
+    return false
+  end
+  local resolved, rerr = lists.resolve(entry.def)
+  if not resolved then
+    notify.error(tostring(rerr))
+    return false
+  end
+  ctx.flags.list = nil
+  for key, value in pairs(entry.def) do
+    if key == "readiness" then
+      if ctx.flags.ready == nil and ctx.flags.waiting == nil then
+        ctx.flags[value] = true
+      end
+    elseif key == "area" then
+      ctx.args = ctx.args or {}
+      if ctx.args.area == nil then
+        ctx.args.area = value
+      end
+    elseif key == "stale_refs" then
+      if ctx.flags.stale == nil then
+        ctx.flags.stale = "refs"
+      end
+    elseif key ~= "desc" then
+      local flag = key:gsub("_", "-")
+      if ctx.flags[flag] == nil then
+        ctx.flags[flag] = value
+      end
+    end
+  end
+  return true
+end
+
 ---Refuse words a command has no use for. Ignoring them is the worse outcome: the command line
 ---splits at spaces, so `--to=file:C:/my dir/x.md` arrives as `--to=file:C:/my` plus the stray
 ---`dir/x.md`, and the export would be written to a file called `my`.
@@ -264,6 +309,8 @@ local function filter_options(flags)
     blocked = flags.blocked,
     unestimated = flags.unestimated,
     quick_win = flags["quick-win"],
+    plan = flags.plan,
+    phase = flags.phase,
   }
 end
 
@@ -307,6 +354,9 @@ end
 ---@param ctx table  composer context
 function M.plan(ctx)
   if not no_stray_words(ctx) then
+    return
+  end
+  if not apply_list(ctx) then
     return
   end
   local flags = ctx.flags
@@ -363,12 +413,39 @@ function M.plan(ctx)
   )
 end
 
+---`:Tasks lists`: pick a named list and open it as the dashboard.
+---@param ctx table  composer context
+function M.lists(ctx)
+  if not no_stray_words(ctx) then
+    return
+  end
+  local lists = require("tasks_nvim.lists")
+  local entries, notes = lists.all()
+  for _, n in ipairs(notes) do
+    notify.warn(n)
+  end
+  vim.ui.select(entries, {
+    prompt = "Task list",
+    format_item = function(e)
+      return ("%s  [%s]  %s"):format(e.name, e.source, lists.summary(e.def))
+    end,
+  }, function(entry)
+    if not entry then
+      return
+    end
+    M.list({ args = {}, flags = { list = entry.name }, rest = {} })
+  end)
+end
+
 ---`:Tasks quickwins [<area>|all] [filters] [--to=] [--format=md|tsv|ids] [--by-actor] [--paths] [--report=<file>]`:
 ---the quick wins (value and effort at the thresholds of `setup({ quick_wins })`), best return first, with the small
 ---tasks that still miss a value. Default status: what can be picked up (open, doing, decision).
 ---@param ctx table  composer context
 function M.quickwins(ctx)
   if not no_stray_words(ctx) then
+    return
+  end
+  if not apply_list(ctx) then
     return
   end
   local flags = ctx.flags
@@ -595,6 +672,9 @@ function M.estimate(ctx)
   if not no_stray_words(ctx) then
     return
   end
+  if not apply_list(ctx) then
+    return
+  end
   local scope = load_scope(ctx)
   if not scope then
     return
@@ -672,6 +752,9 @@ function M.list(ctx)
   if not no_stray_words(ctx) then
     return
   end
+  if not apply_list(ctx) then
+    return
+  end
   local flags = ctx.flags
   local target, terr = view.parse_target(flags.to)
   if terr then
@@ -692,6 +775,8 @@ function M.list(ctx)
     blocked = flags.blocked,
     unestimated = flags.unestimated,
     quick_win = flags["quick-win"],
+    plan = flags.plan,
+    phase = flags.phase,
   })
   if not filter then
     notify.error(tostring(ferr))

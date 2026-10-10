@@ -443,6 +443,47 @@ return function(H)
       vim.cmd("bwipeout!")
       run("tasks lib.nvim --format=csv --to=file:" .. out_dir .. "/h.csv")
       eq(#hook_calls, 2, "an explicit --format bypasses the hook")
+
+      -- ── named lists: --list=<name> and :Tasks lists ─────────────────────
+      local named = require("tasks_nvim.lists")
+      named.set_path(out_dir .. "/lists.json")
+      named.save("lib-small", { area = "lib.nvim", prio = "<=2", sort = "prio-effort" })
+      run("tasks --list=lib-small")
+      eq(#hook_calls, 3, "a named list opens the dashboard")
+      eq(hook_calls[3].area, "lib.nvim", "the list's area")
+      eq(hook_calls[3].filter.prio_max, 2, "the list's filter")
+      eq(hook_calls[3].sort, "prio-effort", "the list's sort")
+      run("tasks --list=lib-small --prio=1")
+      eq(hook_calls[4].filter.prio, { 1 }, "an option typed on top wins over the list")
+      eq(hook_calls[4].filter.prio_max, nil)
+      run("tasks cascade.nvim --list=lib-small")
+      eq(
+        hook_calls[5] ~= nil and hook_calls[5].area or "missing",
+        "cascade.nvim",
+        "a typed area wins over the list's"
+      )
+      run("tasks --list=quick-wins")
+      eq(hook_calls[6].sort, "roi", "a built-in list")
+      eq(hook_calls[6].filter.value_min, 4)
+      run("tasks --list=no-such-list")
+      ok(said_level(ERROR), "an unknown list is an error")
+      has(said(), "no-such-list")
+      eq(#hook_calls, 6, "... and opens nothing")
+      -- :Tasks lists asks, then behaves like --list=
+      local select_orig = vim.ui.select
+      vim.ui.select = function(items, _, on_choice)
+        for _, item in ipairs(items) do
+          if item.name == "lib-small" then
+            on_choice(item)
+            return
+          end
+        end
+        on_choice(nil)
+      end
+      run("task lists")
+      vim.ui.select = select_orig
+      eq(hook_calls[#hook_calls].area, "lib.nvim", "`:Tasks lists` runs the picked list")
+      named.set_path(nil)
       cmd.dashboard = false
 
       -- ── tasks index ─────────────────────────────────────────────────────

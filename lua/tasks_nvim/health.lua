@@ -81,6 +81,26 @@ function M.check()
     ok("setup() options are valid")
   end
 
+  -- Named lists: what each source contributes, and every list that had to be skipped (named, with the reason).
+  local lists = require("tasks_nvim.lists")
+  local entries, list_notes = lists.all()
+  local by_source = { builtin = 0, saved = 0, config = 0 }
+  for _, e in ipairs(entries) do
+    by_source[e.source] = by_source[e.source] + 1
+  end
+  info(
+    ("named lists: %d (built in as shown: %d, saved: %d, setup(): %d); saved lists file: %s"):format(
+      #entries,
+      by_source.builtin,
+      by_source.saved,
+      by_source.config,
+      lists.path()
+    )
+  )
+  for _, msg in ipairs(list_notes) do
+    warn(msg)
+  end
+
   start("tasks.nvim: command")
   if vim.fn.exists(":Tasks") == 2 then
     ok(":Tasks is registered")
