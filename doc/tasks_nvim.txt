@@ -146,7 +146,7 @@ No global key is mapped. In the dashboard list (`g?` shows this):
 
   <CR> open   <Tab> mark   s status   p prio   D finish   f filter chip
   o sort      e export     gp preview  r rescan  gb backlog  gr roadmap
-  gl lists (apply, save the current view as a list, delete a saved one)
+  gl lists (apply, save the current view as a list, rename or delete one)
 
 In the input window the same actions are on `<M-s> <M-p> <M-d> <M-f> <M-l> <M-o>
 <M-e> <M-r> <M-b> <M-m> <M-v> <M-?>` (they shadow some snacks defaults).

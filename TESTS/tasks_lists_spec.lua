@@ -342,6 +342,25 @@ return function(H)
   )
   ok(menu(state, pick("Save the current"), "   "), "an empty name saves nothing")
 
+  -- rename through the menu
+  lists.save("old-name", { prio = "1" })
+  local function choose_rename(items, opts)
+    if opts.prompt == "Rename which list?" then
+      for _, item in ipairs(items) do
+        if item.name == "old-name" then
+          return item
+        end
+      end
+    end
+    return pick("Rename a saved")(items, opts)
+  end
+  ok(menu(state, choose_rename, "new-name"), "renaming hands control back")
+  ok(
+    lists.get("new-name") ~= nil and lists.get("old-name") == nil,
+    "a saved list is renamed from the menu"
+  )
+  lists.delete("new-name")
+
   local function choose_delete(items, opts)
     if opts.prompt == "Delete which list?" then
       return items[1]

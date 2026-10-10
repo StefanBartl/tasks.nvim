@@ -31,7 +31,7 @@ Details of every verb: [COMMANDS.md](COMMANDS.md).
 | `s` / `p` | advance status / prio of marked (else current) tasks |
 | `D` | finish (asks first) |
 | `f` | set a filter chip |
-| `gl` | named lists: apply one, save the current filter and sort as one, delete a saved one |
+| `gl` | named lists: apply one, save the current filter and sort as one, rename or delete a saved one |
 | `o` | cycle the sort |
 | `e` | export marked (else all shown) tasks |
 | `gp` | preview the task file in the browser |

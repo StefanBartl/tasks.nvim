@@ -551,7 +551,7 @@ local function apply_list(state, entry)
   return true
 end
 
----`gl`: the named lists: apply one, save the current filter and sort as one, delete a saved one. `after` is called
+---`gl`: the named lists: apply one, save the current filter and sort as one, rename or delete a saved one. `after` is called
 ---once, whatever happened (the dashboard reopens from it).
 ---@param state Tasks.DashState
 ---@param after fun()
@@ -603,6 +603,45 @@ function M.lists_menu(state, after)
         else
           store()
         end
+      end)
+    end,
+  }
+  items[#items + 1] = {
+    label = "Rename a saved list ...",
+    run = function()
+      local saved = vim.tbl_filter(function(e)
+        return e.source == "saved"
+      end, entries)
+      if #saved == 0 then
+        notify.info("no saved list to rename (lists of setup() are changed in your config)")
+        after()
+        return
+      end
+      vim.ui.select(saved, {
+        prompt = "Rename which list?",
+        format_item = function(e)
+          return e.name .. "  " .. lists.summary(e.def)
+        end,
+      }, function(e)
+        if not e then
+          after()
+          return
+        end
+        vim.ui.input(
+          { prompt = ("Rename '%s' to: "):format(e.name), default = e.name },
+          function(new)
+            new = new and vim.trim(new) or ""
+            if new ~= "" and new ~= e.name then
+              local ok, err = lists.rename(e.name, new)
+              if ok then
+                notify.info(("renamed list '%s' to '%s'"):format(e.name, new))
+              else
+                notify.error(tostring(err))
+              end
+            end
+            after()
+          end
+        )
       end)
     end,
   }
@@ -797,7 +836,7 @@ local ACTIONS = {
   {
     name = "lists",
     action = "tasks_lists",
-    text = "named lists: apply one, save the current filter and sort as one, delete a saved one",
+    text = "named lists: apply one, save the current filter and sort as one, rename or delete a saved one",
   },
   {
     name = "sort",
