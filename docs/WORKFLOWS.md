@@ -261,6 +261,19 @@ an effort has **no** figure and sorts after the ones that do: it is not "worth 0
 shows `v4` on the row; the CSV export gets `Value` and `ROI` columns. Sums per plan and area, and a helper that walks
 the unestimated tasks, are scenario 14c (above).
 
+#### Quick wins — the definition
+
+A task is a **quick win** when it has a `value` of **4 or more** *and* an `effort` of **`S` or less** (`XS`, `S`, or
+up to `0.5d`). Both numbers have to be written: a task without a value or without an effort is *unestimated*, never a
+quick win. Small but unrated tasks are therefore invisible here until they get a value; `:Tasks estimate --walk`
+asks for the missing numbers. The thresholds are `QUICK_WIN_VALUE` and `QUICK_WIN_DAYS` in `tasks_nvim.estimate`
+(one definition, used by every place that names quick wins).
+
+```vim
+:Tasks estimate                                 " the line 'quick wins: ...' (best roi first)
+:Tasks list --value=>=4 --effort=<=S --sort=roi " the same set, as a list
+```
+
 ### 15. Who can do this — works today
 
 ```vim

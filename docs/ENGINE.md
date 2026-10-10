@@ -159,6 +159,10 @@ value or without a valid effort has **no** figure (not 0), stays visible in ever
 one. `--value=4,5` / `--value=>=4` filter, `--sort=roi` orders, the dashboard shows `v4`, the CSV gets the columns
 `Value` and `ROI`. A value outside 1-5 is the error `bad-value`.
 
+**Quick win** (`estimate.QUICK_WIN_VALUE` = 4, `estimate.QUICK_WIN_DAYS` = 0.5): `value >= 4` and `effort <= S`, both
+written. A task missing either number is unestimated and never counts (`estimate.rollup` lists them in `unestimated`).
+`rollup().quick_wins` is the single source; front ends must not re-derive the rule.
+
 `actor: cdx | me | pair` (optional) says who can do the task: `cdx` an AI session alone, `me` only the human
 (decisions, live tests, accounts, publishing), `pair` the AI drafts and the human decides the rest. A task without
 the field is "unclear", not wrong. `model.actor(task)` is the written value, else `me` for `status: decision` or the
