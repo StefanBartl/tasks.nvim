@@ -76,3 +76,19 @@ jobs:
           path: ${{ runner.temp }}/testing-ir.json
           if-no-files-found: ignore
           retention-days: 14
+
+  # The contract tasks-export/1 seen from outside: the golden documents against the JSON Schema (Ajv, strict), the
+  # documents that must be refused, the rules for a reader, and the generated TypeScript types.
+  contract:
+    name: contract (schema, golden files, types)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - run: npm ci
+        working-directory: contract
+      - run: node check.mjs
+        working-directory: contract

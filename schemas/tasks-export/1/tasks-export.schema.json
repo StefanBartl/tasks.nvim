@@ -1,0 +1,1215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tasks.nvim.invalid/schemas/tasks-export/1/tasks-export.schema.json",
+  "title": "TasksExport",
+  "description": "tasks-export/1: every document tasks.nvim hands to a machine. One of the kinds below, told apart by `kind`. The engine writes exactly these fields (a field that is not listed fails the contract tests); a reader ignores fields it does not know, because inside one version the contract only grows.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Hello"
+    },
+    {
+      "$ref": "#/$defs/Snapshot"
+    },
+    {
+      "$ref": "#/$defs/List"
+    },
+    {
+      "$ref": "#/$defs/TaskDocument"
+    },
+    {
+      "$ref": "#/$defs/Next"
+    },
+    {
+      "$ref": "#/$defs/Areas"
+    },
+    {
+      "$ref": "#/$defs/Error"
+    }
+  ],
+  "$defs": {
+    "Status": {
+      "description": "The statuses of a task in `ROADMAP/tasks`. `done` is only seen on a task that was left there after it was finished (listed under `unlisted`).",
+      "enum": ["doing", "decision", "blocked", "open", "parked", "done"]
+    },
+    "OpenStatus": {
+      "enum": ["doing", "decision", "blocked", "open", "parked"]
+    },
+    "Kind": {
+      "enum": ["feature", "task", "bug", "idea", "research"]
+    },
+    "Actor": {
+      "enum": ["cdx", "me", "pair"]
+    },
+    "Severity": {
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "Category": {
+      "enum": ["bug", "security", "performance", "docs", "ruleset"]
+    },
+    "Effort": {
+      "description": "A size (XS to XL) or a duration in days (`3d`, `0.5d`). `effort_days` is always the figure.",
+      "type": "string",
+      "pattern": "^(XS|S|M|L|XL|[0-9]+(\\.[0-9]+)?d)$"
+    },
+    "Date": {
+      "description": "A calendar day, YYYY-MM-DD.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "Etag": {
+      "description": "The version of a file: `sha256:` and 16 hex digits of the hash of its bytes.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{16}$"
+    },
+    "Rev": {
+      "description": "What the vault looked like: `rev:` and 6 hex digits, from every task by id and etag.",
+      "type": "string",
+      "pattern": "^rev:[0-9a-f]{6}$"
+    },
+    "Digest": {
+      "description": "The hash of the document's content (without `generated_at` and `engine`): the same vault gives the same digest.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{16}$"
+    },
+    "Head": {
+      "description": "What every document starts with.",
+      "type": "object",
+      "required": [
+        "schema",
+        "plugin",
+        "kind",
+        "generated_at",
+        "vault",
+        "engine"
+      ],
+      "properties": {
+        "schema": {
+          "const": 1
+        },
+        "plugin": {
+          "const": "tasks.nvim"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "vault": {
+          "type": "object",
+          "required": ["id"],
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "engine": {
+          "type": "object",
+          "required": ["version", "git", "nvim"],
+          "properties": {
+            "version": {
+              "type": "string"
+            },
+            "git": {
+              "type": "string"
+            },
+            "nvim": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "rev": {
+          "$ref": "#/$defs/Rev"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        }
+      }
+    },
+    "Problem": {
+      "type": "object",
+      "required": ["code", "msg"],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "msg": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Steps": {
+      "description": "The steps of the optional `## Plan` section; a dropped one is not counted.",
+      "type": "object",
+      "required": ["total", "ticked", "dropped"],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ticked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dropped": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Readiness": {
+      "description": "Where a task stands in the plan, from `blocked_by` alone.",
+      "type": "object",
+      "required": ["state", "rank", "leverage", "open_blockers"],
+      "properties": {
+        "state": {
+          "enum": [
+            "ready",
+            "decision",
+            "waiting",
+            "stuck",
+            "freed",
+            "parked",
+            "unknown"
+          ]
+        },
+        "stage": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Absent for a task in a cycle."
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Position in plan order, 1 is first."
+        },
+        "eff_prio": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "leverage": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "open_blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "inversion": {
+          "type": "object",
+          "required": ["to", "because"],
+          "properties": {
+            "from": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3
+            },
+            "to": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3
+            },
+            "because": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "in_cycle": {
+          "const": true
+        },
+        "same_file": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "TaskEntry": {
+      "description": "One task. A broken task is still here (`valid: false`, `problems`); a field that is missing is unknown, never 0 (no `effort` means no `effort_days` and no `roi`).",
+      "type": "object",
+      "required": [
+        "id",
+        "area",
+        "slug",
+        "title",
+        "tags",
+        "category",
+        "blocked_by",
+        "after",
+        "refs",
+        "summary",
+        "folder",
+        "file",
+        "valid",
+        "problems"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[^/]+/[^/]+$"
+        },
+        "area": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "kind": {
+          "$ref": "#/$defs/Kind"
+        },
+        "prio": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "order": {
+          "type": "number",
+          "description": "A tie-breaker inside a stage; a fraction slots a task in between."
+        },
+        "effort": {
+          "$ref": "#/$defs/Effort"
+        },
+        "effort_days": {
+          "type": "number",
+          "minimum": 0
+        },
+        "value": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "roi": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Value per effort day (never less than a quarter of a day), rounded to two places."
+        },
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "actor_written": {
+          "type": "boolean",
+          "description": "True when `actor` is what the file says, absent when it was derived."
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "created": {
+          "$ref": "#/$defs/Date"
+        },
+        "updated": {
+          "$ref": "#/$defs/Date"
+        },
+        "plan": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "done_in": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "category": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Category"
+          }
+        },
+        "blocked_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "after": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "refs": {
+          "description": "As written, but a path of the machine shows as `<external>/<name>`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "summary": {
+          "type": "string"
+        },
+        "folder": {
+          "type": "boolean"
+        },
+        "file": {
+          "type": "string",
+          "description": "Relative to the vault, with `/`."
+        },
+        "valid": {
+          "type": "boolean"
+        },
+        "problems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Problem"
+          }
+        },
+        "steps": {
+          "$ref": "#/$defs/Steps"
+        },
+        "etag": {
+          "$ref": "#/$defs/Etag"
+        },
+        "readiness": {
+          "$ref": "#/$defs/Readiness"
+        },
+        "group": {
+          "type": "string",
+          "pattern": "^[a-z?]+\\|([1-3]|-)$",
+          "description": "`status|eff_prio`: inside one group `order` decides."
+        }
+      },
+      "additionalProperties": false
+    },
+    "TaskBrief": {
+      "type": "object",
+      "required": ["id", "title"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[^/]+/[^/]+$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "prio": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "effort": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": ["freed", "area", "vault"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "StatusCounts": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/Status"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "Area": {
+      "type": "object",
+      "required": ["name", "open", "by_status"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "open": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "by_status": {
+          "$ref": "#/$defs/StatusCounts"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Hello": {
+      "description": "tasks.hello: what this engine is and can do. Reads no task.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": ["kind", "schemas", "capabilities", "limits", "enums"],
+      "properties": {
+        "kind": {
+          "const": "tasks.hello"
+        },
+        "schemas": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "The versions of the contract this engine speaks."
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What it can answer; show only what is listed."
+        },
+        "limits": {
+          "type": "object",
+          "required": [
+            "title",
+            "summary",
+            "body_bytes",
+            "list_items",
+            "batch_ops"
+          ],
+          "properties": {
+            "title": {
+              "type": "integer"
+            },
+            "summary": {
+              "type": "integer"
+            },
+            "body_bytes": {
+              "type": "integer"
+            },
+            "list_items": {
+              "type": "integer"
+            },
+            "batch_ops": {
+              "type": "integer"
+            }
+          },
+          "additionalProperties": false
+        },
+        "enums": {
+          "description": "The ranges of the fields, from the engine, so that nobody hard-codes them.",
+          "type": "object",
+          "required": [
+            "status",
+            "kind",
+            "prio",
+            "value",
+            "effort",
+            "actor",
+            "category",
+            "severity"
+          ],
+          "properties": {
+            "status": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "prio": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "effort": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "actor": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "category": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "severity": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "Snapshot": {
+      "description": "tasks.snapshot: one scan, one `rev`: counts, areas, the plan's head, the plan files and every open task with its readiness.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": [
+        "kind",
+        "rev",
+        "digest",
+        "counts",
+        "areas",
+        "unlisted",
+        "plan",
+        "plans",
+        "tasks",
+        "incomplete",
+        "estimate"
+      ],
+      "properties": {
+        "kind": {
+          "const": "tasks.snapshot"
+        },
+        "rev": {
+          "$ref": "#/$defs/Rev"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "counts": {
+          "type": "object",
+          "required": ["listed", "unlisted", "by_status"],
+          "properties": {
+            "listed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unlisted": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "by_status": {
+              "$ref": "#/$defs/StatusCounts"
+            }
+          },
+          "additionalProperties": false
+        },
+        "areas": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Area"
+          }
+        },
+        "unlisted": {
+          "description": "Task files in `ROADMAP/tasks` that are not open work: a finished task left there, a status nobody knows.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "status", "code"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "code": {
+                "enum": ["done-in-roadmap", "unknown-status", "no-status"]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "plan": {
+          "type": "object",
+          "required": [
+            "summary",
+            "critical_path",
+            "stage_sizes",
+            "cycles",
+            "conflict_groups",
+            "warnings"
+          ],
+          "properties": {
+            "summary": {
+              "type": "object",
+              "required": [
+                "tasks",
+                "ready",
+                "decision",
+                "waiting",
+                "stuck",
+                "freed",
+                "parked"
+              ],
+              "properties": {
+                "tasks": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "ready": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "decision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "waiting": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "stuck": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "freed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "parked": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            },
+            "critical_path": {
+              "type": "object",
+              "required": ["days", "path", "unknown_effort"],
+              "properties": {
+                "days": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "path": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "unknown_effort": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Tasks on the path without an effort (counted as one day each)."
+                }
+              },
+              "additionalProperties": false
+            },
+            "stage_sizes": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "cycles": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "conflict_groups": {
+              "description": "Tasks of one stage that name the same file: not parallel work. A list of objects (a tuple would not survive the TypeScript generator).",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["stage", "file", "ids"],
+                "properties": {
+                  "stage": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "file": {
+                    "type": "string"
+                  },
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["code", "msg"],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "msg": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "plans": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "title", "areas", "phase_order", "valid"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "status": {
+                "enum": ["planning", "doing", "parked", "done"]
+              },
+              "areas": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "target": {
+                "type": "string"
+              },
+              "phase_order": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "gate": {
+                "const": "hard"
+              },
+              "valid": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskEntry"
+          },
+          "description": "In plan order."
+        },
+        "incomplete": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Folders that could not be read: the answer may be incomplete."
+        },
+        "estimate": {
+          "type": "object",
+          "required": [
+            "tasks",
+            "days",
+            "n_with_effort",
+            "n_without_effort",
+            "value",
+            "n_with_value",
+            "quick_wins",
+            "unestimated"
+          ],
+          "properties": {
+            "tasks": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "days": {
+              "type": "number",
+              "minimum": 0
+            },
+            "n_with_effort": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "n_without_effort": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "n_with_value": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "roi": {
+              "type": "number",
+              "minimum": 0
+            },
+            "quick_wins": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "unestimated": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "List": {
+      "description": "tasks.list: one page of tasks in plan order.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": [
+        "kind",
+        "rev",
+        "digest",
+        "total",
+        "offset",
+        "limit",
+        "items",
+        "incomplete"
+      ],
+      "properties": {
+        "kind": {
+          "const": "tasks.list"
+        },
+        "rev": {
+          "$ref": "#/$defs/Rev"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskEntry"
+          }
+        },
+        "next_offset": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Absent on the last page."
+        },
+        "incomplete": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "TaskDocument": {
+      "description": "tasks.task: one task with its body and steps.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": [
+        "kind",
+        "rev",
+        "digest",
+        "task",
+        "body",
+        "body_truncated",
+        "steps"
+      ],
+      "properties": {
+        "kind": {
+          "const": "tasks.task"
+        },
+        "rev": {
+          "$ref": "#/$defs/Rev"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "task": {
+          "$ref": "#/$defs/TaskEntry"
+        },
+        "body": {
+          "type": "string",
+          "description": "The file after the frontmatter, untrusted text."
+        },
+        "body_truncated": {
+          "type": "boolean"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["n", "text", "ticked", "dropped"],
+            "properties": {
+              "n": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "text": {
+                "type": "string"
+              },
+              "ticked": {
+                "type": "boolean"
+              },
+              "dropped": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "Next": {
+      "description": "tasks.next: what to start, with the reason; or why there is nothing.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": [
+        "kind",
+        "digest",
+        "alternatives",
+        "cdx",
+        "freed",
+        "ready",
+        "open",
+        "incomplete"
+      ],
+      "properties": {
+        "kind": {
+          "const": "tasks.next"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "task": {
+          "$ref": "#/$defs/TaskBrief"
+        },
+        "alternatives": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskBrief"
+          }
+        },
+        "cdx": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskBrief"
+          },
+          "description": "Ready tasks an AI session could take, apart from yours."
+        },
+        "freed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ready": {
+          "type": "object",
+          "required": ["area", "vault"],
+          "properties": {
+            "area": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "vault": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "open": {
+          "type": "object",
+          "required": ["area", "vault"],
+          "properties": {
+            "area": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "vault": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "empty": {
+          "description": "Present when there is no task to start: which kind of nothing it is. `all_done` is only said when nothing is open at all.",
+          "type": "object",
+          "required": [
+            "kind",
+            "waiting",
+            "for_me",
+            "blocked_status",
+            "parked",
+            "unlisted",
+            "unreadable"
+          ],
+          "properties": {
+            "kind": {
+              "enum": ["all_done", "nothing_startable", "only_cdx"]
+            },
+            "waiting": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "for_me": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "blocked_status": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "parked": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unlisted": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unreadable": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "incomplete": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "Areas": {
+      "description": "tasks.areas: the areas of the vault with their open counts.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": ["kind", "digest", "areas"],
+      "properties": {
+        "kind": {
+          "const": "tasks.areas"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "areas": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Area"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "Error": {
+      "description": "tasks.error: what went wrong, in a code that is stable. `message` carries no path of the machine.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": ["kind", "code", "message", "retryable"],
+      "properties": {
+        "kind": {
+          "const": "tasks.error"
+        },
+        "code": {
+          "enum": [
+            "invalid_argument",
+            "not_found",
+            "unsupported_schema",
+            "payload_too_large",
+            "locked",
+            "io",
+            "internal"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "unevaluatedProperties": false
+    }
+  }
+}
