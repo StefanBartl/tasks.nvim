@@ -6,10 +6,14 @@
 ---     nvim --headless -u NONE -l scripts/tasks-html.lua --vault=<vault> --out=tasks.html
 ---
 --- Options: `--vault=<dir>` (else `$TASKS_VAULT`), `--out=<file>` (default `tasks-overview.html`),
---- `--area=<area>` (only that area; the Today card still asks the whole vault).
+--- `--area=<area>` (only that area; the Today card still asks the whole vault), `--exclude=a,b` (areas whose tasks
+--- are left out everywhere, the Today card too: the file holds titles and is easy to pass on).
 ---
---- Titles come from files and are untrusted: the page builds its DOM with `textContent` only (no `innerHTML`) and
---- the inlined JSON has every `<` escaped, so a title can never close the data block.
+--- The three CLI calls run side by side and each is killed after `TIMEOUT_MS`. The file holds no path of your machine.
+---
+--- Titles come from files and are untrusted: the page builds its DOM with `textContent` only (no `innerHTML`), the
+--- inlined JSON has every `<` escaped, so a title can never close the data block, and a Content-Security-Policy
+--- allows nothing but the page's own inline script and style (no network, no other script, no navigation away).
 
 local script = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p")
 local plugin_root = vim.fs.dirname(vim.fs.dirname(vim.fs.normalize(script)))
@@ -28,24 +32,86 @@ end
 
 local STATUSES = "open,doing,decision,blocked,parked"
 
----Run one command of the CLI and return its lines.
+---One CLI call may take this long (the real vault answers in about a second); a hung child is killed.
+local TIMEOUT_MS = 120000
+
+---@param name string
+---@param value string
+---@return string
+local function fail_usage(name, value)
+  io.stderr:write(("error: --%s: unusable value %q\n"):format(name, value))
+  os.exit(2)
+end
+
+-- An area is a folder name: nothing the CLI could take for an option (`-x`) or a list (`@x`), no path, no control byte.
+---@param area string
+---@return boolean
+local function valid_area(area)
+  return area ~= ""
+    and not area:find("^[-@]")
+    and not area:find("[/\\%c]")
+    and not area:find("^%.%.?$")
+end
+if opts.area ~= nil and not valid_area(opts.area) then
+  fail_usage("area", opts.area)
+end
+
+---Areas whose tasks never reach the file (`--exclude=casedesk.nvim,WKDBook-Tricentis`): the page lists titles, and
+---a file is easy to pass on.
+---@type table<string, boolean>
+local excluded = {}
+if opts.exclude and opts.exclude ~= "" then
+  for _, area in ipairs(vim.split(opts.exclude, ",", { plain = true, trimempty = true })) do
+    if not valid_area(area) then
+      fail_usage("exclude", area)
+    end
+    excluded[area] = true
+  end
+end
+
+---@param id string
+---@return boolean
+local function is_excluded(id)
+  return excluded[id:match("^(.-)/") or ""] == true
+end
+
+---Start one command of the CLI. All of them are started before any is waited for: they only read the vault.
 ---@param args string[]
----@return string[] lines
-local function run(args)
-  local cmd = { vim.v.progpath, "--headless", "-u", "NONE", "-l", cli }
+---@return vim.SystemObj
+local function spawn(args)
+  -- `-n -i NONE`: no swap file and no shada write for a process that only prints.
+  local cmd = { vim.v.progpath, "--headless", "-n", "-i", "NONE", "-u", "NONE", "-l", cli }
   vim.list_extend(cmd, args)
   if opts.vault and opts.vault ~= "" then
     cmd[#cmd + 1] = "--vault=" .. opts.vault
   end
-  local res = vim.system(cmd, { text = true }):wait()
+  return vim.system(cmd, { text = true })
+end
+
+---The lines of a started command; a failure or a timeout ends the script.
+---@param proc vim.SystemObj
+---@param name string
+---@return string[] lines
+local function collect(proc, name)
+  local res = proc:wait(TIMEOUT_MS)
   if res.code ~= 0 then
-    io.stderr:write(
-      ("error: `tasks %s` failed (%d): %s\n"):format(args[1], res.code, res.stderr or "")
-    )
+    local why = res.code == 124 and ("no answer within %d s"):format(TIMEOUT_MS / 1000)
+      or ("exit %d: %s"):format(res.code, vim.trim((res.stderr or ""):sub(1, 500)))
+    io.stderr:write(("error: `tasks %s` failed (%s)\n"):format(name, why))
     os.exit(1)
   end
   return vim.split(res.stdout or "", "\r?\n", { trimempty = true })
 end
+
+local list_args = { "list", "--status=" .. STATUSES }
+if opts.area then
+  table.insert(list_args, 2, opts.area)
+end
+local procs = {
+  list = spawn(list_args),
+  plan = spawn({ "plan", "--format=tsv" }),
+  next = spawn({ "next", "--n=5" }),
+}
 
 ---@param line string
 ---@return string[]
@@ -69,20 +135,15 @@ local function val(s)
   return s
 end
 
-local list_args = { "list", "--status=" .. STATUSES }
-if opts.area and opts.area ~= "" then
-  table.insert(list_args, 2, opts.area)
-end
-
 ---@type table<string, table>
 local by_id = {}
 ---@type table[]
 local tasks = {}
 
 -- list: id status prio effort kind updated title
-for _, line in ipairs(run(list_args)) do
+for _, line in ipairs(collect(procs.list, "list")) do
   local c = cols(line)
-  if #c >= 7 and c[1]:find("/", 1, true) then
+  if #c >= 7 and c[1]:find("/", 1, true) and not is_excluded(c[1]) then
     local area, slug = c[1]:match("^(.-)/(.+)$")
     local t = {
       id = c[1],
@@ -101,7 +162,7 @@ for _, line in ipairs(run(list_args)) do
 end
 
 -- plan --format=tsv: stage id readiness status prio effort leverage title
-for _, line in ipairs(run({ "plan", "--format=tsv" })) do
+for _, line in ipairs(collect(procs.plan, "plan")) do
   local c = cols(line)
   local t = by_id[c[2] or ""]
   if t then
@@ -114,11 +175,13 @@ end
 -- next: "next: <id>\t<title>\t<reason>", "then: ...", "cdx: ..."
 local today = { next = {}, ["then"] = {}, cdx = {} }
 local empty_note
-for _, line in ipairs(run({ "next", "--n=5" })) do
+for _, line in ipairs(collect(procs.next, "next")) do
   local kind, rest = line:match("^(%a+):%s*(.*)$")
   if kind and today[kind] then
     local c = cols(rest)
-    today[kind][#today[kind] + 1] = { id = c[1], title = c[2] or "", reason = c[3] or "" }
+    if c[1] and not is_excluded(c[1]) then
+      today[kind][#today[kind] + 1] = { id = c[1], title = c[2] or "", reason = c[3] or "" }
+    end
   elseif line ~= "" then
     empty_note = (empty_note and (empty_note .. " ") or "") .. line
   end
@@ -126,7 +189,6 @@ end
 
 local data = {
   generated = os.date("%Y-%m-%d %H:%M"),
-  vault = opts.vault or vim.env.TASKS_VAULT or "",
   area = opts.area,
   tasks = tasks,
   today = today,
@@ -146,6 +208,7 @@ local TEMPLATE = [==[<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <title>Tasks Übersicht</title>
 <style>
 :root {
@@ -230,17 +293,26 @@ button:hover { border-color: var(--accent); }
   var D = JSON.parse(document.getElementById("data").textContent);
   var STATUS_ORDER = ["doing", "decision", "blocked", "open", "parked"];
   var EFFORT_ORDER = ["XS", "S", "M", "L", "XL"];
-  var state = { q: "", group: "status", sel: { status: {}, prio: {}, effort: {}, kind: {}, area: {}, ready: {} } };
+  // Maps keyed by words from task files (a kind, an area) have no prototype: a key such as `__proto__` is just a key.
+  function bag() { return Object.create(null); }
+  var DIMS = ["status", "prio", "effort", "kind", "ready", "area"];
+  var state = { q: "", group: "status", sel: bag() };
+  DIMS.forEach(function (d) { state.sel[d] = bag(); });
 
   function load() {
     try {
       var raw = localStorage.getItem("tasks-html-state");
-      if (raw) {
-        var s = JSON.parse(raw);
-        if (s && s.sel) { state.sel = Object.assign(state.sel, s.sel); }
-        if (s && typeof s.group === "string") { state.group = s.group; }
-      }
-    } catch (e) { /* storage may be blocked */ }
+      if (!raw) { return; }
+      var s = JSON.parse(raw);
+      if (!s || typeof s !== "object") { return; }
+      // Only what this page writes is taken back: known dimensions, plain `true`s, a known grouping.
+      DIMS.forEach(function (dim) {
+        var saved = s.sel && Object.prototype.hasOwnProperty.call(s.sel, dim) ? s.sel[dim] : null;
+        if (!saved || typeof saved !== "object") { return; }
+        Object.keys(saved).forEach(function (v) { if (saved[v] === true) { state.sel[dim][v] = true; } });
+      });
+      if (["status", "stage", "area"].indexOf(s.group) !== -1) { state.group = s.group; }
+    } catch (e) { /* storage may be blocked or hold something else */ }
   }
   function save() {
     try { localStorage.setItem("tasks-html-state", JSON.stringify({ sel: state.sel, group: state.group })); }
@@ -275,20 +347,26 @@ button:hover { border-color: var(--accent); }
     if (name === "effort" && v && EFFORT_ORDER.indexOf(v) === -1) { return "Tage"; }
     return v == null || v === "" ? "–" : String(v);
   }
-  function active(name) { return Object.keys(state.sel[name]).filter(function (k) { return state.sel[name][k]; }); }
-
-  function matches(t, skip) {
-    var q = state.q.trim().toLowerCase();
-    if (q && (t.id + " " + t.title).toLowerCase().indexOf(q) === -1) { return false; }
-    return Object.keys(state.sel).every(function (name) {
-      if (name === skip) { return true; }
-      var on = active(name);
-      return on.length === 0 || on.indexOf(dim(t, name)) !== -1;
+  // The selection and the search words as the matcher wants them, computed once per render (not per task and chip).
+  function filterOf() {
+    var on = [];
+    DIMS.forEach(function (name) {
+      var picked = Object.keys(state.sel[name]).filter(function (k) { return state.sel[name][k]; });
+      if (picked.length > 0) { on.push({ name: name, picked: picked }); }
     });
+    return { q: state.q.trim().toLowerCase(), on: on };
+  }
+
+  function matches(t, f, skip) {
+    if (f.q && (t.id + " " + t.title).toLowerCase().indexOf(f.q) === -1) { return false; }
+    for (var i = 0; i < f.on.length; i++) {
+      if (f.on[i].name !== skip && f.on[i].picked.indexOf(dim(t, f.on[i].name)) === -1) { return false; }
+    }
+    return true;
   }
 
   function values(name) {
-    var seen = {};
+    var seen = bag();
     D.tasks.forEach(function (t) { seen[dim(t, name)] = true; });
     var keys = Object.keys(seen);
     var order = name === "status" ? STATUS_ORDER : name === "effort" ? EFFORT_ORDER : null;
@@ -306,14 +384,18 @@ button:hover { border-color: var(--accent); }
   function renderChips() {
     var box = document.getElementById("chips");
     box.textContent = "";
+    var f = filterOf();
     [["status", "Status"], ["prio", "Prio"], ["effort", "Aufwand"], ["kind", "Art"], ["ready", "Bereit"], ["area", "Bereich"]]
       .forEach(function (pair) {
         var name = pair[0];
         var vs = values(name);
         if (vs.length < 2 && name !== "status") { return; }
+        // One pass per dimension: how many tasks each value would show with the other dimensions as they are.
+        var counts = bag();
+        D.tasks.forEach(function (t) { if (matches(t, f, name)) { var k = dim(t, name); counts[k] = (counts[k] || 0) + 1; } });
         var row = el("div", { class: "chips" }, [el("span", { class: "label", text: pair[1] })]);
         vs.forEach(function (v) {
-          var n = D.tasks.filter(function (t) { return dim(t, name) === v && matches(t, name); }).length;
+          var n = counts[v] || 0;
           var on = !!state.sel[name][v];
           var chip = el("button", {
             type: "button", class: "chip", "aria-pressed": on ? "true" : "false",
@@ -363,12 +445,13 @@ button:hover { border-color: var(--accent); }
   function renderList() {
     var box = document.getElementById("list");
     box.textContent = "";
-    var shown = D.tasks.filter(function (t) { return matches(t); });
+    var f = filterOf();
+    var shown = D.tasks.filter(function (t) { return matches(t, f, null); });
     document.getElementById("meta").textContent =
       shown.length + " von " + D.tasks.length + " · erzeugt " + D.generated + (D.area ? " · Bereich " + D.area : "");
     if (shown.length === 0) { box.appendChild(el("div", { class: "empty", text: "Keine Treffer." })); return; }
-    var groups = {};
-    shown.forEach(function (t) { (groups[groupKey(t)] = groups[groupKey(t)] || []).push(t); });
+    var groups = bag();
+    shown.forEach(function (t) { var k = groupKey(t); (groups[k] = groups[k] || []).push(t); });
     Object.keys(groups).sort(groupSort).forEach(function (g) {
       var items = groups[g].sort(taskSort);
       box.appendChild(el("div", { class: "group" }, [
@@ -402,12 +485,17 @@ button:hover { border-color: var(--accent); }
   function render() { renderChips(); renderList(); }
 
   load();
-  document.getElementById("h1").textContent = "Tasks" + (D.vault ? "" : "");
   document.getElementById("group").value = state.group;
   document.getElementById("group").addEventListener("change", function (e) { state.group = e.target.value; save(); render(); });
-  document.getElementById("q").addEventListener("input", function (e) { state.q = e.target.value; renderList(); renderChips(); });
+  // A render rebuilds every row: while someone types, wait for a short pause instead of rebuilding per key.
+  var typing = null;
+  document.getElementById("q").addEventListener("input", function (e) {
+    state.q = e.target.value;
+    clearTimeout(typing);
+    typing = setTimeout(function () { renderList(); renderChips(); }, 120);
+  });
   document.getElementById("clear").addEventListener("click", function () {
-    Object.keys(state.sel).forEach(function (k) { state.sel[k] = {}; });
+    Object.keys(state.sel).forEach(function (k) { state.sel[k] = bag(); });
     state.q = ""; document.getElementById("q").value = ""; save(); render();
   });
   document.getElementById("reload").addEventListener("click", function () { location.reload(); });

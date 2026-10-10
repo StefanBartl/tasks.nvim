@@ -139,7 +139,8 @@ lists = {
 ```
 
 Three are built in (`quick-wins`, `small-and-important`, `unestimated`); a saved list of the same name replaces a
-built-in one, a list of `setup()` replaces a saved one ([docs/COMMANDS.md](docs/COMMANDS.md#tasks-lists)).
+built-in one, a list of `setup()` replaces a saved one ([docs/COMMANDS.md](docs/COMMANDS.md#tasks-lists)). The headless CLI
+has no `setup()`: it knows the built-in and the saved lists.
 
 A wrong key or value is reported (and listed in `:checkhealth`) and the default stays. Every key of the
 dashboard and the form can be moved or switched off with `keys = { dashboard = {...}, dashboard_input = {...},

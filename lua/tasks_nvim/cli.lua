@@ -171,6 +171,7 @@ local SPECS = {
       "value",
       "actor",
       "stale",
+      "phase",
     },
     flag = { "blocked", "stale-refs", "unestimated", "quick-win" },
   },
@@ -777,12 +778,23 @@ local function def_from_options(opt)
   return def
 end
 
+---Does the command take this option word (`--effort` is `value`, `--blocked` is `flag`)?
+---@param spec Tasks.CliSpec
+---@param flag string
+---@return boolean
+local function takes(spec, flag)
+  return vim.tbl_contains(spec.value, flag) or vim.tbl_contains(spec.flag, flag)
+end
+
 ---`list|plan|estimate @<name>`: the named list's options under the ones given on the command line (a word you
----typed wins), its area when no area was typed.
+---typed wins), its area when no area was typed. A word of the list the command has no use for is an error, never
+---dropped (`estimate @small-and-important` must not quietly leave out "startable"); only `sort` may be left over,
+---it is a way to order, not a way to select.
 ---@param args { pos: string[], opt: table }
 ---@param name string
+---@param command string
 ---@return string|nil err
-local function apply_list(args, name)
+local function apply_list(args, name, command)
   local entry, err = lists.get(name)
   if not entry then
     return err
@@ -791,22 +803,39 @@ local function apply_list(args, name)
   if not resolved then
     return rerr
   end
-  table.remove(args.pos, 1)
+  local spec = SPECS[command]
+  ---@type { flag: string, value: any }[]
+  local overlay = {}
   for key, value in pairs(entry.def) do
     if key == "readiness" then
-      if args.opt.ready == nil and args.opt.waiting == nil then
-        args.opt[value] = true
-      end
-    elseif key == "area" then
-      if args.pos[1] == nil then
-        args.pos[1] = value
-      end
-    elseif key ~= "desc" then
+      overlay[#overlay + 1] = { flag = value, value = true }
+    elseif key ~= "desc" and key ~= "area" then
       local flag = key:gsub("_", "-")
-      if args.opt[flag] == nil then
-        args.opt[flag] = value == true and true or tostring(value)
+      if key == "stale_refs" and not takes(spec, flag) then
+        -- `--stale=refs` is the same filter where the flag itself does not exist
+        overlay[#overlay + 1] = { flag = "stale", value = "refs" }
+      else
+        overlay[#overlay + 1] = { flag = flag, value = value == true and true or tostring(value) }
       end
     end
+  end
+  for _, o in ipairs(overlay) do
+    if o.flag ~= "sort" and not takes(spec, o.flag) then
+      return ("list '%s' sets --%s, which `%s` does not take"):format(name, o.flag, command)
+    end
+  end
+  table.remove(args.pos, 1)
+  for _, o in ipairs(overlay) do
+    if o.flag == "ready" or o.flag == "waiting" then
+      if args.opt.ready == nil and args.opt.waiting == nil then
+        args.opt[o.flag] = true
+      end
+    elseif args.opt[o.flag] == nil then
+      args.opt[o.flag] = o.value
+    end
+  end
+  if entry.def.area and args.pos[1] == nil then
+    args.pos[1] = entry.def.area
   end
   return nil
 end
@@ -819,7 +848,7 @@ function commands.lists(ctx)
   if sub == nil or sub == "ls" then
     local entries, notes = lists.all()
     for _, e in ipairs(entries) do
-      ctx.say(table.concat({ e.name, e.source, lists.summary(e.def) }, "	"))
+      ctx.say(table.concat({ e.name, e.source, lists.summary(e.def) }, "\t"))
     end
     for _, n in ipairs(notes) do
       ctx.warn("warn: " .. n)
@@ -837,7 +866,7 @@ function commands.lists(ctx)
       ctx.warn("error: " .. err)
       return 1
     end
-    ctx.say(("%s	%s"):format(entry.name, entry.source))
+    ctx.say(("%s\t%s"):format(entry.name, entry.source))
     if entry.def.desc then
       ctx.say("desc: " .. fsio.clean(entry.def.desc))
     end
@@ -862,7 +891,7 @@ function commands.lists(ctx)
       ctx.warn("error: " .. tostring(err))
       return 1
     end
-    ctx.say(("saved	%s	%s"):format(name, lists.path()))
+    ctx.say(("saved\t%s\t%s"):format(name, lists.path()))
     return 0
   elseif sub == "delete" then
     if not name or #args.pos > 2 then
@@ -874,7 +903,7 @@ function commands.lists(ctx)
       ctx.warn("error: " .. tostring(err))
       return 1
     end
-    ctx.say(("deleted	%s"):format(name))
+    ctx.say(("deleted\t%s"):format(name))
     return 0
   elseif sub == "rename" then
     if not name or not args.pos[3] or #args.pos > 3 then
@@ -886,7 +915,7 @@ function commands.lists(ctx)
       ctx.warn("error: " .. tostring(err))
       return 1
     end
-    ctx.say(("renamed	%s	%s"):format(name, args.pos[3]))
+    ctx.say(("renamed\t%s\t%s"):format(name, args.pos[3]))
     return 0
   end
   ctx.warn("error: unknown lists command: " .. tostring(sub) .. " (save, delete, rename, show)")
@@ -1463,7 +1492,7 @@ function M.run(argv, io)
     and args.pos[1]
     and args.pos[1]:sub(1, 1) == "@"
   then
-    local lerr = apply_list(args, args.pos[1]:sub(2))
+    local lerr = apply_list(args, args.pos[1]:sub(2), name)
     if lerr then
       warn("error: " .. lerr)
       return 2

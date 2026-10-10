@@ -281,13 +281,17 @@ live in `tasks_nvim.estimate` (one definition, used by every place that names qu
 ```sh
 nvim --headless -u NONE -l scripts/tasks-html.lua --vault=<vault> --out=tasks.html
 nvim --headless -u NONE -l scripts/tasks-html.lua --area=my-area --out=my-area.html
+nvim --headless -u NONE -l scripts/tasks-html.lua --exclude=private-area,another --out=tasks.html
 ```
 
 One self-contained file (no server, no network): the Today card from `next`, filter chips for status, prio, effort,
 kind, readiness and area with live counts, a search over id and title (`/` focuses it), grouping by status, stage or
 area, and a click on an id copies it. It only *reads* what `list`, `plan --format=tsv` and `next` print, so it shows
-exactly what the CLI shows. Run the script again and press "Neu laden" to refresh. Titles are untrusted: the page
-builds its DOM with `textContent` and the inlined data has every `<` escaped.
+exactly what the CLI shows. Run the script again and press "Neu laden" to refresh. The three CLI calls run side by side
+(about a second for 600 tasks) and are killed after two minutes. The file lists task titles and is easy to pass on:
+`--exclude=a,b` leaves areas out everywhere (the Today card too), and the file contains no path of your machine. Titles
+are untrusted: the page builds its DOM with `textContent`, the inlined data has every `<` escaped, and a
+Content-Security-Policy allows only the page's own inline script and style.
 
 ### 14e. A list I use again and again — works today
 

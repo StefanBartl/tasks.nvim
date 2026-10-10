@@ -125,10 +125,13 @@ local function unquote(s)
 end
 
 ---`--list=<name>`: the named list's options under the ones typed (a flag you gave wins), its area when no area was
----typed. Reports the problem and returns false when the list is unknown or broken.
+---typed. Reports the problem and returns false when the list is unknown or broken, names an area the vault does not
+---have, or sets something this command has no use for (`unsupported`: those flag words; a list that sets one is an
+---error, never quietly cut short -- only `sort` is left over, it orders and does not select).
 ---@param ctx table  composer context
+---@param unsupported? string[]
 ---@return boolean ok
-local function apply_list(ctx)
+local function apply_list(ctx, unsupported)
   local name = ctx.flags and ctx.flags.list
   if name == nil then
     return true
@@ -143,6 +146,27 @@ local function apply_list(ctx)
   if not resolved then
     notify.error(tostring(rerr))
     return false
+  end
+  local area = entry.def.area
+  if area then
+    local root = vault_root()
+    if not root then
+      return false
+    end
+    if not vault.has_area(root, area) then
+      notify.error(("list '%s': '%s' is not an area of the vault"):format(name, area))
+      return false
+    end
+  end
+  local function refuses(flag)
+    return vim.tbl_contains(unsupported or {}, flag)
+  end
+  for key, value in pairs(entry.def) do
+    local flag = key == "readiness" and value or key:gsub("_", "-")
+    if refuses(flag) then
+      notify.error(("list '%s' sets %s, which this command does not take"):format(name, flag))
+      return false
+    end
   end
   ctx.flags.list = nil
   for key, value in pairs(entry.def) do
@@ -356,7 +380,7 @@ function M.plan(ctx)
   if not no_stray_words(ctx) then
     return
   end
-  if not apply_list(ctx) then
+  if not apply_list(ctx, { "waiting" }) then
     return
   end
   local flags = ctx.flags
@@ -443,9 +467,6 @@ end
 ---@param ctx table  composer context
 function M.quickwins(ctx)
   if not no_stray_words(ctx) then
-    return
-  end
-  if not apply_list(ctx) then
     return
   end
   local flags = ctx.flags
@@ -672,7 +693,7 @@ function M.estimate(ctx)
   if not no_stray_words(ctx) then
     return
   end
-  if not apply_list(ctx) then
+  if not apply_list(ctx, { "ready", "waiting" }) then
     return
   end
   local scope = load_scope(ctx)
@@ -752,7 +773,7 @@ function M.list(ctx)
   if not no_stray_words(ctx) then
     return
   end
-  if not apply_list(ctx) then
+  if not apply_list(ctx, {}) then
     return
   end
   local flags = ctx.flags

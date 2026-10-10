@@ -50,7 +50,18 @@ return function(H)
   err = problem("bad name", {})
   has(err, "a list name is letters")
   err = problem("x", { desc = "two\nlines" })
-  has(err, "one line")
+  has(err, "control character", "a description is one line")
+  err = problem("x", { tag = "a\tb" })
+  has(err, "control character", "a tab would split a TSV row")
+  err = problem("x", { tag = "evil\27[2J" })
+  has(err, "control character", "an escape byte would reach the terminal")
+  err = problem("x", { tag = string.rep("t", 201) })
+  has(err, "longer than")
+  for _, bad in ipairs({ "../x", "a/b", "..", "@x", "-x", "C:\\x" }) do
+    err = problem("x", { area = bad })
+    has(err, "`area`", "area " .. bad)
+  end
+  ok(lists.normalize("x", { area = "docmap-desktop" }), "a real area name passes")
   err = problem("x", "not a table")
   has(err, "table of options")
 
@@ -195,6 +206,26 @@ return function(H)
   vim.fn.delete(lists.path())
   ok(lists.save("x", { prio = "1" }), "a missing file is simply created")
 
+  -- an empty file (`touch`) is an empty set, not damage
+  H.write(lists.path(), "")
+  local empty, estatus = lists.load()
+  eq({ next(empty), estatus }, { nil, "ok" })
+  ok(lists.save("y", { prio = "2" }), "... and can be saved to")
+
+  -- the file is read once per change: a second load answers from memory, a change (ours or somebody's) is seen
+  H.write(lists.path(), vim.json.encode({ version = 1, lists = { first = { prio = "1" } } }))
+  eq(lists.get("first").def.prio, "1")
+  H.write(
+    lists.path(),
+    vim.json.encode({ version = 1, lists = { second = { prio = "2", desc = "other length" } } })
+  )
+  ok(lists.get("second") ~= nil and lists.get("first") == nil, "a changed file is read again")
+  ok(lists.save("third", { prio = "3" }))
+  ok(lists.get("third") ~= nil, "our own save is visible at once")
+  local copy = lists.load()
+  copy.third.prio = "mutated"
+  eq(lists.get("third").def.prio, "3", "what load hands out is a copy of the cache")
+
   -- ── the dashboard's quick-win chip uses the same rule ──
   ok(core.is_quick_win_filter({ value_min = 4, effort_max = "S" }))
 
@@ -270,6 +301,26 @@ return function(H)
   res = run({ "list", "@nope" })
   eq(res.code, 2)
   has(res.err, "unknown list 'nope'")
+  -- a word of the list that a command has no use for is an error, not a quietly wider answer
+  res = run({ "estimate", "@small-and-important" })
+  eq(res.code, 2)
+  has(res.err, "--ready, which `estimate` does not take")
+  res = run({ "plan", "@unestimated" })
+  eq(res.code, 0, "plan takes what unestimated sets: " .. res.err)
+  lists.save("waits", { readiness = "waiting" })
+  res = run({ "plan", "@waits" })
+  eq(res.code, 2)
+  has(res.err, "--waiting, which `plan` does not take")
+  lists.save("sorted", { value = ">=4", sort = "roi" })
+  res = run({ "estimate", "@sorted" })
+  eq(res.code, 0, "a sort order is the one thing a command may leave over: " .. res.err)
+  lists.save("elsewhere", { area = "no-such-area" })
+  res = run({ "list", "@elsewhere" })
+  eq(res.code, 1, "an area the vault does not have")
+  has(res.err, "unknown area")
+  lists.delete("waits")
+  lists.delete("sorted")
+  lists.delete("elsewhere")
   res = run({ "lists", "save", "bad", "--prio=9" })
   eq(res.code, 1)
   has(res.err, "list 'bad'")

@@ -937,8 +937,8 @@ local function nested_routes()
         },
       },
       flags = (function()
-        -- `--quick-win`, `--value` and `--effort` ARE the definition here; `--status` defaults to what can be started.
-        local skip = { ["quick-win"] = true, value = true, effort = true, sort = true }
+        -- `--quick-win`, `--value`, `--effort` and `--list` ARE (or would change) the definition here; `--status` defaults to what can be started.
+        local skip = { ["quick-win"] = true, value = true, effort = true, sort = true, list = true }
         local out = {}
         for _, flag in ipairs(filter_flags({ PLAN_FLAG })) do
           if not skip[flag.name] then

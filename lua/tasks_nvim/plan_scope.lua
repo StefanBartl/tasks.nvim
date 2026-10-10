@@ -278,8 +278,9 @@ local FILTER_KEYS = {
   "value",
   "actor",
   "stale",
+  "phase",
 }
-local FILTER_FLAGS = { "stale_refs", "blocked", "unestimated" }
+local FILTER_FLAGS = { "stale_refs", "blocked", "unestimated", "quick_win" }
 
 ---What a marker records of a `plan --write`: the target, the view (`ready`, `steps`) and the filters, so the refresh
 ---after a finish builds the SAME block (and `--check` agrees with it). A value that cannot live on a marker line

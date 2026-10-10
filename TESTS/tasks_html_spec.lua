@@ -71,4 +71,24 @@ return function(H)
   r = child({ "--nope" })
   eq(r.code, 2, "an argument without a value is refused")
   has(r.stderr, "unknown argument")
+
+  -- an area that could pass for an option, a list or a path is refused before any command runs
+  for _, bad in ipairs({ "--x", "@list", "a/b", "..", "-" }) do
+    r = child({ "--vault=" .. root, "--out=" .. out, "--area=" .. bad })
+    eq(r.code, 2, "area " .. bad)
+    has(r.stderr, "unusable value")
+  end
+
+  -- --exclude leaves an area out everywhere, and the file never names the vault's folder
+  local out3 = H.tmpdir() .. "/excluded.html"
+  r = child({ "--vault=" .. root, "--out=" .. out3, "--exclude=cascade.nvim" })
+  eq(r.code, 0, "exclude run; stderr: " .. tostring(r.stderr))
+  local text3 = H.read(out3)
+  local d3 = vim.json.decode(text3:match('<script type="application/json" id="data">(.-)</script>'))
+  eq(#d3.tasks, 2, "the cascade.nvim task is gone")
+  lacks(text3, "cascade.nvim", "... from the Today card and every other place")
+  lacks(text3, root, "the file holds no path of this machine")
+  lacks(text3, vim.fs.normalize(root), "... in either spelling")
+  r = child({ "--vault=" .. root, "--out=" .. out3, "--exclude=a,../b" })
+  eq(r.code, 2, "a bad name in --exclude is refused")
 end

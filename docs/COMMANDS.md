@@ -375,11 +375,15 @@ require("tasks_nvim").setup({
 ```
 
 Running one: `:Tasks list --list=small-and-good` opens the dashboard on it; every option you type on top wins over the
-list (`:Tasks list --list=my-bugs --prio=1`); `--list=` also works for `plan`, `estimate` and `quickwins`. `:Tasks lists`
-opens a menu of all of them. A saved file that cannot be read is never written over (the dashboard menu says why), and a
+list (`:Tasks list --list=my-bugs --prio=1`); `--list=` also works for `plan` and `estimate`, which take what a list
+selects but not how it orders (`sort` is left over). A list that sets something the command has no use for (`readiness`
+for `estimate`, `waiting` for `plan`) or names an area the vault does not have is an **error**, never a quietly wider
+answer. `:Tasks lists` opens a menu of all of them. A saved file that cannot be read is never written over (the dashboard menu says why), and a
 single broken list in it is skipped and named, the rest stays.
 
-Headless:
+Headless: there is no `setup()`, so the CLI knows the built-in and the **saved** lists (the state file), not the ones of
+your spec; `tasks lists save` is how a list gets there. Two Neovim instances saving at the same moment can lose one of the
+saves (the last writer wins), the file itself is always whole.
 
 ```sh
 nvim --headless -u NONE -l scripts/tasks.lua lists                                  # name, source, what it selects

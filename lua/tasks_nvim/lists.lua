@@ -41,6 +41,22 @@ M.MAX_FILE_BYTES = 256 * 1024
 ---Most lists one state file holds.
 M.MAX_SAVED = 200
 
+---Longest value of one field (a description, a tag list).
+M.MAX_VALUE = 200
+
+---The shape of an area name: a folder name, not a path and nothing the command line could take for an option
+---(`-x`) or a list (`@x`). That the area exists is checked where a list is run (`vault.has_area`).
+---@param area any
+---@return boolean
+function M.valid_area(area)
+  return type(area) == "string"
+    and area ~= ""
+    and not area:find("^[-@]")
+    and not area:find("[/\\%c]")
+    and area ~= "."
+    and area ~= ".."
+end
+
 ---@class Tasks.ListDef
 ---@field desc? string
 ---@field area? string
@@ -213,6 +229,14 @@ function M.normalize(name, def)
     elseif kind == "stringnum" and type(value) == "number" then
       clean[key] = tostring(value)
     elseif type(value) == "string" then
+      -- Every field ends up on a terminal, in a menu line, a TSV row or a file: no control byte (a tab included)
+      -- and a sane length, whatever `filter_opts` would still accept as a word.
+      if value:find("[%z\1-\31\127]") then
+        return nil, ("list '%s': `%s` contains a control character"):format(name, key)
+      end
+      if #value > M.MAX_VALUE then
+        return nil, ("list '%s': `%s` is longer than %d characters"):format(name, key, M.MAX_VALUE)
+      end
       if value ~= "" then
         clean[key] = value
       end
@@ -231,8 +255,9 @@ function M.normalize(name, def)
         clean.readiness
       )
   end
-  if clean.desc and (clean.desc:find("[\r\n]") or #clean.desc > 200) then
-    return nil, ("list '%s': `desc` is one line of at most 200 characters"):format(name)
+  if clean.area and not M.valid_area(clean.area) then
+    return nil,
+      ("list '%s': `area` must be the name of an area folder, got %q"):format(name, clean.area)
   end
   local _, serr = model.parse_sort(clean.sort)
   if serr then
@@ -402,24 +427,56 @@ end
 ---@return table<string, Tasks.ListDef> lists
 ---@return Tasks.ListsStatus status
 ---@return string[] notes  Why the file or single lists were not used.
+---What the last `load` read, keyed by the file's size and mtime: completion and menus ask for the lists on every
+---keystroke, and a state file only changes when somebody saves.
+---@type { path: string, size: integer, sec: integer, nsec: integer, lists: table, status: string, notes: string[] }|nil
+local cache
+
 function M.load()
   local path = M.path()
   local st = uv.fs_stat(path)
   if not st then
+    cache = nil
     return {}, "missing", {}
   end
+  local mt = st.mtime or { sec = 0, nsec = 0 }
+  if
+    cache
+    and cache.path == path
+    and cache.size == st.size
+    and cache.sec == mt.sec
+    and cache.nsec == mt.nsec
+  then
+    return vim.deepcopy(cache.lists), cache.status, vim.deepcopy(cache.notes)
+  end
+  ---@type table<string, Tasks.ListDef>, Tasks.ListsStatus, string[]
+  local lists, status, notes = {}, "ok", {}
   if st.type == "file" and st.size > M.MAX_FILE_BYTES then
-    return {}, "corrupt", { ("%s is larger than %d bytes"):format(path, M.MAX_FILE_BYTES) }
+    status, notes = "corrupt", { ("%s is larger than %d bytes"):format(path, M.MAX_FILE_BYTES) }
+  else
+    local text, rerr = fsio.read(path)
+    if not text then
+      status, notes = "unreadable", { tostring(rerr) }
+    elseif vim.trim(text) ~= "" then
+      -- (an empty file, say from `touch`, is an empty set, not damage)
+      local decoded, skipped, derr = M.decode(text)
+      if decoded then
+        lists, notes = decoded, skipped
+      else
+        status, notes = "corrupt", { ("%s: %s"):format(path, derr) }
+      end
+    end
   end
-  local text, rerr = fsio.read(path)
-  if not text then
-    return {}, "unreadable", { tostring(rerr) }
-  end
-  local lists, skipped, derr = M.decode(text)
-  if not lists then
-    return {}, "corrupt", { ("%s: %s"):format(path, derr) }
-  end
-  return lists, "ok", skipped
+  cache = {
+    path = path,
+    size = st.size,
+    sec = mt.sec,
+    nsec = mt.nsec,
+    lists = vim.deepcopy(lists),
+    status = status,
+    notes = vim.deepcopy(notes),
+  }
+  return lists, status, notes
 end
 
 ---Write the saved lists (atomically, parent folder created). Callers refuse to write over an unreadable or corrupt file.
@@ -427,6 +484,7 @@ end
 ---@return boolean ok
 ---@return string|nil err
 local function write(lists)
+  cache = nil
   return fsio.write_atomic(M.path(), M.encode(lists))
 end
 
@@ -518,7 +576,7 @@ function M.summary(def)
   if def.area then
     table.insert(words, 1, "area=" .. def.area)
   end
-  return #words > 0 and table.concat(words, " ") or "(everything)"
+  return #words > 0 and fsio.clean(table.concat(words, " ")) or "(everything)"
 end
 
 -- ── changing the saved lists ─────────────────────────────────────────────────
