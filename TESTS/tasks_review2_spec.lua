@@ -562,6 +562,42 @@ return function(H)
     vim.on_key(nil, vim.api.nvim_create_namespace("tasks-review2-help"))
   end
 
+  -- ── a key that is a MAPPING closes the help whole: nothing of it runs in the buffer behind ──
+  -- (Neovim's own <C-l> is `<Cmd>nohlsearch|diffupdate|normal! <C-L><CR>`: when only its first key was discarded,
+  -- the rest ran as normal-mode commands -- `n` is E35, `o` is insert mode)
+  do
+    local help_float = require("tasks_nvim.ui.help_float")
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_set_current_buf(buf)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "one", "two" })
+    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+    local wins_before = #vim.api.nvim_list_wins()
+    local win = help_float.open({ "help" }, "tasks-review2-help-mapping")
+    eq(#vim.api.nvim_list_wins(), wins_before + 1, "the float is open")
+    vim.v.errmsg = ""
+    -- a mapping of the kind <C-l> is: `<Cmd>` with several commands, the first of which looks like a motion
+    vim.keymap.set("n", "<F20>", "<Cmd>nohlsearch<Bar>echo 'ran'<CR>", { buffer = buf })
+    vim.api.nvim_feedkeys(vim.keycode("<F20>"), "mx", false)
+    vim.wait(100, function()
+      return not vim.api.nvim_win_is_valid(win)
+    end)
+    ok(not vim.api.nvim_win_is_valid(win), "the mapped key closed the help")
+    eq(vim.v.errmsg, "", "and nothing of it ran behind: " .. vim.v.errmsg)
+    eq(vim.fn.mode(), "n", "still in normal mode")
+    eq(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "one", "two" }, "the buffer is untouched")
+    -- the default <C-l> itself
+    local win2 = help_float.open({ "help" }, "tasks-review2-help-mapping")
+    vim.v.errmsg = ""
+    vim.api.nvim_feedkeys(vim.keycode("<C-l>"), "mx", false)
+    vim.wait(100, function()
+      return not vim.api.nvim_win_is_valid(win2)
+    end)
+    ok(not vim.api.nvim_win_is_valid(win2), "<C-l> closed the help")
+    eq(vim.v.errmsg, "", "<C-l> raised nothing (E35): " .. vim.v.errmsg)
+    eq(vim.fn.mode(), "n")
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end
+
   -- ── the <Tab> list of finished ids comes from file names, not from parsing every file ──
   do
     local routes = require("tasks_nvim.ui.routes")
