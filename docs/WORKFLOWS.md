@@ -151,6 +151,12 @@ lists the task with the file that changed: the signal to re-read a task before a
 3. `<CR>` opens the file, `gp` previews it in the browser (mdview.nvim), `gb` / `gr` open the area's Backlog and
    ROADMAP, `e` exports the marked tasks.
 4. The list refreshes by itself when a task file changes on disk; cursor and marks stay on the same tasks.
+5. `v` switches to the **stage view**: the tasks grouped by stage ("Stage 1 · 5 tasks · not parallel" when two of them
+   name the same file in `refs`), each row with what it still waits for, and an "Unsorted" block for tasks without a
+   plan, an edge or dependants. `P` gives the marked (else current) tasks a plan and one of its stages (`plan:` /
+   `phase:` in one batch). `J` / `K` move a task up or down among the tasks of its stage: `order` becomes a fraction
+   between the two neighbours, and it only breaks ties behind status and prio. `v` again returns to the list; marks and
+   filter stay.
 
 The filter and sort you leave are remembered for the next time; a `--sort=` on the command line wins over it.
 
@@ -253,7 +259,7 @@ values one task at a time (`Skip` is the first choice, `Stop` keeps what you gav
 most value per effort first (`value / effort in days`, never below a quarter day). A task without a value or without
 an effort has **no** figure and sorts after the ones that do: it is not "worth 0", it is unestimated. The dashboard
 shows `v4` on the row; the CSV export gets `Value` and `ROI` columns. Sums per plan and area, and a helper that walks
-the unestimated tasks, are planned (below).
+the unestimated tasks, are scenario 14c (above).
 
 ### 15. Who can do this — works today
 
@@ -345,7 +351,6 @@ These are designed and sized; until they exist, the "instead" column is what to 
 
 | Scenario | What it will do | Instead, today |
 | --- | --- | --- |
-| **Stage view in the dashboard** | tasks grouped by stage ("Stage 2 · 5 tasks · not parallel"), a chip for `plan:` / `phase:`, a "waits on" column, keys to assign a plan and to reorder (`order` between the neighbours) | `:Tasks plan`, `set plan= order=` |
 | **Triage** | after a brain dump an AI proposes edges and groups, with one sentence of reasoning each; you accept one by one | 2 by hand |
 
 The design lives with the author's notes; the tasks for it are ordinary tasks in the author's vault.

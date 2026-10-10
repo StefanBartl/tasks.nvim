@@ -1,6 +1,6 @@
 > **Alpha, not released yet.** The engine, the `:Tasks` command, the dashboard, the form and the headless CLI are
-> built and covered by specs (40). Developed and tested on Windows; the CI runs the specs on Linux, Windows and macOS and
-> is green on Windows and Linux, while three specs currently fail on macOS (symlinked temp folders, `/var` vs `/private/var`).
+> built and covered by specs (44 spec files). Developed and tested on Windows; the CI runs the specs on Linux, Windows
+> and macOS and is green on all three.
 > Pin a commit if you depend on this.
 
 # tasks.nvim
