@@ -7,6 +7,8 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- `scripts/tasks-html.lua`: a one-file HTML overview of the vault (Today card, filter chips with counts, search,
+  grouping by status, stage or area), built from `list`, `plan --format=tsv` and `next`.
 - The task engine (`lua/tasks_nvim/`), extracted from the author's Neovim config: one Markdown file per task, a
   generated overview per area, `done` that moves a task to `Backlog/` with snapshot and rollback.
 - `:Tasks` (`list`, `new`, `set`, `done`, `attach`, `folderize`, `index`, `template`, `open`, `preview`, `folder`),

@@ -48,6 +48,7 @@ lua/tasks_nvim/
 └── @types/       LuaLS types
 scripts/tasks.lua   headless entry (nvim --headless -u NONE -l)
 scripts/tasks-ci.lua  same as `tasks.lua ci`, the one entry point for a pipeline
+scripts/tasks-html.lua  one-file HTML overview: a consumer of `list`, `plan --format=tsv` and `next`
 TESTS/              specs (run with scripts/test.sh, i.e. testing.nvim)
 ```
 

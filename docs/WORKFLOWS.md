@@ -274,6 +274,19 @@ asks for the missing numbers. The thresholds are `QUICK_WIN_VALUE` and `QUICK_WI
 :Tasks list --value=>=4 --effort=<=S --sort=roi " the same set, as a list
 ```
 
+### 14d. A browser overview — works today
+
+```sh
+nvim --headless -u NONE -l scripts/tasks-html.lua --vault=<vault> --out=tasks.html
+nvim --headless -u NONE -l scripts/tasks-html.lua --area=my-area --out=my-area.html
+```
+
+One self-contained file (no server, no network): the Today card from `next`, filter chips for status, prio, effort,
+kind, readiness and area with live counts, a search over id and title (`/` focuses it), grouping by status, stage or
+area, and a click on an id copies it. It only *reads* what `list`, `plan --format=tsv` and `next` print, so it shows
+exactly what the CLI shows. Run the script again and press "Neu laden" to refresh. Titles are untrusted: the page
+builds its DOM with `textContent` and the inlined data has every `<` escaped.
+
 ### 15. Who can do this — works today
 
 ```vim
