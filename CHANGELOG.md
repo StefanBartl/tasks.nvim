@@ -7,6 +7,9 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Quick wins: `setup({ quick_wins = { min_value, max_effort } })` (default value 4, effort S), the filter `--quick-win` for
+  `list`, `plan` and `estimate`, and `:Tasks quickwins` / `tasks quickwins` (best return first, the small tasks that miss a
+  value named apart, `--by-actor`, `--paths`, `--report=<file>`).
 - `scripts/tasks-html.lua`: a one-file HTML overview of the vault (Today card, filter chips with counts, search,
   grouping by status, stage or area), built from `list`, `plan --format=tsv` and `next`.
 - The task engine (`lua/tasks_nvim/`), extracted from the author's Neovim config: one Markdown file per task, a

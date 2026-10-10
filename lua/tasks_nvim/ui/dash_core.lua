@@ -62,6 +62,7 @@ M.FILTER_DIMS = {
   "tag",
   "blocked",
   "unestimated",
+  "quick-win",
   "stale-refs",
   "readiness",
   "plan",
@@ -433,6 +434,18 @@ function M.cycle_sort(cur)
   return model.SORTS[2]
 end
 
+---The filter is exactly the quick-win definition in force (a value bound and an effort bound at the thresholds, no
+---list of exact values beside them): it is shown, and toggled, as ONE chip.
+---@param f Tasks.Filter|nil
+---@return boolean
+function M.is_quick_win_filter(f)
+  if not f or not f.value_min or not f.effort_max then
+    return false
+  end
+  local th = require("tasks_nvim.estimate").thresholds()
+  return f.value_min == th.value and f.effort_max == th.effort and not f.value and not f.effort
+end
+
 ---One chip per active filter dimension, in a fixed order.
 ---@param f Tasks.Filter|nil
 ---@return string[] chips
@@ -447,7 +460,13 @@ function M.chips(f)
   elseif f.prio and #f.prio > 0 then
     chips[#chips + 1] = "prio: " .. joined(f.prio)
   end
-  if f.effort_max then
+  local quick = M.is_quick_win_filter(f)
+  if quick then
+    chips[#chips + 1] = "quick-win"
+  end
+  if quick then
+    -- shown as the one chip above: the value and effort bounds it stands for would repeat it
+  elseif f.effort_max then
     chips[#chips + 1] = "effort: <=" .. f.effort_max
   elseif f.effort and #f.effort > 0 then
     chips[#chips + 1] = "effort: " .. joined(f.effort)
@@ -461,7 +480,9 @@ function M.chips(f)
   if f.severity and #f.severity > 0 then
     chips[#chips + 1] = "severity: " .. joined(f.severity)
   end
-  if f.value_min then
+  if quick then
+    -- see the effort chip
+  elseif f.value_min then
     chips[#chips + 1] = "value: >=" .. f.value_min
   elseif f.value and #f.value > 0 then
     chips[#chips + 1] = "value: " .. joined(f.value)

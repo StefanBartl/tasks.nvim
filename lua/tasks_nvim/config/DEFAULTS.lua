@@ -21,6 +21,10 @@
 ---@class Tasks.StepsConfig
 ---@field ask_finish boolean  In a task buffer: when the LAST open step of `## Plan` is ticked, ask whether to finish the task (off by default: it adds an autocommand on task buffers).
 
+---@class Tasks.QuickWinsConfig
+---@field min_value integer   A task is a quick win with at least this value (1-5) ...
+---@field max_effort string   ... and at most this effort (`XS`..`XL` or days like `0.5d`); both must be written on the task.
+
 ---@class Tasks.ChainConfig
 ---@field marker_docs string[]  Documents whose `<!-- GENERATED:plan scope=... -->` blocks are refreshed after a task is finished. Only these files are ever touched (nothing is scanned); empty by default. The headless CLI has no `setup`: `$TASKS_MARKER_DOCS` (comma separated) names them there.
 
@@ -45,6 +49,7 @@
 ---@field ci Tasks.CiConfig
 ---@field next Tasks.NextConfig
 ---@field chain Tasks.ChainConfig
+---@field quick_wins Tasks.QuickWinsConfig
 ---@field steps Tasks.StepsConfig
 ---@field keys Tasks.KeysConfig
 
@@ -57,6 +62,7 @@ return {
   ci = { lint_timeout_ms = 120000, trust_vault_lint = false },
   next = { popup = true, cdx_hint = true },
   chain = { marker_docs = {} },
+  quick_wins = { min_value = 4, max_effort = "S" },
   steps = { ask_finish = false },
   keys = {
     dashboard = {

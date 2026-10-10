@@ -34,11 +34,37 @@ M.RANGE_DAYS = {
   XL = { 3, 8 },
 }
 
----A task counts as a quick win with at least this value ...
+---The built-in quick-win definition: a value of at least 4 ...
 M.QUICK_WIN_VALUE = 4
 
----... and at most this effort in days (`S`).
+---... and at most this effort in days (`S`). `setup({ quick_wins = { min_value, max_effort } })` changes both.
 M.QUICK_WIN_DAYS = 0.5
+
+---@class Tasks.QuickWinThresholds
+---@field value integer   Minimum value.
+---@field days number     Maximum effort in days.
+---@field effort string   The maximum effort as written (`S`, `0.5d`).
+
+---The quick-win thresholds in force: the `quick_wins` config section, else the built-in definition.
+---@return Tasks.QuickWinThresholds
+function M.thresholds()
+  local cfg = require("tasks_nvim.config").get().quick_wins or {}
+  local effort = type(cfg.max_effort) == "string" and cfg.max_effort or "S"
+  local days = model.effort_days(effort) or M.QUICK_WIN_DAYS
+  local value = type(cfg.min_value) == "number" and cfg.min_value or M.QUICK_WIN_VALUE
+  return { value = value, days = days, effort = effort }
+end
+
+---A quick win has BOTH numbers written: a value at the threshold or above and an effort at the threshold or below.
+---A task missing either is unestimated, never a quick win.
+---@param task Tasks.Task
+---@param th? Tasks.QuickWinThresholds
+---@return boolean
+function M.is_quick_win(task, th)
+  th = th or M.thresholds()
+  local days = model.effort_days(task.effort)
+  return days ~= nil and task.value ~= nil and task.value >= th.value and days <= th.days
+end
 
 ---@class Tasks.ActorShare
 ---@field n integer        # Tasks.
@@ -105,6 +131,7 @@ function M.rollup(tasks, opts)
   }
   local roi_days, roi_value = 0, 0
   local wins = {}
+  local th = M.thresholds()
   for _, t in ipairs(tasks) do
     local days = model.effort_days(t.effort)
     local share = r.by_actor[model.actor(t) or "none"]
@@ -130,7 +157,7 @@ function M.rollup(tasks, opts)
       roi_days = roi_days + math.max(days, 0.25)
       roi_value = roi_value + t.value
       r.n_roi = r.n_roi + 1
-      if t.value >= M.QUICK_WIN_VALUE and days <= M.QUICK_WIN_DAYS then
+      if M.is_quick_win(t, th) then
         wins[#wins + 1] = t
       end
     else

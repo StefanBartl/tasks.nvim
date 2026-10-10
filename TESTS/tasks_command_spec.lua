@@ -29,12 +29,13 @@ return function(H)
       "task plan",
       "task planfile",
       "task preview",
+      "task quickwins",
       "task set",
       "task template",
       "tasks",
       "tasks index",
     },
-    "the nested grammar (`:MyPlugins`): the old paths are unchanged, plan / next / estimate are new"
+    "the nested grammar (`:MyPlugins`): the old paths are unchanged, plan / next / estimate / quickwins are new"
   )
   eq(paths(routes.routes({ flat = true })), {
     "attach",
@@ -50,6 +51,7 @@ return function(H)
     "plan",
     "planfile",
     "preview",
+    "quickwins",
     "set",
     "template",
   }, "the flat grammar of `:Tasks`: no two routes share a path")

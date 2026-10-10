@@ -24,6 +24,7 @@ local index = require("tasks_nvim.index")
 local model = require("tasks_nvim.model")
 local done_flow = require("tasks_nvim.done_flow")
 local estimate = require("tasks_nvim.estimate")
+local quick_wins = require("tasks_nvim.quick_wins")
 local fsio = require("tasks_nvim.fsio")
 local mutate = require("tasks_nvim.mutate")
 local next_pick = require("tasks_nvim.next_pick")
@@ -55,14 +56,15 @@ usage: nvim --headless -u NONE -l scripts/tasks.lua <command> [args]
 commands:
   list [<area>] [--status=a,b] [--prio=1,2|<=2] [--effort=S,M|<=M] [--kind=k] [--tag=t]
        [--category=c,d] [--severity=high,critical] [--value=4,5|>=4] [--actor=cdx,me,pair,none]
-       [--stale=<days>|refs] [--stale-refs] [--blocked] [--ready|--waiting] [--unestimated]
+       [--stale=<days>|refs] [--stale-refs] [--blocked] [--ready|--waiting] [--unestimated] [--quick-win]
        [--sort=default|prio-effort|severity|frecency|roi] [--format=tsv|ids]   open tasks, sorted; one line each
        (categories: bug security performance docs ruleset; --category=bug also finds kind=bug;
         --sort=prio-effort: small first within a prio; --sort=severity: critical first;
         --sort=roi: most value per effort first, tasks without value or effort last;
         --actor=me also finds status=decision and the tag needs-user; none = nobody classified it;
         --sort=frecency: what the dashboard opened or changed most, from the frecency file)
-       (--ready: nothing open blocks it; --waiting: an open blocker; --unestimated: no effort or no value)
+       (--ready: nothing open blocks it; --waiting: an open blocker; --unestimated: no effort or no value;
+        --quick-win: value and effort at the quick-win thresholds, see `quickwins`)
   plan-new <area> <title> [--areas=a,b] [--target=<id>] [--phases=a,b,c] [--gate=hard] [--summary=text]
                                           create ROADMAP/plans/<slug>.md; tasks join it with plan=<id> phase=<word>
   plan [<area>] [--for=<id>|--plan=<id>] [filters as for list] [--ready] [--with-steps] [--format=md|tsv|ids]
@@ -71,6 +73,11 @@ commands:
                                           (--for: the task and everything that has to be finished before it)
   next [<area>] [--n=3] [--actor=cdx|me|pair|none]   the best ready tasks, with the reason
   estimate [<area>] [--for=<id>] [filters as for list]   sums of effort and value, what is missing, quick wins
+  quickwins [<area>] [--status=a,b] [--prio=..] [--kind=k] [--tag=t] [--category=c,d] [--actor=..] [--stale=..] [--plan=<id>]
+       [--min-value=1..5] [--max-effort=XS..XL|0.5d] [--format=tsv|md|ids] [--by-actor] [--paths] [--report=<file>]
+                                          the quick wins (value >= 4 and effort <= S, both written; thresholds from
+                                          setup({ quick_wins })), best return first, plus the small tasks that miss a
+                                          value; default status open,doing,decision. --report writes the Markdown
   index [<area>] [--check]                (re)write ROADMAP/TASKS.md; --check only reports
   migrate-actor [<area>] [--write]        propose actor=me for tasks that wait for you (status decision, tag
                                           needs-user) and leave every other task EMPTY; dry run unless --write
@@ -120,7 +127,7 @@ local SPECS = {
       "sort",
       "format",
     },
-    flag = { "blocked", "all", "stale-refs", "ready", "waiting", "unestimated" },
+    flag = { "blocked", "all", "stale-refs", "ready", "waiting", "unestimated", "quick-win" },
   },
   plan = {
     value = {
@@ -140,7 +147,7 @@ local SPECS = {
       "stale",
       "format",
     },
-    flag = { "blocked", "stale-refs", "ready", "unestimated", "with-steps", "check" },
+    flag = { "blocked", "stale-refs", "ready", "unestimated", "with-steps", "check", "quick-win" },
   },
   estimate = {
     value = {
@@ -157,7 +164,25 @@ local SPECS = {
       "actor",
       "stale",
     },
-    flag = { "blocked", "stale-refs", "unestimated" },
+    flag = { "blocked", "stale-refs", "unestimated", "quick-win" },
+  },
+  quickwins = {
+    value = {
+      "plan",
+      "status",
+      "prio",
+      "kind",
+      "tag",
+      "category",
+      "severity",
+      "actor",
+      "stale",
+      "min-value",
+      "max-effort",
+      "format",
+      "report",
+    },
+    flag = { "blocked", "stale-refs", "unestimated", "by-actor", "paths" },
   },
   next = { value = { "n", "actor" }, flag = {} },
   ["plan-new"] = {
@@ -305,6 +330,7 @@ local function filter_option_map(opt)
     stale_refs = opt["stale-refs"] == true,
     blocked = opt.blocked == true,
     unestimated = opt.unestimated == true,
+    quick_win = opt["quick-win"] == true,
     today = opt.today --[[@as string|nil]],
   }
 end
@@ -609,6 +635,78 @@ function commands.estimate(ctx)
     ctx.say(("unestimated: %d (list them: list --unestimated)"):format(#sums.unestimated))
   end
   return #scope.errors > 0 and 1 or 0
+end
+
+---The quick-win thresholds of one run: the config, then `--min-value` / `--max-effort` over it.
+---@param opt table<string, string|boolean>
+---@return Tasks.QuickWinThresholds|nil th
+---@return string|nil err
+local function quick_win_thresholds(opt)
+  local th = estimate.thresholds()
+  if opt["min-value"] ~= nil then
+    local v = model.to_value(opt["min-value"])
+    if not v then
+      return nil, "--min-value must be 1..5, got " .. tostring(opt["min-value"])
+    end
+    th.value = v
+  end
+  if opt["max-effort"] ~= nil then
+    local raw = tostring(opt["max-effort"])
+    local norm = raw:match("^%a+$") and raw:upper() or raw:lower()
+    local days = model.effort_days(norm)
+    if not days then
+      return nil, "--max-effort must be XS..XL or days like 0.5d, got " .. raw
+    end
+    th.effort, th.days = norm, days
+  end
+  return th, nil
+end
+
+function commands.quickwins(ctx)
+  local opt = ctx.args.opt
+  local format = opt.format or "tsv"
+  if format ~= "md" and format ~= "tsv" and format ~= "ids" then
+    ctx.warn("error: --format must be md, tsv or ids")
+    return 2
+  end
+  local th, terr = quick_win_thresholds(opt)
+  if not th then
+    ctx.warn("error: " .. tostring(terr))
+    return 2
+  end
+  if opt.status == nil then
+    -- A parked or blocked task is not something to start: the default is what can be picked up.
+    opt.status = "open,doing,decision"
+  end
+  local scope, code = load_scope(ctx, "quickwins")
+  if not scope then
+    return code or 1
+  end
+  local report = quick_wins.build(scope.tasks, th)
+  local text_opts =
+    { title = scope.title, by_actor = opt["by-actor"] == true, paths = opt.paths == true }
+  local rc = #scope.errors > 0 and 1 or 0
+  if opt.report then
+    local ok, where = quick_wins.write(tostring(opt.report), quick_wins.markdown(report, text_opts))
+    if not ok then
+      ctx.warn("error: " .. where)
+      return 1
+    end
+    ctx.say("wrote\t" .. where)
+    return rc
+  end
+  if format == "ids" then
+    for _, id in ipairs(quick_wins.ids(report)) do
+      ctx.say(id)
+    end
+  elseif format == "md" then
+    ctx.out(quick_wins.markdown(report, text_opts))
+  else
+    for _, line in ipairs(quick_wins.tsv(report)) do
+      ctx.say(line)
+    end
+  end
+  return rc
 end
 
 commands["plan-new"] = function(ctx)

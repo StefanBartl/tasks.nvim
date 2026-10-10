@@ -233,7 +233,7 @@ local function filter_note(flags)
   if flags.blocked then
     parts[#parts + 1] = "blocked"
   end
-  for _, name in ipairs({ "ready", "waiting", "unestimated" }) do
+  for _, name in ipairs({ "ready", "waiting", "unestimated", "quick-win" }) do
     if flags[name] then
       parts[#parts + 1] = name
     end
@@ -263,6 +263,7 @@ local function filter_options(flags)
     stale = flags.stale,
     blocked = flags.blocked,
     unestimated = flags.unestimated,
+    quick_win = flags["quick-win"],
   }
 end
 
@@ -360,6 +361,65 @@ function M.plan(ctx)
   notify.info(
     ("plan of %s: %d task(s), %d ready"):format(scope.title, #scope.tasks, #scope.plan.ready)
   )
+end
+
+---`:Tasks quickwins [<area>|all] [filters] [--to=] [--format=md|tsv|ids] [--by-actor] [--paths] [--report=<file>]`:
+---the quick wins (value and effort at the thresholds of `setup({ quick_wins })`), best return first, with the small
+---tasks that still miss a value. Default status: what can be picked up (open, doing, decision).
+---@param ctx table  composer context
+function M.quickwins(ctx)
+  if not no_stray_words(ctx) then
+    return
+  end
+  local flags = ctx.flags
+  local target, terr = view.parse_target(flags.to)
+  if terr then
+    notify.error(terr)
+    return
+  end
+  local format = flags.format or "md"
+  if format ~= "md" and format ~= "tsv" and format ~= "ids" then
+    notify.error("--format must be md, tsv or ids")
+    return
+  end
+  if flags.status == nil then
+    flags.status = "open,doing,decision"
+  end
+  local scope = load_scope(ctx)
+  if not scope then
+    return
+  end
+  local qw = require("tasks_nvim.quick_wins")
+  local result = qw.build(scope.tasks)
+  local text_opts =
+    { title = scope.title, by_actor = flags["by-actor"] == true, paths = flags.paths == true }
+  if flags.report then
+    local ok, where = qw.write(tostring(flags.report), qw.markdown(result, text_opts))
+    if not ok then
+      notify.error(where)
+      return
+    end
+    notify.info(("quick wins: %d written to %s"):format(#result.wins, where))
+    return
+  end
+  local text
+  if format == "md" then
+    text = qw.markdown(result, text_opts)
+  elseif format == "tsv" then
+    text = table.concat(qw.tsv(result), "\n") .. "\n"
+  else
+    text = table.concat(qw.ids(result), "\n") .. "\n"
+  end
+  local ok, err = view.deliver_text(text, target, {
+    force = flags.force,
+    title = "tasks/quickwins/" .. scope.title:gsub("[^%w._-]+", "-"),
+    filetype = format == "md" and "markdown" or "text",
+  })
+  if not ok then
+    notify.error(tostring(err))
+    return
+  end
+  notify.info(("quick wins of %s: %d (of %d task(s))"):format(scope.title, #result.wins, result.n))
 end
 
 ---`:Tasks plan --write=<file> [--scope=<name>] [--check]`: replace only the generated block of the scope in a
@@ -631,6 +691,7 @@ function M.list(ctx)
     stale = flags.stale,
     blocked = flags.blocked,
     unestimated = flags.unestimated,
+    quick_win = flags["quick-win"],
   })
   if not filter then
     notify.error(tostring(ferr))

@@ -266,12 +266,14 @@ the unestimated tasks, are scenario 14c (above).
 A task is a **quick win** when it has a `value` of **4 or more** *and* an `effort` of **`S` or less** (`XS`, `S`, or
 up to `0.5d`). Both numbers have to be written: a task without a value or without an effort is *unestimated*, never a
 quick win. Small but unrated tasks are therefore invisible here until they get a value; `:Tasks estimate --walk`
-asks for the missing numbers. The thresholds are `QUICK_WIN_VALUE` and `QUICK_WIN_DAYS` in `tasks_nvim.estimate`
-(one definition, used by every place that names quick wins).
+asks for the missing numbers. The thresholds are the `quick_wins` config section (default value 4, effort `S`) and
+live in `tasks_nvim.estimate` (one definition, used by every place that names quick wins).
 
 ```vim
 :Tasks estimate                                 " the line 'quick wins: ...' (best roi first)
-:Tasks list --value=>=4 --effort=<=S --sort=roi " the same set, as a list
+:Tasks list --quick-win --sort=roi              " the same set, as a list (or --value=>=4 --effort=<=S)
+:Tasks quickwins --by-actor --paths             " the report: wins, plus small tasks that miss a value
+:Tasks quickwins --report=quickwins.md          " the same, written to a file
 ```
 
 ### 14d. A browser overview — works today

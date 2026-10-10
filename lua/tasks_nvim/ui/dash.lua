@@ -499,6 +499,16 @@ local function set_filter(state, after)
       after()
       return
     end
+    if dim == "quick-win" then
+      -- One chip for the two bounds of the definition; a second pick takes both away again.
+      local th = require("tasks_nvim.estimate").thresholds()
+      local on = core.is_quick_win_filter(state.filter)
+      state.filter = core.set_dim(state.filter, "value", (not on) and (">=" .. th.value) or nil)
+      state.filter = core.set_dim(state.filter, "effort", (not on) and ("<=" .. th.effort) or nil)
+      persist(state)
+      after()
+      return
+    end
     if dim == "stale-refs" then
       state.filter = core.set_dim(state.filter, "stale-refs", not state.filter.stale_refs or nil)
       persist(state)

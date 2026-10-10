@@ -39,6 +39,7 @@ lowercase word `all` is the keyword; `ALL` with capitals is the area of that nam
 | `--blocked` | status `blocked`, or a non-empty `blocked_by` |
 | `--ready` / `--waiting` | the tasks that can be started now (nothing open blocks them; a `decision` counts: it waits for you, not for a task) / the tasks that wait on an open blocker. One definition for the plan, the dashboard, `next` and these flags, judged against every open task of the vault (a blocker in another area counts). The two exclude each other |
 | `--unestimated` | missing the effort or the value |
+| `--quick-win` | a quick win: value and effort at the thresholds of `setup({ quick_wins })` (default value 4+, effort S-). Shorthand for `--value=>=N --effort=<=X`, so it cannot be combined with `--value` or `--effort` (an error, never a silent pick) |
 | `--sort=default` / `prio-effort` / `severity` / `frecency` / `roi` | the order (`roi`: highest `value / effort` first, tasks without both numbers after the ones with a figure, each group in the default order): `default` is status, prio, area, slug; `prio-effort` is status, prio, then effort ascending (important and small first, no effort last of its prio); `severity` is `critical` first, then `high`, `medium`, `low`, no severity last, each group in the default order; `frecency` is what the dashboard opened or changed most first (see below), the rest in the default order |
 | `--to=` | where the list goes: `buffer` (default), `clipboard`, `qf`, `file:<path>`, `echo`, `mdview` (Markdown written to a temp file and shown in the browser by [mdview.nvim](https://github.com/StefanBartl/mdview.nvim); see [Browser preview](#browser-preview-mdview)) |
 | `--format=md` / `--format=csv` | table (default) or CSV with the extra columns tags, blocked by, summary, path, severity, value, roi, actor; a `file:` target ending in `.csv` implies `csv`. A CSV cell that starts with `=`, `+`, `-`, `@` or a tab gets a leading `'`, so a title like `=HYPERLINK(...)` is text, not a formula, when the file is opened in a spreadsheet |
@@ -82,7 +83,7 @@ counts, the active filter chips and, when it is not the default, the sort order:
 | `s` | advance the status of the marked (else the current) tasks: `doing` -> `decision` -> `blocked` -> `open` -> `parked` -> `doing` |
 | `p` | advance the prio: none -> 1 -> 2 -> 3 -> none (3 -> none removes the key) |
 | `D` | finish after **one** confirmation naming every task (engine `done`, moved to `Backlog/`) |
-| `f` | set a filter chip: pick `status`, `prio`, `effort` (`XS`..`XL`, `<=S`, `<=M`), `kind`, `category`, `severity`, `value`, `actor`, `tag`, `blocked`, `unestimated`, `stale-refs` (toggle: shows the chip `[stale: refs]`),
+| `f` | set a filter chip: pick `status`, `prio`, `effort` (`XS`..`XL`, `<=S`, `<=M`), `kind`, `category`, `severity`, `value`, `actor`, `tag`, `blocked`, `unestimated`, `quick-win` (toggle: value and effort at the quick-win thresholds, shown as the one chip `[quick-win]`), `stale-refs` (toggle: shows the chip `[stale: refs]`),
 `plan` and `phase` (the plans and stages in use), `readiness` (`ready` / `waiting`: the same cut as `list --ready` / `--waiting`, which the dashboard keeps when it was
 opened with them) or "clear all", then a value (`(any)` clears one chip) |
 | `o` | cycle the sort order: `default` -> `prio-effort` (small first within a prio) -> `severity` (critical first) -> `frecency` (most opened / changed first) -> `default`; a non-default order shows as `[sort: ...]` in the title |
@@ -344,6 +345,30 @@ its low and its high end (a T-shirt size is not a number). The return on effort 
 numbers. Quick wins (value 4 or more, effort S or less) are named. `--walk` goes through the tasks that miss an effort
 or a value, asks for them one by one (`Skip` first; `Stop`, and a dismissed dialog (Esc), end the walk and keep what was given)
 and writes everything in one batch.
+
+### `:Tasks quickwins [<area>|all] [filters] [--to=] [--format=md|tsv|ids] [--by-actor] [--paths] [--report=<file>]`
+
+The quick wins: a task with **both** numbers written, a value of at least `quick_wins.min_value` (default 4) and an
+effort of at most `quick_wins.max_effort` (default `S`), best return on effort first. The report also names what the
+rule cannot see, never as a quick win: the small tasks **without a value** ("one number away") and the high-value tasks
+**without an effort**. By default only what can be picked up is looked at (`--status=open,doing,decision`; a parked or
+blocked task is not offered, name it with `--status=`). `--value`, `--effort` and `--quick-win` do not exist here: they
+are the definition. `--by-actor` splits the table into "for me", "pair", "for an AI session" and "unclassified",
+`--paths` adds a column with the absolute path of each task file. `--to=` delivers it like `list` does (default: a scratch
+buffer).
+
+`--report=<file>` writes the Markdown to a file instead. The file starts with a generated-comment and is replaced by the
+next run; a file at that path that this command did not write is **never** overwritten (an error). Headless:
+
+```sh
+nvim --headless -u NONE -l scripts/tasks.lua quickwins                       # tab-separated: id prio effort value roi actor title
+nvim --headless -u NONE -l scripts/tasks.lua quickwins --format=md --by-actor --paths
+nvim --headless -u NONE -l scripts/tasks.lua quickwins --min-value=3 --max-effort=M --report=quickwins.md
+```
+
+`--min-value` and `--max-effort` override the thresholds for one headless run. To keep a different definition, set
+`setup({ quick_wins = { min_value = 3, max_effort = "M" } })`: every place that names quick wins (`:Tasks estimate`, the
+plan header, `--quick-win`, this report) follows it.
 
 ### `:Tasks done <id> [done_in=...] [date=YYYY-MM-DD] [--yes]`
 

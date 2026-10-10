@@ -47,7 +47,7 @@ end
 ---words the same way. Unknown words are an error, never silently ignored.
 ---`stale` may be a number, a digit string or `refs` (same as `stale_refs`: a
 ---file named in `refs` changed since `updated`); `today` is passed through.
----@param opt { plan?: string, phase?: string, status?: string, prio?: string|integer, effort?: string, kind?: string, tag?: string, category?: string, severity?: string, value?: string|integer, actor?: string, stale?: string|integer, stale_refs?: boolean, blocked?: boolean, unestimated?: boolean, today?: string }
+---@param opt { plan?: string, phase?: string, status?: string, prio?: string|integer, effort?: string, kind?: string, tag?: string, category?: string, severity?: string, value?: string|integer, actor?: string, stale?: string|integer, stale_refs?: boolean, blocked?: boolean, unestimated?: boolean, quick_win?: boolean, today?: string }
 ---@return Tasks.Filter|nil filter
 ---@return string|nil err
 function M.parse(opt)
@@ -233,6 +233,16 @@ function M.parse(opt)
   end
   if opt.unestimated then
     f.unestimated = true
+  end
+  if opt.quick_win then
+    -- The shorthand IS a value and an effort bound: a second one beside it would be ambiguous, never silently dropped.
+    if opt.value ~= nil or opt.effort ~= nil then
+      return nil,
+        "--quick-win sets the value and the effort bound itself; do not combine it with --value or --effort"
+    end
+    local th = require("tasks_nvim.estimate").thresholds()
+    f.value_min = th.value
+    f.effort_max = th.effort
   end
   return f, nil
 end

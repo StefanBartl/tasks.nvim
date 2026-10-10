@@ -47,6 +47,7 @@ blockers, plan or estimate is valid and stays visible everywhere.
     next = { popup = true, cdx_hint = true },
     chain = { marker_docs = {} },
     steps = { ask_finish = false },
+    quick_wins = { min_value = 4, max_effort = "S" },
   })
 <
 
@@ -69,6 +70,8 @@ blockers, plan or estimate is valid and stays visible everywhere.
   chain.marker_docs        Documents whose `<!-- GENERATED:plan scope=... -->` blocks are
                            refreshed after a task is finished (only these files). The
                            headless CLI reads `$TASKS_MARKER_DOCS` (comma separated).
+  quick_wins.min_value     A quick win has at least this value (1-5) ...
+  quick_wins.max_effort    ... and at most this effort (`XS`..`XL` or days like `0.5d`).
   steps.ask_finish         In a task buffer, ticking the last `## Plan` step asks to finish
                            the task (off by default: it adds an autocommand).
   keys.dashboard           Dashboard list keys: action = key, or false.
@@ -112,6 +115,9 @@ A wrong key or value is ignored with a message and listed in
   :Tasks estimate [{area}|all] [--for={id}] [filters] [--walk]
                                          Sums of effort and value, what is
                                          missing; `--walk` asks for them.
+  :Tasks quickwins [{area}|all] [filters] [--to=] [--format=md|tsv|ids] [--by-actor] [--paths] [--report={file}]
+                                         The quick wins, best return first, and the
+                                         small tasks that miss a value.
   :Tasks attach {id} {file} [name=]      Copy a file into `assets/`.
   :Tasks folderize {id}                  Make a plain task a folder task.
   :Tasks template [--to=]                The task file template.

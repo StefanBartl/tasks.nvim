@@ -421,6 +421,11 @@ local LIST_FLAGS = {
   { name = "waiting", bool = true, desc = "Only tasks that wait on an open blocker" },
   { name = "unestimated", bool = true, desc = "Only tasks missing an effort or a value" },
   {
+    name = "quick-win",
+    bool = true,
+    desc = "Only quick wins (value and effort at the quick_wins thresholds)",
+  },
+  {
     name = "sort",
     type = "STRING",
     enum = model.SORTS,
@@ -884,6 +889,64 @@ local function nested_routes()
       desc = "Sums of effort and value of an area (default: all) or of one task and everything before it, with what is missing; --walk goes through the tasks without effort or value and asks for them one by one",
       run = function(ctx)
         cmd().estimate(ctx)
+      end,
+    },
+
+    {
+      path = { "task", "quickwins" },
+      args = {
+        {
+          name = "area",
+          type = "TASK_AREA",
+          allow_all = true,
+          optional = true,
+          desc = "Area to look at, or all (default: all areas)",
+        },
+      },
+      flags = (function()
+        -- `--quick-win`, `--value` and `--effort` ARE the definition here; `--status` defaults to what can be started.
+        local skip = { ["quick-win"] = true, value = true, effort = true, sort = true }
+        local out = {}
+        for _, flag in ipairs(filter_flags({ PLAN_FLAG })) do
+          if not skip[flag.name] then
+            out[#out + 1] = flag
+          end
+        end
+        vim.list_extend(out, {
+          {
+            name = "to",
+            type = "TASK_TARGET",
+            values = { "buffer", "clipboard", "qf", "file:", "echo", "mdview" },
+            desc = "Deliver the report here (default: a scratch buffer)",
+          },
+          {
+            name = "format",
+            type = "STRING",
+            values = { "md", "tsv", "ids" },
+            desc = "Markdown report (default), tab-separated lines or ids",
+          },
+          {
+            name = "by-actor",
+            bool = true,
+            desc = "Split the quick wins by who can do them",
+          },
+          {
+            name = "paths",
+            bool = true,
+            desc = "Add the absolute path of each task file",
+          },
+          {
+            name = "report",
+            type = "STRING",
+            desc = "Write the Markdown to this file (never replaces a hand-written one)",
+          },
+          { name = "force", bool = true, desc = "Replace an existing target of --to=file:" },
+        })
+        return out
+      end)(),
+      desc = "The quick wins (value 4+ and effort S or less by default, both written on the task), best return first, plus the small tasks that miss a value; --report=<file> writes the Markdown",
+      run = function(ctx)
+        cmd().quickwins(ctx)
       end,
     },
 

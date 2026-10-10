@@ -13,7 +13,7 @@ local M = {}
 ---@type Tasks.Opts
 local state = vim.deepcopy(DEFAULTS)
 
----@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"
+---@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"|"value"|"effort"
 
 ---@type table<string, Tasks.ConfigType|table<string, Tasks.ConfigType>>
 local SCHEMA = {
@@ -24,6 +24,7 @@ local SCHEMA = {
   ci = { lint_timeout_ms = "posint", trust_vault_lint = "boolean" },
   next = { popup = "boolean", cdx_hint = "boolean" },
   chain = { marker_docs = "string_list" },
+  quick_wins = { min_value = "value", max_effort = "effort" },
   steps = { ask_finish = "boolean" },
   keys = { dashboard = "keymap", dashboard_input = "keymap", form = "keymap" },
 }
@@ -96,6 +97,20 @@ local function check(kind, value)
       return true, value, nil
     end
     return false, nil, 'one of "auto", "snacks", "kit", "select"'
+  elseif kind == "value" then
+    if type(value) == "number" and value >= 1 and value <= 5 and value == math.floor(value) then
+      return true, value, nil
+    end
+    return false, nil, "a whole number from 1 to 5"
+  elseif kind == "effort" then
+    -- Lazily: `model` must not be a load-time dependency of the config layer.
+    if type(value) == "string" then
+      local norm = value:match("^%a+$") and value:upper() or value:lower()
+      if require("tasks_nvim.model").effort_days(norm) ~= nil then
+        return true, norm, nil
+      end
+    end
+    return false, nil, "an effort (XS, S, M, L, XL or days like 0.5d)"
   elseif kind == "posint" then
     if type(value) == "number" and value > 0 and value == math.floor(value) then
       return true, value, nil
