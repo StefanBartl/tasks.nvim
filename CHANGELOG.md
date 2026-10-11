@@ -15,6 +15,8 @@ the version is not tagged yet (the repository is not published).
   control bytes); JSON Schemas (draft 2020-12), generated TypeScript types, golden files of a synthetic fixture vault
   and the CI job `contract` (Ajv, strict).
 - `check`: `symlink-task`.
+- `tasks_nvim.edges`: `validate` judges a change of `blocked_by` / `after` / `plan` / `phase` before it is written, with
+  the codes of `check` (self, dangling, cycle, unknown plan, a phase the plan does not list).
 - `mutate.set`: `if_match` / `expect` are checked under the lock (compare-and-set), a conflict is structured
   (`code`, `id`, `key`, `expected`, `actual`), the answer has `etag_before`, `etag_after` and the old values for an
   undo; `fsio.with_lock` tells `locked` from `lock_stuck`; a task file that is a link is not written through.
