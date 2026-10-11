@@ -295,6 +295,53 @@ return function(H)
   r = run({ "areas" })
   eq(lines(r.out), { "ALL", "cascade.nvim", "lib.nvim", "migrate.nvim", "nvim-config" })
 
+  -- a title that starts with `--` is a title after a bare `--`; leading global options must not end up behind it
+  -- (they used to be appended to the arguments, i.e. into the title), and a title with a tab stays one line. A vault
+  -- of its own: the checks below count the tasks of `root`.
+  do
+    local scratch = F.vault(H)
+    local silent = { out = function() end, err = function() end }
+    local scan = require("tasks_nvim.scan")
+    eq(
+      cli.run({
+        "--vault=" .. scratch,
+        "--today=" .. F.TODAY,
+        "new",
+        "lib.nvim",
+        "--",
+        "--vault=/elsewhere",
+      }, silent),
+      0,
+      "a title that looks like an option"
+    )
+    eq(
+      assert(scan.find("lib.nvim/vault-elsewhere", { root = scratch })).title,
+      "--vault=/elsewhere"
+    )
+    eq(
+      cli.run(
+        { "--vault=" .. scratch, "--today=" .. F.TODAY, "new", "lib.nvim", "tab\tin\ttitle" },
+        silent
+      ),
+      0
+    )
+    eq(
+      assert(scan.find("lib.nvim/tab-in-title", { root = scratch })).title,
+      "tab in title",
+      "a tab becomes a space: a title is one line, and the tab-separated listing stays parseable"
+    )
+    local listed = {}
+    cli.run({ "--vault=" .. scratch, "list" }, {
+      out = function(t)
+        listed[#listed + 1] = t
+      end,
+      err = function() end,
+    })
+    for _, line in ipairs(lines(table.concat(listed))) do
+      eq(select(2, line:gsub("\t", "")), 6, "every row of `list` has its six separators: " .. line)
+    end
+  end
+
   r = run({ "export" })
   eq(r.code, 0)
   has(r.out, "# Offene Tasks — alle Bereiche (1 in 1 Bereichen)")

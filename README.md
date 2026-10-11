@@ -61,7 +61,9 @@ sessions that run without an editor. Nothing is stored anywhere but in the files
 - **Export** to a buffer, the clipboard, the quickfix list, a file (CSV or Markdown) or a browser preview.
 - **Headless CLI** with the same rules and a CI gate (`check`, `index --check`, `md_lint`).
 - **A machine contract** for apps, agents and pipelines: `tasks call snapshot` and friends answer with versioned JSON
-  documents (JSON Schema, TypeScript types, golden files), read only ([docs/CONTRACT.md](docs/CONTRACT.md)).
+  documents (JSON Schema, TypeScript types, golden files), and `tasks call ops` changes the vault through the engine:
+  compare-and-set with `if_match`, a preview before `done`, dry runs, an undo for every change
+  ([docs/CONTRACT.md](docs/CONTRACT.md)).
 
 How it is meant to be used, scenario by scenario: [docs/WORKFLOWS.md](docs/WORKFLOWS.md).
 

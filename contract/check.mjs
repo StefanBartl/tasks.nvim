@@ -130,6 +130,41 @@ mutate(
 );
 mutate("a list page without its total", "list-page", (d) => delete d.total);
 mutate(
+  "an operation outcome nobody defined",
+  "result-run",
+  (d) => (d.results[0].outcome = "mostly"),
+);
+mutate(
+  "an operation result without its position",
+  "result-run",
+  (d) => delete d.results[0].n,
+);
+mutate(
+  "an operation that is not in the catalog",
+  "result-run",
+  (d) => (d.results[0].op = "delete"),
+);
+mutate(
+  "a failure with an error code outside the list",
+  "result-run",
+  (d) => (d.results[1].error.code = "oops"),
+);
+mutate(
+  "an inverse that is no operation",
+  "result-run",
+  (d) => (d.results[0].inverse.op = "rm"),
+);
+mutate(
+  "a confirm token of the wrong shape",
+  "donepreview",
+  (d) => (d.confirm = "yes"),
+);
+mutate(
+  "a dry-run flag that is not a boolean",
+  "result-dry-run",
+  (d) => (d.dry_run = "yes"),
+);
+mutate(
   "an empty object where an array belongs",
   "areas",
   (d) => (d.areas = {}),

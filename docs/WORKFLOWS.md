@@ -190,7 +190,9 @@ open.
 A program that wants the whole picture in one piece asks for JSON instead: `tasks call snapshot` (every open task
 with its readiness, the plan head, the sums), `tasks call list --params='{"limit":20}'`, `tasks call task
 --params='{"id":"my-area/some-slug"}'`. The documents have a schema, no path of your machine and a version
-tag per task; nothing in them writes. [docs/CONTRACT.md](CONTRACT.md).
+tag per task. Changing the vault goes through the same door: `tasks call ops --params=-` takes a list of operations (`set`
+with `if_match`, `new`, `reorder`, `done` after a `done_preview`), says per operation what happened, and hands back the
+operation that undoes it; `dry_run` checks everything and writes nothing. [docs/CONTRACT.md](CONTRACT.md).
 
 ### 12. A pipeline guards the vault — works today
 

@@ -3,7 +3,7 @@
 /**
  * tasks-export/1: every document tasks.nvim hands to a machine. One of the kinds below, told apart by `kind`. The engine writes exactly these fields (a field that is not listed fails the contract tests); a reader ignores fields it does not know, because inside one version the contract only grows.
  */
-export type TasksExport = Hello | Snapshot | List | TaskDocument | Next | Areas | Error;
+export type TasksExport = Hello | Snapshot | List | TaskDocument | Next | Areas | DonePreview | Result | Error;
 /**
  * tasks.hello: what this engine is and can do. Reads no task.
  */
@@ -232,11 +232,71 @@ export type Areas = Head & {
   areas: Area[];
 };
 /**
+ * tasks.donepreview: what finishing a task would do, with nothing written, and the `confirm` token that `done` needs for exactly this version of the file.
+ */
+export type DonePreview = Head & {
+  kind: "tasks.donepreview";
+  digest: Digest;
+  id: string;
+  /**
+   * The task is finished already: nothing to confirm.
+   */
+  already?: true;
+  area?: string;
+  bucket?: "FEATURES" | "TASKS";
+  from?: string;
+  to: string;
+  resumed?: boolean;
+  steps_ticked?: number;
+  readme?: {
+    state: "missing" | "updated" | "unchanged";
+    row?: string;
+  };
+  plan?: string;
+  /**
+   * The plan this finish closes: the task is its last open member.
+   */
+  closes_plan?: string;
+  /**
+   * Open tasks that wait on nothing but this one.
+   */
+  freed?: string[];
+  etag?: Etag;
+  confirm?: string;
+};
+/**
+ * tasks.result: the answer to a request of `tasks-ops/1`, one entry per operation. `ok` is true only when every operation was.
+ */
+export type Result = Head & {
+  kind: "tasks.result";
+  digest: Digest;
+  client_op_id?: string;
+  dry_run: boolean;
+  ok: boolean;
+  results: ResultEntry[];
+};
+/**
+ * Why something failed, in a word that is stable. A reader treats a word it does not know as `internal`.
+ */
+export type ErrorCode =
+  | "invalid_argument"
+  | "not_found"
+  | "conflict"
+  | "exists"
+  | "forbidden"
+  | "locked"
+  | "lock_stuck"
+  | "unsupported_schema"
+  | "payload_too_large"
+  | "rollback_incomplete"
+  | "io"
+  | "internal";
+/**
  * tasks.error: what went wrong, in a code that is stable. `message` carries no path of the machine.
  */
 export type Error = Head & {
   kind: "tasks.error";
-  code: "invalid_argument" | "not_found" | "unsupported_schema" | "payload_too_large" | "locked" | "io" | "internal";
+  code: ErrorCode;
   message: string;
   retryable: boolean;
   details?: {};
@@ -369,4 +429,94 @@ export interface TaskBrief {
   prio?: number;
   effort?: string;
   reason?: "freed" | "area" | "vault";
+}
+/**
+ * What happened to one operation of a request, in the order they were sent. A failed operation does not stop the others.
+ */
+export interface ResultEntry {
+  n: number;
+  op: "set" | "new" | "reorder" | "done" | "move_area";
+  id?: string;
+  ok: boolean;
+  /**
+   * `would_*` is what a dry run says; `blocked` is a move that cannot be made.
+   */
+  outcome:
+    | "changed"
+    | "unchanged"
+    | "created"
+    | "done"
+    | "would_change"
+    | "would_create"
+    | "would_done"
+    | "would_move"
+    | "blocked"
+    | "failed";
+  etag_before?: Etag;
+  etag_after?: Etag;
+  inverse?: Inverse;
+  /**
+   * Ids whose files this operation wrote (a dry run: none).
+   */
+  changed_ids: string[];
+  /**
+   * What happened to the generated index of the area, once for the whole request.
+   */
+  index?: {
+    action: "written" | "removed" | "unchanged" | "stale" | "error";
+    error?: string;
+  };
+  error?: OperationError;
+  file?: string;
+  group?: string;
+  renumbered?: boolean;
+  writes?: number;
+  to?: string;
+  steps_ticked?: number;
+  plans_closed?: string[];
+  notes?: string[];
+  move?: MovePlan;
+}
+/**
+ * The operation that undoes a change: send it as a new operation (its `if_match` is the version the change left). A key the change added is `null` in the patch of a `set`.
+ */
+export interface Inverse {
+  op: "set" | "reorder";
+  id: string;
+  patch?: {};
+  after?: string;
+  before?: string;
+  if_match?: Etag;
+}
+/**
+ * Why an operation did not happen. `details` names ids, keys and values (`expected` and `actual` of a conflict, the `problems` of a refused relation), never a path.
+ */
+export interface OperationError {
+  code: ErrorCode;
+  message: string;
+  retryable: boolean;
+  details?: {};
+}
+/**
+ * What moving a task to another area would do and break (stage 1 of `move_area`: a report, nothing is written).
+ */
+export interface MovePlan {
+  new_id: string;
+  to_area: string;
+  from: string;
+  to: string;
+  folder: boolean;
+  conflicts: {
+    code: string;
+    message: string;
+  }[];
+  /**
+   * Places that name the old id and would dangle.
+   */
+  references: {
+    kind: "blocked_by" | "after" | "plan_target" | "refs" | "document";
+    id?: string;
+    path?: string;
+  }[];
+  notes: string[];
 }

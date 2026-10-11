@@ -1,0 +1,87 @@
+{
+  "client_op_id": "golden-dry",
+  "digest": "sha256:a2021d12ec7bf5b2",
+  "dry_run": true,
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "kind": "tasks.result",
+  "ok": true,
+  "plugin": "tasks.nvim",
+  "results": [
+    {
+      "changed_ids": [],
+      "etag_before": "sha256:a62f0b463bd31a5e",
+      "id": "cascade.nvim/eta",
+      "n": 1,
+      "ok": true,
+      "op": "set",
+      "outcome": "would_change"
+    },
+    {
+      "changed_ids": [],
+      "file": "cascade.nvim/ROADMAP/tasks/golden-new-task.md",
+      "id": "cascade.nvim/golden-new-task",
+      "n": 2,
+      "ok": true,
+      "op": "new",
+      "outcome": "would_create"
+    },
+    {
+      "changed_ids": [],
+      "etag_before": "sha256:c337ac829c9ce237",
+      "group": "open|1",
+      "id": "lib.nvim/alpha-twin",
+      "n": 3,
+      "ok": true,
+      "op": "reorder",
+      "outcome": "would_change",
+      "renumbered": false,
+      "writes": 1
+    },
+    {
+      "changed_ids": [],
+      "etag_before": "sha256:6c4aef85fbbd3fff",
+      "id": "lib.nvim/delta",
+      "n": 4,
+      "ok": true,
+      "op": "done",
+      "outcome": "would_done",
+      "to": "lib.nvim/Backlog/TASKS/2026-01-02_delta.md"
+    },
+    {
+      "changed_ids": [],
+      "id": "lib.nvim/alpha",
+      "move": {
+        "conflicts": [],
+        "folder": false,
+        "from": "lib.nvim/ROADMAP/tasks/alpha.md",
+        "new_id": "cascade.nvim/alpha",
+        "notes": [],
+        "references": [
+          {
+            "id": "cascade.nvim/iota",
+            "kind": "blocked_by"
+          },
+          {
+            "id": "lib.nvim/beta",
+            "kind": "blocked_by"
+          }
+        ],
+        "to": "cascade.nvim/ROADMAP/tasks/alpha.md",
+        "to_area": "cascade.nvim"
+      },
+      "n": 5,
+      "ok": true,
+      "op": "move_area",
+      "outcome": "would_move"
+    }
+  ],
+  "schema": 1,
+  "vault": {
+    "id": "vault"
+  }
+}

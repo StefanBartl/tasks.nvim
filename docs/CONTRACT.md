@@ -2,11 +2,12 @@
 
 What an app, an agent or a pipeline reads from the vault: a handful of JSON documents with a fixed shape, each with a
 JSON Schema. The Markdown files stay the single source of truth; the documents are built from what the engine already
-knows (`scan`, `plan`, `next_pick`, `estimate`), never from a second reading of the files. **Nothing here writes**: the
-contract has read methods only.
+knows (`scan`, `plan`, `next_pick`, `estimate`), never from a second reading of the files. Reading is the larger part;
+changes go through one door, `ops`, which asks the engine to write ([Writing](#writing-tasks-ops1)).
 
 - [Asking](#asking) -- `tasks call`, the Lua door, the request
-- [The documents](#the-documents) -- `hello`, `snapshot`, `list`, `task`, `next`, `areas`, `error`
+- [The documents](#the-documents) -- `hello`, `snapshot`, `list`, `task`, `next`, `areas`, `donepreview`, `result`, `error`
+- [Writing](#writing-tasks-ops1) -- `ops`: `set`, `new`, `reorder`, `done`, `move_area`; conflicts, `done_preview`, dry runs
 - [The rules every document keeps](#the-rules-every-document-keeps)
 - [`etag`, `rev`, `digest`](#etag-rev-digest) -- what changed
 - [Errors](#errors)
@@ -27,6 +28,8 @@ nvim --headless -u NONE -l scripts/tasks.lua call task --params='{"id":"my-proje
 nvim --headless -u NONE -l scripts/tasks.lua --capabilities          # the same as `call hello`
 ```
 
+`--params=-` reads the JSON from stdin instead (no limit of the command line, nothing for the shell to interpret).
+
 | Method | Parameters | Answer (`kind`) |
 |---|---|---|
 | `hello` | none | `tasks.hello`: the handshake, reads no task |
@@ -35,6 +38,8 @@ nvim --headless -u NONE -l scripts/tasks.lua --capabilities          # the same 
 | `task` | `id` (`<area>/<slug>`) | `tasks.task`: one task with its body and steps |
 | `next` | `n` (0..10), `actor`, `area` | `tasks.next`: what to start next, with the reason |
 | `areas` | none | `tasks.areas`: the areas with their open counts |
+| `done_preview` | `id` | `tasks.donepreview`: what finishing the task would do, and the token for it |
+| `ops` | the request itself (below) | `tasks.result`: what happened to each operation |
 
 The exit code of `tasks call` is `0` for an answer, `2` for `invalid_argument`, `1` for any other error. An error is a
 `tasks.error` document on stdout like any answer, so a reader parses one stream. `--pretty` indents the same document.
@@ -60,7 +65,7 @@ Every document starts with the same head:
 |---|---|
 | `schema` | the version of the contract (`1`) |
 | `plugin` | `tasks.nvim` |
-| `kind` | `tasks.hello`, `tasks.snapshot`, `tasks.list`, `tasks.task`, `tasks.next`, `tasks.areas`, `tasks.error` |
+| `kind` | `tasks.hello`, `tasks.snapshot`, `tasks.list`, `tasks.task`, `tasks.next`, `tasks.areas`, `tasks.donepreview`, `tasks.result`, `tasks.error` |
 | `generated_at` | UTC, `YYYY-MM-DDTHH:MM:SSZ` |
 | `vault.id` | the name of the vault folder (never its path) |
 | `engine` | `version`, `git` (short commit of the plugin checkout, `unknown` without git) and `nvim` |
@@ -95,11 +100,87 @@ task has a `## Plan` section), `etag` and, for an open task, `readiness`:
 `state` is `ready`, `decision`, `waiting`, `stuck`, `freed` or `parked` (the one definition of "can be started",
 `tasks_nvim.plan`); `inversion`, `in_cycle` and `same_file` appear when they apply. `group` is `<status>|<eff_prio>`.
 
+**`tasks.donepreview`** and **`tasks.result`** belong to writing and are described there.
+
 **`tasks.list`** -- `total` (all matches), `offset`, `limit`, `items` (task entries) and `next_offset` while there is
 more. Pages are 100 entries at most. **`tasks.task`** -- `task`, `body` (the Markdown after the frontmatter, cut at 256 KiB
 with `body_truncated`) and `steps` (`[{ n, text, ticked, dropped }]`). **`tasks.next`** -- `task` (`id`, `title`, `status`,
 `prio`, `effort` and the `reason`), `alternatives`, `cdx` (the queue written for the AI), `freed`, `ready` and `open`
 (counts for the area and the vault) and, when there is no task, `empty` (`kind`: why). **`tasks.areas`** -- `areas`.
+
+## Writing: `tasks-ops/1`
+
+Changes go through one door, `ops`: a list of operations answered with one `tasks.result`. The engine stays the only
+writer and the only implementation of the rules; a front end never touches a file.
+
+```sh
+echo '{"client_op_id":"c-1","ops":[{"op":"set","id":"my-project/fix-the-thing","patch":{"status":"doing"},"if_match":"sha256:3f6c9a1e0b7d4c22"}]}' \
+  | nvim --headless -u NONE -l scripts/tasks.lua call ops --params=-
+```
+
+(`--params=-` reads the request from stdin, so there is no limit of the command line and the shell never sees it. For
+`ops` the JSON is the whole request; for the read methods it is their `params`.)
+
+A request is `{ "schema": 1, "client_op_id": "c-81f2", "dry_run": false, "ops": [ ... ] }`. `client_op_id` (1 to 64
+characters of letters, digits and `. _ : -`) is echoed in the answer, for a client that must not repeat itself;
+`dry_run` checks everything and writes nothing. At most 100 operations.
+
+| `op` | Fields | |
+|---|---|---|
+| `set` | `id`, `patch`, `if_match`?, `expect`? | change frontmatter keys; `null` in the patch removes a key. `if_match` is the task's `etag`; `expect` is `{ "key", "value" }`: that key must still have that value |
+| `new` | `area`, `title`, `fields`? | create a task. `fields`: `kind`, `prio`, `effort`, `tags`, `category`, `severity`, `value`, `actor`, `summary`, `refs`, `status`, `slug`. Relations (`blocked_by`, `after`, `plan`, `phase`) are set afterwards with `set` |
+| `reorder` | `id`, `after`?, `before`?, `group`?, `if_match`? | move a task inside its group (same stage, same `status|eff_prio`, the `group` of the task entry): it gets an `order` between its neighbours'; tasks that have no `order` yet are numbered only where the spot needs it, and a crowd of halvings is renumbered. A move that would write more than 50 files is refused |
+| `done` | `id`, `confirm`, `done_in`? | finish a task. `confirm` is the token of `done_preview` for the version of the file that was shown |
+| `move_area` | `id`, `to_area` | only as a dry run in this version: the report of what the move would break (below) |
+
+**The shape is checked first, for the whole request**: an unknown operation or field, a wrong type, an empty or too long
+list is `invalid_argument` (`payload_too_large` for more than 100 operations) and nothing runs. After that every
+operation runs on its own, in order, and **one that fails does not stop the others**. This is not all-or-nothing, and
+the answer never says "ok" for a part: `ok` of the document is true only when every operation was.
+
+The answer, `tasks.result`, has one entry per operation:
+
+| Field | |
+|---|---|
+| `n`, `op`, `id` | the position, the operation and the task it is about (for `new`: the id it got) |
+| `ok`, `outcome` | `changed`, `unchanged`, `created`, `done`; a dry run says `would_change`, `would_create`, `would_done`, `would_move` (or `blocked`: the move cannot be made); `failed` |
+| `etag_before`, `etag_after` | the version of the file before and after (a dry run: only before) |
+| `inverse` | the operation that undoes it: send it as a new operation, its `if_match` is the version the change left. A key a `set` added is `null` in the inverse patch. `done` and `new` have none in this version |
+| `changed_ids` | the ids whose files this wrote |
+| `index` | what happened to the generated overview of the area: `written`, `unchanged`, `removed` or `error`. It is written **once** for the whole request, however many tasks of the area changed |
+| `error` | for a failed operation: `code`, `message`, `retryable`, `details` (see below) |
+| `file`, `group`, `renumbered`, `writes`, `to`, `steps_ticked`, `plans_closed`, `notes`, `move` | what is particular to the operation |
+
+**Conflicts.** `if_match` and `expect` are checked against the text read **under the file lock**, so two writers cannot
+both win: the second gets `conflict` with `details`: `id`, `expected` and `actual` (the version it found) and, for
+`expect`, the `key`. Another key of the same file that changed meanwhile is kept, never overwritten. A change of the
+relations (`blocked_by`, `after`, `plan`, `phase`) is judged first with the codes of `check` (`blocked-by-self`,
+`blocked-by-dangling`, `blocked-by-cycle` with the members named, `after-self`, `after-dangling`, `plan-unknown`,
+`plan-phase`): an `invalid_argument` whose `details.problems` lists them. A `reorder` that is not what the caller saw (a
+neighbour of another group, neighbours that are no longer next to each other, another `group`) is a `conflict` too: the
+list moved on, ask again. A `reorder` is not all-or-nothing: what was written stays, and `details.written` says how far
+it got.
+
+**Finishing a task takes two steps** on purpose. `done_preview` (a read method, `{"id": ...}`) answers `tasks.donepreview`:
+the target, the README row, the steps it would tick, the plan it would close (`closes_plan`), the tasks it would free
+(`freed`), the `etag` of the file it read and a `confirm` token for exactly that version. `done` needs the token; if the
+file changed since, it is a `conflict` and nothing moves. A task that is finished already answers `unchanged`, so a
+repeated request does no harm. The token is not a secret (the engine keeps no state); a host that needs authorisation
+adds its own.
+
+**What a front end may not write.** Limits are kept on writing (title 300 characters, summary 1000, lists of 100
+entries of 300 characters). A `refs` entry that is **new** must be a plain relative path, optionally with a line suffix
+(`lua/a.lua:42`, `lua/a.lua:10-20`), an anchor (`docs/a.md#top`), a `repo@commit` or an id: no `..`, no drive or network
+prefix, no absolute path, no control character, no colon but the line suffix. Entries the task already has stay as they
+are. A task file that is a link is not written through (`forbidden`). No error carries a path of this machine, only ids.
+
+**`move_area`** answers, as a dry run, with `move`: `new_id`, `from`, `to`, `conflicts` (the slug is taken in the target
+area), `references` (the `blocked_by`, `after`, `refs`, plan `target` and documents that name the old id and would
+dangle) and `notes`. The move itself, rewriting those places with a rollback, is a later version; without `dry_run` the
+operation fails with `invalid_argument`.
+
+The exit code of `tasks call ops` is `0` when every operation worked, `1` when any failed (the document says which), `2`
+for a bad request.
 
 ## The rules every document keeps
 
@@ -134,10 +215,15 @@ A `tasks.error` document: `code`, `message`, `retryable` and, when there is more
 |---|---|
 | `invalid_argument` | the request is not valid JSON, has an unknown field or parameter, or a value out of range |
 | `not_found` | unknown method, area or task; no vault |
+| `conflict` | the file is not the version the caller saw (`if_match`, `expect`, a stale `confirm`, a list that moved on); `details` says what was found |
+| `exists` | the slug that was asked for is taken |
+| `forbidden` | a task file that is a link is not written through |
 | `unsupported_schema` | the request asks for a higher `schema` than this engine speaks |
-| `payload_too_large` | a request over 256 KiB, or a document over 8 MiB |
-| `locked` | a writer holds the vault right now (`retryable: true`) |
-| `io` | something could not be listed or read |
+| `payload_too_large` | a request over 256 KiB, a document over 8 MiB, more than 100 operations, a value over the limits |
+| `locked` | another writer holds the file right now (`retryable: true`) |
+| `lock_stuck` | a lock nobody will release (older than the takeover age and not deletable, or a folder where the lock file should be): the message names the lock to remove by hand |
+| `rollback_incomplete` | a failed write could not be fully undone; the message names the files |
+| `io` | something could not be listed, read or written |
 | `internal` | a bug of the engine; the message says what failed |
 
 ## Writing a reader
@@ -175,8 +261,8 @@ The documents are built from files anyone may have edited or synced, so the read
 | `schemas/tasks-export/1/tasks-export.schema.json` | JSON Schema (draft 2020-12), `oneOf` by `kind`, shared pieces in `$defs` |
 | `schemas/tasks-export/1/tasks-export.d.ts` | the TypeScript types generated from it (`json-schema-to-typescript` 16; no tuples: the generator does not understand `prefixItems`) |
 | `TESTS/golden/tasks-export-1/*.json` | the documents of the synthetic fixture vault (`TESTS/contract_fixture.lua`), byte for byte: a change of one is a change of the contract |
-| `TESTS/tasks_contract_spec.lua`, `TESTS/tasks_cli_contract_spec.lua` | the Lua side: every document against the golden files, the dispatcher, the command line |
-| `contract/check.mjs` | the outside view (Node 22): every golden document validates (Ajv, strict), 16 broken documents are refused, the reader rules hold, the `.d.ts` equals the generated one |
+| `TESTS/tasks_contract_spec.lua`, `TESTS/tasks_cli_contract_spec.lua`, `TESTS/tasks_ops_spec.lua` | the Lua side: every document against the golden files, the dispatcher, the command line, the write door (every operation, conflicts, dry runs, limits, two writers at once in two processes) |
+| `contract/check.mjs` | the outside view (Node 22): every golden document validates (Ajv, strict), 23 broken documents are refused, the reader rules hold, the `.d.ts` equals the generated one |
 
 ```sh
 nvim --headless -u NONE -l TESTS/golden/regenerate.lua     # on purpose; read `git diff TESTS/golden`, commit with the code

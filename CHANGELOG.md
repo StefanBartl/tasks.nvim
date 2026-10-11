@@ -15,6 +15,14 @@ the version is not tagged yet (the repository is not published).
   control bytes); JSON Schemas (draft 2020-12), generated TypeScript types, golden files of a synthetic fixture vault
   and the CI job `contract` (Ajv, strict).
 - `check`: `symlink-task`.
+- The write door of the machine contract, `tasks-ops/1` (`tasks_nvim.ops`, `tasks call ops`): `set`, `new`, `reorder`, `done`
+  and `move_area` (as a dry run) answered with a `tasks.result` that has one entry per operation (`outcome`, `etag_before`,
+  `etag_after`, `inverse`, `error`); the shape of a request is checked as a whole, then each operation runs on its own;
+  `if_match` / `expect` conflicts name what was found; relations are judged first (`edges`); limits and a strict `refs`
+  check for new entries; `done` needs the `confirm` token of the new read method `done_preview` (`tasks.donepreview`);
+  `dry_run` for everything; `--params=-` reads a request from stdin; new error codes `conflict`, `exists`, `forbidden`,
+  `lock_stuck`, `rollback_incomplete` (`tasks_nvim.errors`); hello capabilities `ops`, `if_match`, `done_preview`,
+  `reorder`, `move_area_preview`; schema, golden files and checks for `tasks.result` and `tasks.donepreview`.
 - `moves.preview`: moving a task to another area, stage 1: whether it can be done (the slug must be free in the target area) and which `blocked_by`, `after`, `refs`, plan targets and documents would dangle; nothing is written.
 - `done_flow.preview` / `mutate.done_preview`: what finishing a task would do (target, README row, steps, the plan it closes, the tasks it frees), nothing written, with a `confirm` token that binds the version of the file; `done` takes `if_match`.
 - `batch.reorder`: move a task inside its group by giving it an `order` between its neighbours' (numbering the tasks before the spot only when they have none, renumbering when two values get too close), with the `inverse` for an undo; `plan.group_key`.
@@ -92,6 +100,7 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- CLI: a global option typed before the command (`--vault=x new area -- "--title"`) was moved behind a bare `--`, where it became part of the text; it now goes right behind the command name, so a title that starts with `--` can be given.
 - `scripts/test.sh` finds snacks.nvim (`$SNACKS_DIR`, `.deps/`, beside the repository, the plugin manager's data folder)
   and hands it to the specs: the runner gives every spec a sandboxed data folder, so the picker part of the dashboard
   specs no longer stops running on a local machine. Without snacks.nvim the script says so first and

@@ -22,6 +22,8 @@
 --- Only reads: nothing here changes a file. Not its job: parsing a request, mapping an error to a code (`api`), the
 --- command line (`cli`).
 
+local done_flow = require("tasks_nvim.done_flow")
+local error_codes = require("tasks_nvim.errors")
 local estimate = require("tasks_nvim.estimate")
 local fsio = require("tasks_nvim.fsio")
 local json = require("tasks_nvim.json")
@@ -43,20 +45,30 @@ M.PLUGIN = "tasks.nvim"
 M.ENGINE_VERSION = "0.1.0-dev"
 
 ---What this engine can answer; an app shows only what is listed here. Sorted.
+---`ops` is the write door (`set`, `new`, `reorder`, `done`, `move_area`), `if_match` the compare-and-set on a task's
+---`etag`, `done_preview` what `done` needs first, `reorder` a move inside a group, `move_area_preview` the report of a
+---move to another area (the move itself is not there yet).
 ---@type string[]
-M.CAPABILITIES = { "areas", "etag", "hello", "list", "next", "snapshot", "task" }
+M.CAPABILITIES = {
+  "areas",
+  "done_preview",
+  "etag",
+  "hello",
+  "if_match",
+  "list",
+  "move_area_preview",
+  "next",
+  "ops",
+  "reorder",
+  "snapshot",
+  "task",
+}
 
 ---Sizes the contract promises to keep.
 M.LIMITS = { title = 300, summary = 1000, body_bytes = 262144, list_items = 100, batch_ops = 100 }
 
 ---A document is never bigger than this.
 M.MAX_DOC_BYTES = 8 * 1024 * 1024
-
----@class Tasks.ContractError
----@field code string
----@field message string
----@field retryable boolean
----@field details? table
 
 -- ── small helpers ────────────────────────────────────────────────────────────
 
@@ -476,6 +488,10 @@ local function seal(doc, rev)
   return doc
 end
 
+M.redact = redact
+M.seal = seal
+M.relative = relative
+
 -- ── documents ────────────────────────────────────────────────────────────────
 
 ---The handshake: what this engine is and can do. Reads no task.
@@ -787,6 +803,45 @@ function M.areas(opts)
   end
   local doc = M.head("tasks.areas", view.root)
   doc.areas = areas_of(view)
+  return seal(doc, nil), nil
+end
+
+---What finishing a task would do, written down: the target, the README row, the steps, the plan it closes, the
+---tasks it frees, the `etag` of the file that was read and a `confirm` token for exactly that version. Nothing is
+---written; `done` in `tasks-ops/1` needs the token.
+---@param id string
+---@param opts? { root?: string, today?: string }
+---@return table|nil doc
+---@return Tasks.ContractError|string|nil err
+function M.done_preview(id, opts)
+  opts = opts or {}
+  local root, rerr = vault.root(opts)
+  if not root then
+    return nil, rerr
+  end
+  local pv, err, info = done_flow.preview(id, { root = root, today = opts.today })
+  if not pv then
+    return nil, error_codes.classify(err, info)
+  end
+  local doc = M.head("tasks.donepreview", root)
+  doc.id = pv.id
+  if pv.already then
+    doc.already = true
+    doc.to = relative(root, pv.to) or vim.fs.basename(pv.to)
+    return seal(doc, nil), nil
+  end
+  doc.area = pv.area
+  doc.bucket = pv.bucket
+  doc.from = relative(root, pv.from) or vim.fs.basename(pv.from)
+  doc.to = relative(root, pv.to) or vim.fs.basename(pv.to)
+  doc.resumed = pv.resumed == true
+  doc.steps_ticked = pv.steps_ticked or 0
+  doc.readme = json.object({ state = pv.readme, row = pv.readme_row })
+  doc.plan = pv.plan_id
+  doc.closes_plan = pv.closes_plan
+  doc.freed = vim.list_slice(pv.freed, 1)
+  doc.etag = pv.etag
+  doc.confirm = pv.confirm
   return seal(doc, nil), nil
 end
 

@@ -7,7 +7,8 @@
 --- needs from `cli.lua` (area argument, filter parsing) come in as `helpers`, so the two files need not require each
 --- other.
 ---
----  - `call <method> [--params=<json>] [--pretty]`: any method of the dispatcher, the document on stdout. Exit 0 for an
+---  - `call <method> [--params=<json>|-] [--pretty]`: any method of the dispatcher (`-`: the JSON comes on stdin; for `ops`
+---    it is the whole request, for the others the `params`), the document on stdout. Exit 0 for an
 ---    answer, 2 for `invalid_argument`, 1 for any other error; an error is a `tasks.error` document, also on stdout.
 ---  - `--capabilities`: the `tasks.hello` document (`call hello`)
 ---  - `list --format=json [--limit=N] [--offset=N]`: the `tasks.list` document of the same filters as the text form; the
@@ -15,7 +16,8 @@
 ---  - `next --format=json`, `areas --format=json|tsv`, `show <id> [--format=json|text]`, `plans [area]`
 ---  - `list --done`: the finished tasks of the Backlogs (tab-separated, like the open ones)
 ---
---- Only reads. Not its job: the documents (`contract`), the request check (`api`).
+--- Reads, except `call ops` (the write door; exit 1 when an operation failed). Not its job: the documents (`contract`),
+--- the request check (`api`).
 
 local api = require("tasks_nvim.api")
 local contract = require("tasks_nvim.contract")
@@ -85,19 +87,34 @@ local function run_call(ctx)
   local method = args.pos[1]
   if not method or #args.pos > 1 then
     ctx.warn(
-      "error: usage: call <method> [--params=<json>] [--pretty]   (methods: "
+      "error: usage: call <method> [--params=<json>|-] [--pretty]   (methods: "
         .. table.concat(api.methods(), ", ")
         .. ")"
     )
     return 2
   end
   local request = nil
-  if args.opt.params ~= nil then
-    request = '{"params":' .. tostring(args.opt.params) .. "}"
+  local params = args.opt.params
+  if params == "-" then
+    -- the JSON on stdin: no limit of the command line, the shell never sees it. One byte more than the limit is read,
+    -- so a request that is too big is told so instead of being cut off and misread.
+    params = io.stdin:read(api.MAX_REQUEST_BYTES + 1) or ""
+  end
+  if params ~= nil then
+    local def = api.METHODS[method]
+    -- `ops` carries its fields at the top of the request; the read methods carry theirs under `params`
+    request = (def and def.flat) and tostring(params) or ('{"params":' .. tostring(params) .. "}")
   end
   local text, code =
     api.call(method, request, { root = ctx.eo.root, indent = args.opt.pretty and 2 or nil })
   ctx.out(text .. "\n")
+  -- a request of `ops` that was answered but not carried out in full (`ok: false`) is a failure for the shell too
+  if code == nil and method == "ops" then
+    local decoded = select(2, pcall(vim.json.decode, text))
+    if type(decoded) == "table" and decoded.ok == false then
+      return 1
+    end
+  end
   return exit_code(code)
 end
 

@@ -45,7 +45,9 @@ local root = fixture.build(H)
 
 vim.fn.mkdir(golden.dir, "p")
 for _, case in ipairs(golden.cases) do
-  local text = golden.render(root, case)
+  local text = golden.render(root, case, function()
+    return fixture.build(H)
+  end)
   H.write(golden.dir .. "/" .. case.name .. ".json", text)
   io.stdout:write(("wrote %s (%d bytes)\n"):format(case.name, #text))
 end

@@ -1,10 +1,15 @@
 {
   "capabilities": [
     "areas",
+    "done_preview",
     "etag",
     "hello",
+    "if_match",
     "list",
+    "move_area_preview",
     "next",
+    "ops",
+    "reorder",
     "snapshot",
     "task"
   ],

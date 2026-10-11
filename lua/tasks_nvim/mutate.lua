@@ -591,6 +591,18 @@ local function normalize_patch(patch, opts)
   return result, nil
 end
 
+---Whether `patch` would be accepted by `set`, and in what shape: the validation without a task and without a write.
+---@param patch table<string, any>
+---@param opts? { allow_unknown?: boolean }
+---@return table[]|nil pairs  # ordered `{ key, value }`, `REMOVE` for a key to delete
+---@return string|nil err
+function M.check_patch(patch, opts)
+  if type(patch) ~= "table" then
+    return nil, "patch must be a table of key = value"
+  end
+  return normalize_patch(patch, opts)
+end
+
 -- ── new ──────────────────────────────────────────────────────────────────────
 
 ---Create a task file under `<area>/ROADMAP/tasks/`.
@@ -779,6 +791,17 @@ function M.new(area, opts)
     if not taken[slug] and not in_use then
       local path = opts.folder and vault.folder_task_path(root, area, slug)
         or vault.task_path(root, area, slug)
+      if opts.dry_run then
+        -- the slug it would get, nothing created
+        return {
+          id = area .. "/" .. slug,
+          area = area,
+          slug = slug,
+          path = path,
+          folder = opts.folder == true,
+        },
+          nil
+      end
       local ok, err = fsio.create_exclusive(path, text)
       if ok then
         ---@type table
@@ -877,7 +900,7 @@ end
 ---other keys of the file are never touched, so a change of another key made meanwhile is kept.
 ---@param id string
 ---@param patch table<string, any>
----@param opts? { root?: string, today?: string, index?: boolean, allow_unknown?: boolean, if_match?: string, expect?: { key: string, value: any } }
+---@param opts? { root?: string, today?: string, index?: boolean, allow_unknown?: boolean, if_match?: string, expect?: { key: string, value: any }, dry_run?: boolean }
 ---@return { id: string, path: string, changed: boolean, etag_before?: string, etag_after?: string, before?: table<string, any>, index?: Tasks.IndexResult, index_err?: string }|nil result
 ---@return string|nil err
 ---@return table|nil info  # `{ code = "conflict"|"locked"|"lock_stuck"|"forbidden"|"io", ... }` when there is a reason to name
@@ -934,6 +957,11 @@ function M.set(id, patch, opts)
     etag_after = etag_before,
   }
   if not result.changed then
+    return result, nil
+  end
+
+  if opts.dry_run then
+    -- everything is checked (the patch, the version, the text it would give), nothing is written
     return result, nil
   end
 

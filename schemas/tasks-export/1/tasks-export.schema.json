@@ -23,6 +23,12 @@
       "$ref": "#/$defs/Areas"
     },
     {
+      "$ref": "#/$defs/DonePreview"
+    },
+    {
+      "$ref": "#/$defs/Result"
+    },
+    {
       "$ref": "#/$defs/Error"
     }
   ],
@@ -1189,15 +1195,7 @@
           "const": "tasks.error"
         },
         "code": {
-          "enum": [
-            "invalid_argument",
-            "not_found",
-            "unsupported_schema",
-            "payload_too_large",
-            "locked",
-            "io",
-            "internal"
-          ]
+          "$ref": "#/$defs/ErrorCode"
         },
         "message": {
           "type": "string"
@@ -1207,6 +1205,366 @@
         },
         "details": {
           "type": "object"
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "ErrorCode": {
+      "description": "Why something failed, in a word that is stable. A reader treats a word it does not know as `internal`.",
+      "enum": [
+        "invalid_argument",
+        "not_found",
+        "conflict",
+        "exists",
+        "forbidden",
+        "locked",
+        "lock_stuck",
+        "unsupported_schema",
+        "payload_too_large",
+        "rollback_incomplete",
+        "io",
+        "internal"
+      ]
+    },
+    "OperationError": {
+      "description": "Why an operation did not happen. `details` names ids, keys and values (`expected` and `actual` of a conflict, the `problems` of a refused relation), never a path.",
+      "type": "object",
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Inverse": {
+      "description": "The operation that undoes a change: send it as a new operation (its `if_match` is the version the change left). A key the change added is `null` in the patch of a `set`.",
+      "type": "object",
+      "required": ["op", "id"],
+      "properties": {
+        "op": {
+          "enum": ["set", "reorder"]
+        },
+        "id": {
+          "type": "string"
+        },
+        "patch": {
+          "type": "object"
+        },
+        "after": {
+          "type": "string"
+        },
+        "before": {
+          "type": "string"
+        },
+        "if_match": {
+          "$ref": "#/$defs/Etag"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MovePlan": {
+      "description": "What moving a task to another area would do and break (stage 1 of `move_area`: a report, nothing is written).",
+      "type": "object",
+      "required": [
+        "new_id",
+        "to_area",
+        "from",
+        "to",
+        "folder",
+        "conflicts",
+        "references",
+        "notes"
+      ],
+      "properties": {
+        "new_id": {
+          "type": "string"
+        },
+        "to_area": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "folder": {
+          "type": "boolean"
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "references": {
+          "description": "Places that name the old id and would dangle.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "blocked_by",
+                  "after",
+                  "plan_target",
+                  "refs",
+                  "document"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ResultEntry": {
+      "description": "What happened to one operation of a request, in the order they were sent. A failed operation does not stop the others.",
+      "type": "object",
+      "required": ["n", "op", "ok", "outcome", "changed_ids"],
+      "properties": {
+        "n": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "op": {
+          "enum": ["set", "new", "reorder", "done", "move_area"]
+        },
+        "id": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "outcome": {
+          "description": "`would_*` is what a dry run says; `blocked` is a move that cannot be made.",
+          "enum": [
+            "changed",
+            "unchanged",
+            "created",
+            "done",
+            "would_change",
+            "would_create",
+            "would_done",
+            "would_move",
+            "blocked",
+            "failed"
+          ]
+        },
+        "etag_before": {
+          "$ref": "#/$defs/Etag"
+        },
+        "etag_after": {
+          "$ref": "#/$defs/Etag"
+        },
+        "inverse": {
+          "$ref": "#/$defs/Inverse"
+        },
+        "changed_ids": {
+          "description": "Ids whose files this operation wrote (a dry run: none).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "index": {
+          "description": "What happened to the generated index of the area, once for the whole request.",
+          "type": "object",
+          "required": ["action"],
+          "properties": {
+            "action": {
+              "enum": ["written", "removed", "unchanged", "stale", "error"]
+            },
+            "error": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "error": {
+          "$ref": "#/$defs/OperationError"
+        },
+        "file": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "renumbered": {
+          "type": "boolean"
+        },
+        "writes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to": {
+          "type": "string"
+        },
+        "steps_ticked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "plans_closed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "move": {
+          "$ref": "#/$defs/MovePlan"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Result": {
+      "description": "tasks.result: the answer to a request of `tasks-ops/1`, one entry per operation. `ok` is true only when every operation was.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": ["kind", "digest", "dry_run", "ok", "results"],
+      "properties": {
+        "kind": {
+          "const": "tasks.result"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "client_op_id": {
+          "type": "string"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResultEntry"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "DonePreview": {
+      "description": "tasks.donepreview: what finishing a task would do, with nothing written, and the `confirm` token that `done` needs for exactly this version of the file.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": ["kind", "digest", "id", "to"],
+      "properties": {
+        "kind": {
+          "const": "tasks.donepreview"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "id": {
+          "type": "string"
+        },
+        "already": {
+          "description": "The task is finished already: nothing to confirm.",
+          "const": true
+        },
+        "area": {
+          "type": "string"
+        },
+        "bucket": {
+          "enum": ["FEATURES", "TASKS"]
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "resumed": {
+          "type": "boolean"
+        },
+        "steps_ticked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "readme": {
+          "type": "object",
+          "required": ["state"],
+          "properties": {
+            "state": {
+              "enum": ["missing", "updated", "unchanged"]
+            },
+            "row": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "plan": {
+          "type": "string"
+        },
+        "closes_plan": {
+          "description": "The plan this finish closes: the task is its last open member.",
+          "type": "string"
+        },
+        "freed": {
+          "description": "Open tasks that wait on nothing but this one.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "etag": {
+          "$ref": "#/$defs/Etag"
+        },
+        "confirm": {
+          "type": "string",
+          "pattern": "^done-[0-9a-f]{16}-[0-9a-f]{6}$"
         }
       },
       "unevaluatedProperties": false

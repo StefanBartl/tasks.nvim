@@ -46,7 +46,13 @@ return function(H)
   local function golden(name)
     local path = golden_files.dir .. "/" .. name .. ".json"
     ok(H.exists(path), "golden file " .. name .. " exists (TESTS/golden/regenerate.lua writes it)")
-    eq(golden_files.render(root, golden_files.case(name)), H.read(path), "golden " .. name)
+    eq(
+      golden_files.render(root, golden_files.case(name), function()
+        return fixture.build(H)
+      end),
+      H.read(path),
+      "golden " .. name
+    )
   end
 
   -- ── hello: what the engine is and can do, without reading a task ──
@@ -56,10 +62,17 @@ return function(H)
   eq(hello.schemas, { 1 })
   eq(hello.vault.id, "vault", "the vault is named by its folder, never by its path")
   eq(hello.engine, { version = "0.1.0-test", git = "0000000", nvim = "0.0.0" })
+  -- every method is a capability, plus the features that are no method of their own
   local expected_caps = api.methods()
-  table.insert(expected_caps, "etag")
+  for _, feature in ipairs({ "etag", "if_match", "move_area_preview", "reorder" }) do
+    table.insert(expected_caps, feature)
+  end
   table.sort(expected_caps)
-  eq(hello.capabilities, expected_caps, "capabilities are the methods plus etag: one list, not two")
+  eq(
+    hello.capabilities,
+    expected_caps,
+    "capabilities are the methods plus the features: one list, not two"
+  )
   eq(hello.limits.list_items, 100)
   eq(hello.enums.status, { "doing", "decision", "blocked", "open", "parked" })
   eq(hello.enums.effort[#hello.enums.effort], "<n>d")

@@ -10,11 +10,14 @@
 --- is `unsupported_schema`; `params` may be left out too. A parameter the method does not know is `invalid_argument`:
 --- a request that is silently half-understood is worse than one that is refused. A request is at most 256 KiB.
 ---
---- Only read methods exist so far (`hello`, `snapshot`, `list`, `task`, `next`, `areas`); nothing here writes.
+--- Read methods (`hello`, `snapshot`, `list`, `task`, `next`, `areas`, `done_preview`) and the write door `ops`
+--- (`tasks_nvim.ops`: the fields of the request are its own, `null` is kept because it means "remove" in a patch).
 ---
 --- Not its job: building a document (`contract`), the command line (`cli`: `tasks call`, `--format=json`).
 
 local contract = require("tasks_nvim.contract")
+local errors = require("tasks_nvim.errors")
+local ops = require("tasks_nvim.ops")
 
 local M = {}
 
@@ -22,7 +25,9 @@ local M = {}
 M.MAX_REQUEST_BYTES = 256 * 1024
 
 ---@class Tasks.ApiMethod
----@field params table<string, string>   # Parameter name -> its type (`string`, `integer`, `string_list`).
+---@field params table<string, string>   # Parameter name -> its type (`string`, `integer`, `string_list`, `boolean`, `object_list`).
+---@field flat? boolean                  # The parameters are the request's own fields (`ops`), not under `params`.
+---@field keep_null? boolean             # JSON `null` stays `vim.NIL` (it means "remove" in a patch) instead of being absent.
 ---@field run fun(params: table, opts: table): table|nil, Tasks.ContractError|string|nil
 
 ---@type table<string, Tasks.ApiMethod>
@@ -67,6 +72,28 @@ M.METHODS = {
       return contract.areas(opts)
     end,
   },
+  done_preview = {
+    params = { id = "string" },
+    run = function(params, opts)
+      if params.id == nil then
+        return nil,
+          {
+            code = "invalid_argument",
+            message = "done_preview needs the parameter id",
+            retryable = false,
+          }
+      end
+      return contract.done_preview(params.id, opts)
+    end,
+  },
+  ops = {
+    flat = true,
+    keep_null = true,
+    params = { client_op_id = "string", dry_run = "boolean", ops = "object_list" },
+    run = function(params, opts)
+      return ops.run(params, opts)
+    end,
+  },
 }
 
 ---The names of the methods, sorted.
@@ -84,36 +111,14 @@ end
 ---@param message string
 ---@return Tasks.ContractError
 local function fail(code, message)
-  return { code = code, message = message, retryable = false }
+  return errors.fail(code, message)
 end
 
----An error string from below the contract, as a code. The engine's functions answer `nil, "text"`; the text is all
----there is, so this is a short list of patterns, the one fragile spot of the door (a code at the source comes later).
+---An error from below the contract, as a code (see `tasks_nvim.errors`).
 ---@param err any
 ---@return Tasks.ContractError
 local function classify(err)
-  if type(err) == "table" and err.code then
-    return err
-  end
-  local text = tostring(err)
-  local code = "internal"
-  if
-    text:find("vault not found", 1, true)
-    or text:find("is not a directory", 1, true)
-    or text:find("no such", 1, true)
-    or text:find("unknown area", 1, true)
-  then
-    code = "not_found"
-  elseif
-    text:find("cannot list", 1, true)
-    or text:find("cannot read", 1, true)
-    or text:find("permission", 1, true)
-  then
-    code = "io"
-  elseif text:find("is being written", 1, true) then
-    return { code = "locked", message = text, retryable = true }
-  end
-  return { code = code, message = text, retryable = false }
+  return errors.classify(err)
 end
 
 ---@param value any
@@ -122,6 +127,18 @@ end
 local function has_type(value, kind)
   if kind == "string" then
     return type(value) == "string"
+  elseif kind == "boolean" then
+    return type(value) == "boolean"
+  elseif kind == "object_list" then
+    if type(value) ~= "table" or not vim.islist(value) then
+      return false
+    end
+    for _, v in ipairs(value) do
+      if type(v) ~= "table" or (next(v) ~= nil and vim.islist(v)) then
+        return false
+      end
+    end
+    return true
   elseif kind == "integer" then
     return type(value) == "number" and value == math.floor(value)
   elseif kind == "string_list" then
@@ -161,8 +178,11 @@ local function parse_request(name, request)
     if vim.trim(request) == "" then
       req = {}
     else
-      local ok, decoded =
-        pcall(vim.json.decode, request, { luanil = { object = true, array = true } })
+      local ok, decoded = pcall(
+        vim.json.decode,
+        request,
+        method.keep_null and {} or { luanil = { object = true, array = true } }
+      )
       if not ok then
         return nil, fail("invalid_argument", "the request is not valid JSON")
       end
@@ -175,12 +195,32 @@ local function parse_request(name, request)
   if type(req) ~= "table" or (next(req) ~= nil and vim.islist(req)) then
     return nil, fail("invalid_argument", "the request must be a JSON object")
   end
+  -- a JSON `null` at the top level is the same as leaving the field out
+  for key, value in pairs(req) do
+    if value == vim.NIL then
+      req[key] = nil
+    end
+  end
   for key in pairs(req) do
-    if key ~= "schema" and key ~= "params" then
+    local known = key == "schema"
+      or (method.flat and method.params[key] ~= nil)
+      or (not method.flat and key == "params")
+    if not known then
+      local fields = { "schema" }
+      if method.flat then
+        local own = vim.tbl_keys(method.params)
+        table.sort(own)
+        vim.list_extend(fields, own)
+      else
+        fields[2] = "params"
+      end
       return nil,
         fail(
           "invalid_argument",
-          ("unknown field '%s' in the request (fields: schema, params)"):format(tostring(key))
+          ("unknown field '%s' in the request (fields: %s)"):format(
+            tostring(key),
+            table.concat(fields, ", ")
+          )
         )
     end
   end
@@ -204,6 +244,10 @@ local function parse_request(name, request)
     end
   end
   local params = req.params
+  if method.flat then
+    params = vim.tbl_extend("force", {}, req)
+    params.schema = nil
+  end
   if params == nil then
     params = {}
   end
@@ -243,7 +287,7 @@ end
 ---@return string|nil code                # `nil` for an answer, else the error code.
 function M.call(name, request, opts)
   opts = opts or {}
-  local engine_opts = { root = opts.root }
+  local engine_opts = { root = opts.root, today = opts.today }
   local root = require("tasks_nvim.vault").root(engine_opts)
   -- a vault that cannot be found is named in the message the engine gives: the path the caller handed in is still
   -- a path of this machine, so it is what gets hidden

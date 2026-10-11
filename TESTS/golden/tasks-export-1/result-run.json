@@ -1,0 +1,155 @@
+{
+  "client_op_id": "golden-run",
+  "digest": "sha256:0026f742d55533ce",
+  "dry_run": false,
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "kind": "tasks.result",
+  "ok": false,
+  "plugin": "tasks.nvim",
+  "results": [
+    {
+      "changed_ids": [
+        "cascade.nvim/eta"
+      ],
+      "etag_after": "sha256:a2efd36076129e81",
+      "etag_before": "sha256:a62f0b463bd31a5e",
+      "id": "cascade.nvim/eta",
+      "index": {
+        "action": "written"
+      },
+      "inverse": {
+        "id": "cascade.nvim/eta",
+        "if_match": "sha256:a2efd36076129e81",
+        "op": "set",
+        "patch": {
+          "summary": null,
+          "tags": null
+        }
+      },
+      "n": 1,
+      "ok": true,
+      "op": "set",
+      "outcome": "changed"
+    },
+    {
+      "changed_ids": [],
+      "error": {
+        "code": "conflict",
+        "details": {
+          "actual": "sha256:e0f5beeee8b836de",
+          "expected": "sha256:0000000000000000",
+          "id": "lib.nvim/gamma"
+        },
+        "message": "lib.nvim/gamma changed since it was read (its version is sha256:e0f5beeee8b836de, not sha256:0000000000000000)",
+        "retryable": false
+      },
+      "n": 2,
+      "ok": false,
+      "op": "set",
+      "outcome": "failed"
+    },
+    {
+      "changed_ids": [
+        "cascade.nvim/golden-new-task"
+      ],
+      "etag_after": "sha256:69b48747968150b5",
+      "file": "cascade.nvim/ROADMAP/tasks/golden-new-task.md",
+      "id": "cascade.nvim/golden-new-task",
+      "index": {
+        "action": "written"
+      },
+      "n": 3,
+      "ok": true,
+      "op": "new",
+      "outcome": "created"
+    },
+    {
+      "changed_ids": [
+        "lib.nvim/alpha-twin"
+      ],
+      "etag_after": "sha256:067a5d686fff0e52",
+      "etag_before": "sha256:c337ac829c9ce237",
+      "group": "open|1",
+      "id": "lib.nvim/alpha-twin",
+      "index": {
+        "action": "written"
+      },
+      "inverse": {
+        "after": "lib.nvim/alpha",
+        "id": "lib.nvim/alpha-twin",
+        "if_match": "sha256:067a5d686fff0e52",
+        "op": "reorder"
+      },
+      "n": 4,
+      "ok": true,
+      "op": "reorder",
+      "outcome": "changed",
+      "renumbered": false,
+      "writes": 1
+    },
+    {
+      "changed_ids": [
+        "lib.nvim/delta"
+      ],
+      "etag_before": "sha256:6c4aef85fbbd3fff",
+      "id": "lib.nvim/delta",
+      "index": {
+        "action": "written"
+      },
+      "n": 5,
+      "notes": [],
+      "ok": true,
+      "op": "done",
+      "outcome": "done",
+      "plans_closed": [],
+      "steps_ticked": 0,
+      "to": "lib.nvim/Backlog/TASKS/2026-01-02_delta.md"
+    },
+    {
+      "changed_ids": [],
+      "error": {
+        "code": "invalid_argument",
+        "details": {
+          "problems": [
+            {
+              "code": "blocked-by-cycle",
+              "key": "blocked_by",
+              "members": [
+                "lib.nvim/alpha",
+                "lib.nvim/beta"
+              ],
+              "message": "this would form a cycle: lib.nvim/alpha -> lib.nvim/beta"
+            }
+          ]
+        },
+        "message": "this would form a cycle: lib.nvim/alpha -> lib.nvim/beta",
+        "retryable": false
+      },
+      "n": 6,
+      "ok": false,
+      "op": "set",
+      "outcome": "failed"
+    },
+    {
+      "changed_ids": [],
+      "error": {
+        "code": "invalid_argument",
+        "message": "move_area can only be asked as a dry run in this version (dry_run: true): the report says what the move would break",
+        "retryable": false
+      },
+      "n": 7,
+      "ok": false,
+      "op": "move_area",
+      "outcome": "failed"
+    }
+  ],
+  "schema": 1,
+  "vault": {
+    "id": "vault"
+  }
+}

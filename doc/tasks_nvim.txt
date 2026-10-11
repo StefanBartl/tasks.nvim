@@ -205,7 +205,7 @@ which optional pieces are present.
 ==============================================================================
 9. MACHINE CONTRACT                                       *tasks_nvim-contract*
 
-For apps, agents and pipelines: versioned JSON documents, read only. The
+For apps, agents and pipelines: versioned JSON documents. The
 shapes, rules and errors are in docs/CONTRACT.md; the JSON Schemas are in
 `schemas/tasks-export/1/`.
 
@@ -216,9 +216,11 @@ shapes, rules and errors are in docs/CONTRACT.md; the JSON Schemas are in
   nvim --headless -u NONE -l scripts/tasks.lua call task --params='{"id":"area/slug"}'
 <
 
-Methods: `hello`, `snapshot`, `list`, `task`, `next`, `areas`. Exit codes: 0
-an answer, 2 `invalid_argument`, 1 any other error (a `tasks.error`
-document, also on stdout). From Lua: `require("tasks_nvim.api").call()`,
+Methods: `hello`, `snapshot`, `list`, `task`, `next`, `areas`, `done_preview`
+and `ops`, the write door (`set`, `new`, `reorder`, `done`, `move_area` as a
+dry run). Exit codes: 0 an answer, 2 `invalid_argument`, 1 any other error (a
+`tasks.error` document, also on stdout; for `ops`: any operation failed).
+`--params=-` reads the JSON from stdin. From Lua: `require("tasks_nvim.api").call()`,
 which never throws. A document has no path of this machine, a missing
 number is unknown (never 0), a broken task is listed with `valid: false`,
 and each task carries an `etag`; `rev` and `digest` say whether anything

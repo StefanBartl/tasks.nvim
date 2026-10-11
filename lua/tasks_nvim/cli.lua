@@ -77,8 +77,9 @@ commands:
                                           stages, ready tasks, decisions by leverage, critical path
                                           (--for: the task and everything that has to be finished before it)
   next [<area>] [--n=3] [--actor=cdx|me|pair|none] [--format=text|json]   the best ready tasks, with the reason
-  call <method> [--params=<json>] [--pretty]   the machine contract (tasks-export/1): hello, snapshot, list, task, next,
-                                          areas; the document on stdout, a tasks.error on failure (exit 1, 2 for a bad request)
+  call <method> [--params=<json>|-] [--pretty]   the machine contract (tasks-export/1): hello, snapshot, list, task, next,
+                                          areas, done_preview and ops (the write door); `-` reads the JSON from stdin; the document
+                                          on stdout, a tasks.error on failure (exit 1, 2 for a bad request)
   --capabilities                          the handshake document (call hello)
   show <area>/<slug> [--format=text|json]   one task: fields, readiness, body
   plans [<area>]                          the plan files: id, status, location, title
@@ -1519,11 +1520,13 @@ function M.run(argv, io)
     lead = lead + 1
   end
   if lead > 0 and argv[lead + 1] then
+    -- right behind the command name, NOT at the end: after a bare `--` everything is text (`new area -- --title`), and
+    -- an option that landed there would be read as part of the title
     local moved = { argv[lead + 1] }
-    for i = lead + 2, #argv do
+    for i = 1, lead do
       moved[#moved + 1] = argv[i]
     end
-    for i = 1, lead do
+    for i = lead + 2, #argv do
       moved[#moved + 1] = argv[i]
     end
     argv = moved

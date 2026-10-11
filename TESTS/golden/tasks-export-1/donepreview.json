@@ -1,0 +1,31 @@
+{
+  "area": "lib.nvim",
+  "bucket": "TASKS",
+  "confirm": "done-6c4aef85fbbd3fff-125b6d",
+  "digest": "sha256:b35634dd97c8de52",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "etag": "sha256:6c4aef85fbbd3fff",
+  "freed": [
+    "lib.nvim/epsilon"
+  ],
+  "from": "lib.nvim/ROADMAP/tasks/delta.md",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "id": "lib.nvim/delta",
+  "kind": "tasks.donepreview",
+  "plugin": "tasks.nvim",
+  "readme": {
+    "row": "| [`2026-01-02_delta.md`](./TASKS/2026-01-02_delta.md) | Delta is parked — A summary line for delta. (2026-01-02) |",
+    "state": "updated"
+  },
+  "resumed": false,
+  "schema": 1,
+  "steps_ticked": 0,
+  "to": "lib.nvim/Backlog/TASKS/2026-01-02_delta.md",
+  "vault": {
+    "id": "vault"
+  }
+}
