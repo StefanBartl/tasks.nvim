@@ -412,7 +412,16 @@ A vault is data that other people and tools write, so the engine is strict about
   created exclusively, taken over after 10 s): the Backlog README row of `done` and `plans.close` is added to the text
   on disk NOW (`mutate.readme_update`), and `mutate.set` rewrites the frontmatter under the lock, so two processes
   (an agent's CLI and the dashboard) do not drop each other's change. It serialises tasks.nvim writers; an editor with
-  the file open is not one of them.
+  the file open is not one of them. A lock that fails says why in a third value: `locked` (another process holds it
+  right now, asking again can help), `lock_stuck` (older than the takeover age and not deletable, or a folder or link
+  where the lock file should be: it names the lock to remove by hand) or `io`.
+- `mutate.set` can be a compare-and-set: `if_match` (the `etag` of the task file the caller read) and `expect`
+  (`{ key, value }`, one key must still have this value) are checked against the text read UNDER the lock. A
+  difference is `nil, message, { code = "conflict", id, key?, expected, actual }` and nothing is written; a change of
+  another key made meanwhile is kept. The answer carries `etag_before`, `etag_after` and `before` (the old values of
+  the patched keys, `REMOVE` for a key the file did not have: the inverse patch of an undo). `batch.set_many` uses the
+  same check for its `expect`, so the window between looking and writing is closed. A task file that is a link is not
+  written through (`code = "forbidden"`).
 - A document the user names (`--write=<file>`, `chain.marker_docs`) is a literal path (`fsio.doc_path`: `~` and
   `$VAR` expanded, `[1]` no wildcard) and a symlink there is written through (`write_atomic(..., { follow_symlinks })`);
   files the vault owns are replaced, never followed.

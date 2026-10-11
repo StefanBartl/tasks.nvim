@@ -278,13 +278,18 @@ end
 ---serialises the cooperating writers only; an editor with the file open is not one of them.
 ---
 ---A holder that died leaves its file behind: a lock older than `opts.stale_s` (10 s; a locked write takes
----milliseconds) is taken over. Waiting is bounded (`opts.wait_ms`, 2 s), then `nil, err`.
+---milliseconds) is taken over. Waiting is bounded (`opts.wait_ms`, 2 s), then `nil, err, info`.
+---
+---`info.code` says why: `locked` (another process holds it right now; asking again can help, `retryable`),
+---`lock_stuck` (a lock that nobody will release: older than the takeover age and not deletable, or a folder or link
+---where the lock file should be; remove it by hand) or `io`. What `fn` answers (up to three values) is handed back.
 ---@generic R
 ---@param path string
----@param fn fun(): R, string|nil
+---@param fn fun(): R, string|nil, table|nil
 ---@param opts? { wait_ms?: integer, stale_s?: integer }
 ---@return R|nil result
 ---@return string|nil err
+---@return table|nil info  # `{ code = "locked"|"lock_stuck"|"io", retryable = boolean, lock = string }` for a failed lock, else what `fn` gave
 function M.with_lock(path, fn, opts)
   opts = opts or {}
   local lock = M.dirname(path) .. "/." .. path:match("([^/\\]+)$") .. ".lock"
@@ -308,27 +313,43 @@ function M.with_lock(path, fn, opts)
         )
       )
     if not transient then
-      return nil, ("cannot lock %s: %s"):format(path, tostring(err))
+      return nil,
+        ("cannot lock %s: %s"):format(path, tostring(err)),
+        { code = "io", retryable = false, lock = lock }
     end
+    local stuck = ("%s has a lock that cannot be taken over: remove it by hand (%s)"):format(
+      path,
+      lock
+    )
     if exists then
-      local st = uv.fs_stat(lock)
+      local st = uv.fs_lstat(lock)
+      -- a folder or a link where the lock file should be (a checked-in `.<name>.lock/`): nobody will ever release it
+      if st and st.type ~= "file" then
+        return nil, stuck, { code = "lock_stuck", retryable = false, lock = lock }
+      end
       if st and os.time() - st.mtime.sec > stale_s then
         pcall(uv.fs_unlink, lock)
       end
     end
     -- the deadline applies on EVERY turn: a stale lock that cannot be deleted must not spin the editor
     if uv.hrtime() > deadline then
+      local st = uv.fs_lstat(lock)
+      if st and os.time() - st.mtime.sec > stale_s then
+        -- older than the takeover age and still there: deleting it failed, and waiting longer will not change that
+        return nil, stuck, { code = "lock_stuck", retryable = false, lock = lock }
+      end
       return nil,
-        ("%s is being written by another process (%s: %s)"):format(path, lock, tostring(err))
+        ("%s is being written by another process (%s: %s)"):format(path, lock, tostring(err)),
+        { code = "locked", retryable = true, lock = lock }
     end
     vim.wait(10)
   end
-  local ran, res, res2 = pcall(fn)
+  local ran, res, res2, res3 = pcall(fn)
   pcall(uv.fs_unlink, lock)
   if not ran then
     error(res, 0)
   end
-  return res, res2
+  return res, res2, res3
 end
 
 ---The SHA-256 of some bytes, 64 hex digits. `vim.fn.sha256` refuses a string with a NUL byte (a Blob), so such a text

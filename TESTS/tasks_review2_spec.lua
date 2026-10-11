@@ -194,11 +194,13 @@ return function(H)
     -- a lock held by someone else: wait, then give up with a message
     H.write(lock, "1234")
     local t0 = vim.uv.hrtime()
-    local none, busy = fsio.with_lock(target, function()
+    local none, busy, busy_info = fsio.with_lock(target, function()
       return "never", nil
     end, { wait_ms = 80 })
     eq(none, nil)
     has(busy, "being written by another process")
+    eq(busy_info.code, "locked", "a lock someone holds right now is busy")
+    eq(busy_info.retryable, true, "and asking again can help")
     ok((vim.uv.hrtime() - t0) / 1e9 < 1.5, "the wait is bounded")
     ok(H.exists(lock), "a lock that is not ours stays")
     -- one that is older than the stale limit belongs to a process that died: taken over
@@ -921,12 +923,14 @@ return function(H)
       return nil, "EBUSY"
     end
     local t0 = vim.uv.hrtime()
-    local none, busy = fsio.with_lock(target, function()
+    local none, busy, busy_info = fsio.with_lock(target, function()
       return "never"
     end, { wait_ms = 100 })
     vim.uv.fs_unlink = real_unlink
     eq(none, nil)
-    has(busy, "being written by another process")
+    has(busy, "remove it by hand")
+    eq(busy_info.code, "lock_stuck", "an old lock that cannot be deleted is stuck, not busy")
+    eq(busy_info.retryable, false)
     ok((vim.uv.hrtime() - t0) / 1e9 < 1.5, "the deadline holds for a lock that cannot be removed")
     os.remove(dir .. "/.spin.md.lock")
     local real_create, tries = fsio.create_exclusive, 0

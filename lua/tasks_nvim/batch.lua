@@ -15,7 +15,6 @@ local done_flow = require("tasks_nvim.done_flow")
 local index = require("tasks_nvim.index")
 local mutate = require("tasks_nvim.mutate")
 local next_pick = require("tasks_nvim.next_pick")
-local scan = require("tasks_nvim.scan")
 local vault = require("tasks_nvim.vault")
 
 local M = {}
@@ -153,7 +152,7 @@ end
 ---@class Tasks.BatchSetResult
 ---@field changed { id: string, path: string }[]
 ---@field unchanged string[]
----@field failed { id: string, err: string }[]
+---@field failed { id: string, err: string, code?: string }[]  # `code`: `conflict` (the task changed since it was read), `locked`, ...
 ---@field areas string[]            # Areas whose index was regenerated (those with a change).
 ---@field index_errors string[]
 
@@ -167,29 +166,16 @@ function M.set_many(steps, opts)
   local res = { changed = {}, unchanged = {}, failed = {}, areas = {}, index_errors = {} }
   local changed_ids = {}
   for _, step in ipairs(steps) do
-    local r, err
-    local refused
-    if step.expect then
-      -- Read again right before the write: advancing an OLD value would overwrite a newer change with the
-      -- wrong successor. A difference is a failure, not a write.
-      local current = scan.find(step.id, { root = opts.root })
-      if current and tostring(current[step.expect.key]) ~= tostring(step.expect.value) then
-        refused = ("%s changed since the list was read (%s is now %s, not %s); press r to rescan"):format(
-          step.id,
-          step.expect.key,
-          tostring(current[step.expect.key]),
-          tostring(step.expect.value)
-        )
-      end
-    end
-    if refused then
-      err = refused
-    else
-      r, err =
-        mutate.set(step.id, step.patch, { root = opts.root, index = false, today = opts.today })
-    end
+    -- `expect` is checked by `mutate.set` UNDER the lock, against the text read there: advancing an OLD value would
+    -- overwrite a newer change with the wrong successor, and a check before the lock leaves a gap.
+    local r, err, info = mutate.set(step.id, step.patch, {
+      root = opts.root,
+      index = false,
+      today = opts.today,
+      expect = step.expect,
+    })
     if not r then
-      res.failed[#res.failed + 1] = { id = step.id, err = tostring(err) }
+      res.failed[#res.failed + 1] = { id = step.id, err = tostring(err), code = info and info.code }
     elseif r.changed then
       res.changed[#res.changed + 1] = { id = r.id, path = r.path }
       changed_ids[#changed_ids + 1] = r.id

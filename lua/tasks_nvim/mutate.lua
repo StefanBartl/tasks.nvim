@@ -809,15 +809,78 @@ end
 
 -- ── set ──────────────────────────────────────────────────────────────────────
 
+---The frontmatter values of `keys` as the file carries them, in the shape `set` takes them back: the inverse of a
+---patch. `REMOVE` for a key the file does not have. Raw frontmatter, not the derived fields: a `summary` read from the
+---body or a `title` taken from the slug is not in the file.
+---@param task Tasks.Task
+---@param keys string[]
+---@return table<string, any>
+local function values_of(task, keys)
+  local out = {}
+  for _, key in ipairs(keys) do
+    local v = task.meta[key]
+    out[key] = v == nil and M.REMOVE or v
+  end
+  return out
+end
+
+---Whether the text of a task file still is what the caller based its change on: `opts.if_match` (the version tag of
+---the whole file) and `opts.expect` (one key must still have this value). Called with the text read UNDER the lock,
+---so there is nothing between the check and the write.
+---@param task Tasks.Task
+---@param text string
+---@param opts { if_match?: string, expect?: { key: string, value: any } }
+---@return string|nil err
+---@return table|nil info  # `{ code = "conflict", id, key?, expected, actual }`
+local function precondition(task, text, opts)
+  if opts.if_match ~= nil then
+    local etag = fsio.etag(text)
+    if etag ~= opts.if_match then
+      return ("%s changed since it was read (its version is %s, not %s)"):format(
+        task.id,
+        etag,
+        tostring(opts.if_match)
+      ),
+        { code = "conflict", id = task.id, expected = opts.if_match, actual = etag }
+    end
+  end
+  local ex = opts.expect
+  if ex then
+    local current = model.parse_text(text, {
+      path = task.path,
+      area = task.area,
+      location = task.location,
+      slug = task.slug,
+      folder = task.folder,
+    })
+    local actual = current[ex.key]
+    if tostring(actual) ~= tostring(ex.value) then
+      return ("%s changed since the list was read (%s is now %s, not %s); press r to rescan"):format(
+        task.id,
+        ex.key,
+        tostring(actual),
+        tostring(ex.value)
+      ),
+        { code = "conflict", id = task.id, key = ex.key, expected = ex.value, actual = actual }
+    end
+  end
+  return nil, nil
+end
+
 ---Change frontmatter keys of an open task and set `updated`.
 ---
 ---`patch` maps key -> value (`REMOVE` deletes). Nothing is written, and
 ---`updated` stays as it was, when the patch would not change the file.
+---
+---`opts.if_match` (the `etag` the caller read) and `opts.expect` (`{ key, value }`) make it a compare-and-set: they are
+---checked against the text read under the lock, and a difference is `nil, message, { code = "conflict", ... }`. The
+---other keys of the file are never touched, so a change of another key made meanwhile is kept.
 ---@param id string
 ---@param patch table<string, any>
----@param opts? { root?: string, today?: string, index?: boolean, allow_unknown?: boolean }
----@return { id: string, path: string, changed: boolean, index?: Tasks.IndexResult, index_err?: string }|nil result
+---@param opts? { root?: string, today?: string, index?: boolean, allow_unknown?: boolean, if_match?: string, expect?: { key: string, value: any } }
+---@return { id: string, path: string, changed: boolean, etag_before?: string, etag_after?: string, before?: table<string, any>, index?: Tasks.IndexResult, index_err?: string }|nil result
 ---@return string|nil err
+---@return table|nil info  # `{ code = "conflict"|"locked"|"lock_stuck"|"forbidden"|"io", ... }` when there is a reason to name
 function M.set(id, patch, opts)
   opts = opts or {}
   if type(patch) ~= "table" then
@@ -840,27 +903,82 @@ function M.set(id, patch, opts)
     return nil, perr
   end
 
+  -- A link in the vault is a way out of it: `fm.update` would write through it into a file outside the vault.
+  if fsio.is_link(task.path) then
+    return nil,
+      ("%s is a symbolic link or junction: it is not written through (the vault must not point outside itself)"):format(
+        task.id
+      ),
+      { code = "forbidden" }
+  end
   local text, rd_err = fsio.read(task.path)
   if not text then
     return nil, "cannot read " .. task.path .. ": " .. tostring(rd_err)
+  end
+  -- first against the text just read: a stale caller is answered without taking the lock (and a no-op patch on a file
+  -- that has moved on is still a conflict: the caller is looking at old data)
+  local cerr, cinfo = precondition(task, text, opts)
+  if cerr then
+    return nil, cerr, cinfo
   end
   local probe, uerr = fm.update_text(text, pairs_)
   if not probe then
     return nil, "cannot update " .. task.path .. ": " .. tostring(uerr)
   end
-  local result = { id = task.id, path = task.path, changed = probe ~= text }
+  local etag_before = fsio.etag(text)
+  local result = {
+    id = task.id,
+    path = task.path,
+    changed = probe ~= text,
+    etag_before = etag_before,
+    etag_after = etag_before,
+  }
   if not result.changed then
     return result, nil
   end
 
+  local keys = {}
+  for _, kv in ipairs(pairs_) do
+    keys[#keys + 1] = kv[1]
+  end
   pairs_[#pairs_ + 1] = { "updated", today }
-  -- Under the lock: `fm.update` reads the file again and patches only these keys, so a second process changing OTHER
-  -- keys of the same task at the same moment is not undone.
-  local ok, werr = fsio.with_lock(task.path, function()
-    return fm.update(task.path, pairs_)
+  -- Under the lock: the text is read again (nobody else can change it now) and the preconditions are checked against
+  -- THAT text; `fm.update` then patches only these keys, so a second process changing OTHER keys of the same task at
+  -- the same moment is not undone.
+  local ok, werr, winfo = fsio.with_lock(task.path, function()
+    local cur, curerr = fsio.read(task.path)
+    if not cur then
+      return nil, "cannot read " .. task.path .. ": " .. tostring(curerr)
+    end
+    local e, info = precondition(task, cur, opts)
+    if e then
+      return nil, e, info
+    end
+    result.etag_before = fsio.etag(cur)
+    result.before = values_of(
+      model.parse_text(cur, {
+        path = task.path,
+        area = task.area,
+        location = task.location,
+        slug = task.slug,
+        folder = task.folder,
+      }),
+      keys
+    )
+    local wrote, wr_err = fm.update(task.path, pairs_)
+    if not wrote then
+      return nil, wr_err
+    end
+    local after = fsio.read(task.path)
+    result.etag_after = after and fsio.etag(after) or nil
+    result.changed = result.etag_after ~= result.etag_before
+    return true
   end)
   if not ok then
-    return nil, "cannot write " .. task.path .. ": " .. tostring(werr)
+    if winfo and winfo.code == "conflict" then
+      return nil, werr, winfo
+    end
+    return nil, "cannot write " .. task.path .. ": " .. tostring(werr), winfo
   end
   -- The first member of a plan that goes to `doing` starts the plan: `planning` -> `doing`. Best effort: the task is
   -- already written, a plan file that cannot be updated is not a reason to fail the `set`.
