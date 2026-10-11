@@ -283,13 +283,13 @@ function M.reorder(id, spec, opts)
   local built = planner.build(shared.open, shared.index)
   local node = built.nodes[id]
   if not node then
-    local known = shared.index.open[id]
-    if known then
-      return nil,
-        id .. " is in a dependency cycle (or behind one) and has no place in the order",
-        { code = "invalid_argument" }
-    end
     return nil, "no such open task: " .. id, { code = "not_found" }
+  end
+  if node.stage == nil then
+    -- in a dependency cycle, or behind one: the plan leaves it out of its stages, so it has no neighbours to go next to
+    return nil,
+      id .. " is in a dependency cycle (or behind one) and has no place in the order",
+      { code = "invalid_argument" }
   end
   local moved = node.task
   local group = planner.group_key(node)

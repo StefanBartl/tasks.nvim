@@ -279,6 +279,45 @@ return function(H)
     "not_found"
   )
 
+  -- a control character does not get into the vault: it would reach terminals and parsers of other tools
+  for _, bad_text in ipairs({
+    "red\27[31m",
+    "nul\0byte",
+    "c1\194\155csi",
+    "line\226\128\168sep",
+    "del\127",
+  }) do
+    eq(
+      one({ { op = "set", id = "lib.nvim/gamma", patch = { summary = bad_text } } }).error.code,
+      "invalid_argument",
+      "summary " .. vim.inspect(bad_text)
+    )
+  end
+  eq(
+    one({ { op = "set", id = "lib.nvim/gamma", patch = { tags = { "ok", "bad\27" } } } }).error.code,
+    "invalid_argument",
+    "inside a list too"
+  )
+  eq(
+    one({ { op = "new", area = "lib.nvim", title = "esc\27[2Jtitle" } }).error.code,
+    "invalid_argument"
+  )
+  eq(
+    one({ { op = "new", area = "lib.nvim", title = "x", fields = { summary = "a\226\128\169b" } } }).error.code,
+    "invalid_argument"
+  )
+  eq(
+    one({
+      {
+        op = "set",
+        id = "lib.nvim/gamma",
+        patch = { summary = "Größe 日本 \240\159\152\128 and\ta tab" },
+      },
+    }).ok,
+    true,
+    "ordinary text, non-ASCII and a tab are fine"
+  )
+
   -- limits are kept on writing
   local long = ("x"):rep(301)
   local over = one({ { op = "set", id = "lib.nvim/gamma", patch = { title = long } } })
@@ -593,6 +632,43 @@ return function(H)
   eq(dry.results[4].error.code, "invalid_argument", "a dry run validates")
   eq(dry.results[5].outcome, "would_done", "done needs no token for a dry run")
   eq(dry.ok, false)
+
+  -- ── a task in a dependency cycle has no place in the order ─────────────────
+  do
+    local cyc_root = F.vault(H)
+    F.task(H, cyc_root, "lib.nvim", "c1", F.meta("C1", "open", { { "blocked_by", "lib.nvim/c2" } }))
+    F.task(H, cyc_root, "lib.nvim", "c2", F.meta("C2", "open", { { "blocked_by", "lib.nvim/c1" } }))
+    local text = api.call(
+      "ops",
+      vim.json.encode({ ops = { { op = "reorder", id = "lib.nvim/c1" } } }),
+      { root = cyc_root, today = F.TODAY }
+    )
+    local e = vim.json.decode(text).results[1]
+    eq({ e.ok, e.error and e.error.code }, { false, "invalid_argument" }, text)
+    has(e.error.message, "dependency cycle")
+  end
+
+  -- ── an internal error names the file in the plugin, never where the plugin is installed ──
+  do
+    local errors = require("tasks_nvim.errors")
+    eq(
+      errors.scrub("B:\\repos\\tasks.nvim/lua/tasks_nvim/edges.lua:116: attempt to index nil"),
+      "tasks_nvim/edges.lua:116: attempt to index nil"
+    )
+    eq(
+      errors.scrub(
+        "C:\\Users\\x\\AppData\\Local\\nvim-data\\lazy\\tasks.nvim\\lua\\tasks_nvim\\ops.lua:9: boom"
+      ),
+      "tasks_nvim\\ops.lua:9: boom"
+    )
+    eq(
+      errors.scrub("/home/x/.local/share/nvim/lazy/tasks.nvim/lua/tasks_nvim/x.lua:1: y"),
+      "tasks_nvim/x.lua:1: y"
+    )
+    eq(errors.scrub("plain message"), "plain message")
+    eq(errors.classify("/opt/p/lua/tasks_nvim/a.lua:2: bug").message, "tasks_nvim/a.lua:2: bug")
+    eq(errors.classify("a message about nothing known").code, "internal")
+  end
 
   -- ── no path of this machine in an answer ────────────────────────────────────
   local _, text = ops({

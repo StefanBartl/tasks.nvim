@@ -23,6 +23,8 @@ the version is not tagged yet (the repository is not published).
   `dry_run` for everything; `--params=-` reads a request from stdin; new error codes `conflict`, `exists`, `forbidden`,
   `lock_stuck`, `rollback_incomplete` (`tasks_nvim.errors`); hello capabilities `ops`, `if_match`, `done_preview`,
   `reorder`, `move_area_preview`; schema, golden files and checks for `tasks.result` and `tasks.donepreview`.
+  A front end cannot write a control character (ESC, NUL, C1, U+2028) into a value; an internal error names the file in the
+  plugin (`tasks_nvim/x.lua:12`), never where it is installed; `--today` reaches `call ops`.
 - `moves.preview`: moving a task to another area, stage 1: whether it can be done (the slug must be free in the target area) and which `blocked_by`, `after`, `refs`, plan targets and documents would dangle; nothing is written.
 - `done_flow.preview` / `mutate.done_preview`: what finishing a task would do (target, README row, steps, the plan it closes, the tasks it frees), nothing written, with a `confirm` token that binds the version of the file; `done` takes `if_match`.
 - `batch.reorder`: move a task inside its group by giving it an `order` between its neighbours' (numbering the tasks before the spot only when they have none, renumbering when two values get too close), with the `inverse` for an undo; `plan.group_key`.

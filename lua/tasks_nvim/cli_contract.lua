@@ -105,8 +105,11 @@ local function run_call(ctx)
     -- `ops` carries its fields at the top of the request; the read methods carry theirs under `params`
     request = (def and def.flat) and tostring(params) or ('{"params":' .. tostring(params) .. "}")
   end
-  local text, code =
-    api.call(method, request, { root = ctx.eo.root, indent = args.opt.pretty and 2 or nil })
+  local text, code = api.call(method, request, {
+    root = ctx.eo.root,
+    today = ctx.eo.today,
+    indent = args.opt.pretty and 2 or nil,
+  })
   ctx.out(text .. "\n")
   -- a request of `ops` that was answered but not carried out in full (`ok: false`) is a failure for the shell too
   if code == nil and method == "ops" then

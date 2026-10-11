@@ -168,8 +168,9 @@ file changed since, it is a `conflict` and nothing moves. A task that is finishe
 repeated request does no harm. The token is not a secret (the engine keeps no state); a host that needs authorisation
 adds its own.
 
-**What a front end may not write.** Limits are kept on writing (title 300 characters, summary 1000, lists of 100
-entries of 300 characters). A `refs` entry that is **new** must be a plain relative path, optionally with a line suffix
+**What a front end may not write.** A text value with a control character (ESC and the rest of C0 but the tab, NUL, DEL, the
+8-bit C1 range, the Unicode line separators) is refused: other tools print the files to a terminal and parse them. Limits are
+kept on writing (title 300 characters, summary 1000, lists of 100 entries of 300 characters). A `refs` entry that is **new** must be a plain relative path, optionally with a line suffix
 (`lua/a.lua:42`, `lua/a.lua:10-20`), an anchor (`docs/a.md#top`), a `repo@commit` or an id: no `..`, no drive or network
 prefix, no absolute path, no control character, no colon but the line suffix. Entries the task already has stay as they
 are. A task file that is a link is not written through (`forbidden`). No error carries a path of this machine, only ids.

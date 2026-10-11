@@ -311,7 +311,7 @@ function M.call(name, request, opts)
   end
   local ok, doc, err = pcall(M.METHODS[name].run, params, engine_opts)
   if not ok then
-    return error_text(fail("internal", tostring(doc)))
+    return error_text(fail("internal", errors.scrub(tostring(doc))))
   end
   if not doc then
     return error_text(classify(err))

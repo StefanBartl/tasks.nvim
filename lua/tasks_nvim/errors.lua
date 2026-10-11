@@ -28,6 +28,15 @@ function M.fail(code, message, retryable)
   return { code = code, message = message, retryable = retryable == true }
 end
 
+---A Lua error message without where the plugin is installed: `<path>/lua/tasks_nvim/x.lua:12: boom` becomes
+---`tasks_nvim/x.lua:12: boom`. The message of a bug of the engine says where it happened, which is useful, but a path of
+---this machine does not belong in a document.
+---@param text string
+---@return string
+function M.scrub(text)
+  return (text:gsub("[^%s'\"]*[/\\]lua[/\\]", ""))
+end
+
 ---What a reader may learn from `info` besides the code: ids, keys and values, never a path.
 local DETAIL_KEYS = { "id", "key", "expected", "actual", "written", "writes" }
 
@@ -87,7 +96,7 @@ function M.classify(err, info)
   elseif text:find("remove it by hand", 1, true) then
     return M.fail("lock_stuck", text, false)
   end
-  return M.fail(code, text, false)
+  return M.fail(code, code == "internal" and M.scrub(text) or text, false)
 end
 
 return M

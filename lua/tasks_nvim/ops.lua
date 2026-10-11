@@ -231,6 +231,26 @@ local function over_limit(key, value)
   return nil
 end
 
+---Whether a value carries a character that must not reach the vault from a front end: a control character (ESC and
+---the rest of C0 but the tab, DEL, the 8-bit C1 range) or a Unicode line separator. Other tools print the files to a
+---terminal and parse them; the editor's own commands clean what they print, a text editor does not.
+---@param value any
+---@return boolean
+local function has_control(value)
+  if type(value) == "string" then
+    return value:find("[%z\1-\8\11-\31\127]") ~= nil
+      or value:find("\194[\128-\159]") ~= nil
+      or value:find("\226\128[\168\169]") ~= nil
+  elseif type(value) == "table" and value ~= vim.NIL then
+    for _, v in ipairs(value) do
+      if has_control(v) then
+        return true
+      end
+    end
+  end
+  return false
+end
+
 ---Why a `refs` entry may not be written by a front end that is not the author, or nil: a plain relative path (with an
 ---optional line or range suffix), a `repo@commit` or an id. No `..`, no drive or network prefix, no absolute path,
 ---no control character, no colon but the position suffix.
@@ -366,6 +386,10 @@ local function do_set(op, ctx)
     return failure(ctx, ferr)
   end
   for _, kv in ipairs(pairs_) do
+    -- first the characters, then the length: `strchars` cannot take a NUL byte
+    if has_control(kv[2]) then
+      return refuse("invalid_argument", kv[1] .. " contains a control character")
+    end
     local over = over_limit(kv[1], kv[2])
     if over then
       return refuse("payload_too_large", over)
@@ -450,6 +474,15 @@ local function do_new(op, ctx)
     end
     if value ~= vim.NIL then
       fields[key] = value
+    end
+  end
+  -- first the characters, then the length: `strchars` cannot take a NUL byte
+  if has_control(op.title) then
+    return refuse("invalid_argument", "title contains a control character")
+  end
+  for key, value in pairs(fields) do
+    if has_control(value) then
+      return refuse("invalid_argument", key .. " contains a control character")
     end
   end
   local over = over_limit("title", op.title)
@@ -566,6 +599,9 @@ local function do_done(op, ctx)
   local etag = mutate.confirm_etag(op.id, op.confirm)
   if not etag then
     return refuse("invalid_argument", "the confirm token is not one for " .. op.id)
+  end
+  if has_control(op.done_in) then
+    return refuse("invalid_argument", "done_in contains a control character")
   end
   local flow, err, info = done_flow.run(op.id, {
     root = ctx.root,
@@ -696,7 +732,7 @@ function M.run(params, opts)
     end
     local ran, entry = pcall(HANDLERS[op.op], op, ctx)
     if not ran then
-      entry = refuse("internal", contract.redact(root, tostring(entry)))
+      entry = refuse("internal", errors.scrub(contract.redact(root, tostring(entry))))
     end
     entry.n = i
     entry.op = op.op

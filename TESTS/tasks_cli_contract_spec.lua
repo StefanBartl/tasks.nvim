@@ -55,6 +55,22 @@ return function(H)
   r = run({ "call", "task", '--params={"id":"lib.nvim/alpha"}' })
   eq({ r.code, doc(r).task.id }, { 0, "lib.nvim/alpha" })
 
+  -- the write door follows `--today`: a dry run of `done` names the file with that day in its name
+  r = run({
+    "call",
+    "ops",
+    '--params={"dry_run":true,"ops":[{"op":"done","id":"lib.nvim/alpha"}]}',
+  })
+  eq(r.code, 0, r.err)
+  has(doc(r).results[1].to, "2026-01-01_alpha.md", "the day of --today, not the day it is")
+  r = run({
+    "call",
+    "ops",
+    '--params={"ops":[{"op":"set","id":"lib.nvim/ghost","patch":{"status":"open"}}]}',
+  })
+  eq({ r.code, doc(r).ok }, { 1, false }, "an operation that failed is a failure for the shell")
+  eq(run({ "call", "ops", '--params={"ops":[]}' }).code, 2, "a bad request is exit 2")
+
   -- an error is a document on stdout, with the exit code of its kind
   r = run({ "call", "frobnicate" })
   eq({ r.code, doc(r).code }, { 1, "not_found" })
