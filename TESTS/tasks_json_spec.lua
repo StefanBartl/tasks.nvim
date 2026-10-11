@@ -127,6 +127,28 @@ return function(H)
   lacks(json.encode(doc), "\n", "the compact form has no whitespace")
   lacks(json.encode(doc), " ")
 
+  -- ── memo: the big part of a document is written once ──
+  local big = json.memo({ { a = 1 }, { a = 2 } })
+  local first = json.encode({ list = big, x = 1 })
+  eq(first, '{"list":[{"a":1},{"a":2}],"x":1}')
+  big[1].a = 99 -- (not allowed in real use; here it shows the text is remembered)
+  eq(
+    json.encode({ list = big, x = 2 }),
+    '{"list":[{"a":1},{"a":2}],"x":2}',
+    "the compact text is reused"
+  )
+  eq(
+    json.encode({ list = big }, { indent = 1 }),
+    '{\n "list": [\n  {\n   "a": 99\n  },\n  {\n   "a": 2\n  }\n ]\n}',
+    "a readable document ignores the memo"
+  )
+  eq(json.encode(json.memo({})), "[]", "an empty memoised table is still an array")
+  has(
+    fails({ json.memo({ 0 / 0 }) }),
+    "$[1][1]",
+    "an error inside a memoised table names the full path"
+  )
+
   -- ── round trip through a real decoder ──
   local sample = {
     id = "lib.nvim/x",

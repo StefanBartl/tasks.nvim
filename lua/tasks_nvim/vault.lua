@@ -278,6 +278,25 @@ function M.resolve_task(root, area, slug)
   return nil, "no such open task: " .. area .. "/" .. slug
 end
 
+---Why `dir` must not be read as part of the vault, or nil: a symbolic link or a junction on the way (`<area>`,
+---`ROADMAP`, `tasks`, ...) leads out of `root`. Both are resolved on disk first, so a link that stays inside the vault
+---and a vault that itself sits below a link (`/var` on macOS) are fine.
+---@param root string
+---@param dir string
+---@return string|nil err
+function M.leaves(root, dir)
+  local real_dir, real_root = uv.fs_realpath(dir), uv.fs_realpath(root)
+  if real_dir and real_root and not fsio.is_inside(real_root, real_dir) then
+    local shown = fsio.norm(dir)
+    local base = fsio.norm(root)
+    if fsio.is_inside(base, shown) then
+      shown = shown:sub(#base + 2)
+    end
+    return ("%s leaves the vault (a symbolic link or junction): not read"):format(shown)
+  end
+  return nil
+end
+
 ---Whether the folder `<root>/<name>` is an area: it holds `ROADMAP/` or
 ---`Backlog/`, or is one of `EXTRA_AREAS`; hidden and `_`-prefixed folders and
 ---`SKIP` entries never are.
@@ -289,7 +308,8 @@ local function is_area_dir(root, name)
     return false
   end
   local dir = root .. "/" .. name
-  if not fsio.is_dir(dir) then
+  -- A link (a symbolic link, a junction) is a way out of the vault: what it points at is not the vault's.
+  if not fsio.is_dir(dir) or fsio.is_link(dir) then
     return false
   end
   for _, extra in ipairs(M.extra_areas()) do

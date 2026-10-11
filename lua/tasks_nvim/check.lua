@@ -36,6 +36,7 @@
 ---  - `open-in-backlog`: a task file in `Backlog/` whose status is not `done`
 ---  - `duplicate-id`: an open task and a finished one share an id
 ---  - `unreadable`, `index-error`: something could not be read at all
+---  - `symlink-task` (error): the task file is a symbolic link or a junction; it is not read (the vault must not point outside itself)
 ---  - `frontmatter-warning` (warning): a frontmatter line was kept but not understood
 ---  - `title-comment` (warning): the title has a trailing YAML comment (` #...`)
 ---

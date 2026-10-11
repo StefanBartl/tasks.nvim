@@ -40,6 +40,21 @@ function M.array(t)
   return setmetatable(t or {}, ARRAY)
 end
 
+---Tables whose compact text is remembered (`M.memo`). Weak: a table that goes away takes its text with it.
+---@type table<table, string|false>
+local memo = setmetatable({}, { __mode = "k" })
+
+---Mark a table whose compact text may be reused: the big part of a document (the list of tasks) is written once for
+---its digest and once for the answer, and the second time costs nothing. The table must not change afterwards, and
+---`indent` ignores the mark (a readable document is rare and small).
+---@generic T: table
+---@param t T
+---@return T
+function M.memo(t)
+  memo[t] = false
+  return t
+end
+
 ---Most nesting we accept: a cycle in the data must fail, not hang.
 local MAX_DEPTH = 64
 
@@ -205,10 +220,11 @@ end
 ---@field indent? integer  # Spaces per level: the readable form (golden files). Default: compact, the form that is hashed.
 
 ---@param value any
----@param opts? Tasks.JsonOpts
+---@param indent? integer
+---@param path0 string
+---@param bypass? boolean  # The root itself is not looked up in the memo (it is being computed).
 ---@return string
-function M.encode(value, opts)
-  local indent = opts and opts.indent
+local function render(value, indent, path0, bypass)
   local out = {}
   local function put(v, depth, path)
     local ty = type(v)
@@ -223,6 +239,12 @@ function M.encode(value, opts)
     elseif ty == "table" then
       if depth > MAX_DEPTH then
         error(("json: %s is nested deeper than %d levels (a cycle?)"):format(path, MAX_DEPTH), 0)
+      end
+      if not indent and memo[v] ~= nil and not (bypass and depth == 0) then
+        local text = memo[v] or render(v, nil, path, true)
+        memo[v] = text
+        out[#out + 1] = text
+        return
       end
       local kind, keys = shape(v, path)
       local open, close = "[", "]"
@@ -252,8 +274,15 @@ function M.encode(value, opts)
       error(("json: %s is a %s, which JSON cannot hold"):format(path, ty), 0)
     end
   end
-  put(value, 0, "$")
+  put(value, 0, path0)
   return table.concat(out)
+end
+
+---@param value any
+---@param opts? Tasks.JsonOpts
+---@return string
+function M.encode(value, opts)
+  return render(value, opts and opts.indent, "$")
 end
 
 return M

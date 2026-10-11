@@ -60,6 +60,8 @@ sessions that run without an editor. Nothing is stored anywhere but in the files
 - **Folder tasks** with an `assets/` folder for screenshots and logs.
 - **Export** to a buffer, the clipboard, the quickfix list, a file (CSV or Markdown) or a browser preview.
 - **Headless CLI** with the same rules and a CI gate (`check`, `index --check`, `md_lint`).
+- **A machine contract** for apps, agents and pipelines: `tasks call snapshot` and friends answer with versioned JSON
+  documents (JSON Schema, TypeScript types, golden files), read only ([docs/CONTRACT.md](docs/CONTRACT.md)).
 
 How it is meant to be used, scenario by scenario: [docs/WORKFLOWS.md](docs/WORKFLOWS.md).
 
@@ -153,6 +155,7 @@ export TASKS_VAULT=~/vault
 nvim --headless -u NONE -l scripts/tasks.lua list --status=doing
 nvim --headless -u NONE -l scripts/tasks.lua new my-project "Fix the thing" --kind=bug --prio=2
 nvim --headless -u NONE -l scripts/tasks.lua done my-project/fix-the-thing
+nvim --headless -u NONE -l scripts/tasks.lua call snapshot    # the vault as one JSON document (docs/CONTRACT.md)
 nvim --headless -u NONE -l scripts/tasks-ci.lua    # check + index --check + md_lint, exit 0/1
 nvim --headless -u NONE -l scripts/tasks-html.lua --out=tasks.html   # one-file HTML overview, open it in a browser
 ```
@@ -169,6 +172,7 @@ the file `done` says so and moves the task anyway.
 | [docs/COMMANDS.md](docs/COMMANDS.md) | every `:Tasks` verb, flag and the dashboard |
 | [docs/BINDINGS.md](docs/BINDINGS.md) | commands, dashboard and form keys, autocommands |
 | [docs/ENGINE.md](docs/ENGINE.md) | file format, rules, checks, the CLI, limits |
+| [docs/CONTRACT.md](docs/CONTRACT.md) | the machine contract `tasks-export/1`: documents, rules, errors, how to write a reader |
 | `:help tasks_nvim` | the same in short |
 
 ## Tests

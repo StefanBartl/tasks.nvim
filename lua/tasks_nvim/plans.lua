@@ -186,6 +186,10 @@ function M.area(area, opts)
   if not fsio.is_dir(dir) then
     return out, {}
   end
+  local escape = vault.leaves(root, dir)
+  if escape then
+    return out, { escape }
+  end
   local errors = {}
   for name, kind in vim.fs.dir(dir) do
     if kind == "file" and name:match("%.md$") then

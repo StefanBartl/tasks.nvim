@@ -35,11 +35,16 @@ local M = {}
 ---not an error: an area without tasks has no `tasks/` folder.
 ---@param dir string
 ---@param opts Tasks.ScanOpts
+---@param root? string  # the vault; with it a folder that leads out of the vault is refused
 ---@return string[] paths
 ---@return string[] errors
-local function markdown_files(dir, opts)
+local function markdown_files(dir, opts, root)
   if not fsio.is_dir(dir) then
     return {}, {}
+  end
+  local escape = root and vault.leaves(root, dir)
+  if escape then
+    return {}, { escape }
   end
   local paths, errors
   if opts.ttl_seconds then
@@ -139,7 +144,7 @@ function M.area(area, opts)
     return nil, "invalid area name: " .. tostring(area)
   end
   local dir = vault.tasks_dir(root, area)
-  local files, errors = markdown_files(dir, opts)
+  local files, errors = markdown_files(dir, opts, root)
   local tasks = {}
   for _, entry in ipairs(classify(dir, files)) do
     tasks[#tasks + 1] = model.from_file(entry.path, {
@@ -223,7 +228,7 @@ function M.backlog(area, opts)
   local tasks, all_errors = {}, {}
   for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
     local dir = vault.backlog_dir(root, area, bucket)
-    local files, errors = markdown_files(dir, opts)
+    local files, errors = markdown_files(dir, opts, root)
     for _, e in ipairs(errors) do
       all_errors[#all_errors + 1] = e
     end
@@ -259,7 +264,7 @@ function M.backlog_slugs(area, opts)
   local slugs = {}
   for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
     local dir = vault.backlog_dir(root, area, bucket)
-    local files, walk_errors = markdown_files(dir, opts)
+    local files, walk_errors = markdown_files(dir, opts, root)
     if #walk_errors > 0 then
       -- A listing that failed is not an empty one: a new task would be given a slug a finished task has.
       return nil, ("cannot list %s: %s"):format(dir, tostring(walk_errors[1]))
@@ -302,7 +307,7 @@ function M.finished_lookup(opts)
         found = {}
         for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
           local dir = vault.backlog_dir(root, area, bucket)
-          for _, entry in ipairs(classify(dir, markdown_files(dir, opts))) do
+          for _, entry in ipairs(classify(dir, markdown_files(dir, opts, root))) do
             found[model.slug_of(entry.path, "backlog")] = true
           end
         end
@@ -362,7 +367,7 @@ function M.find_done(id, opts)
   end
   for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
     local dir = vault.backlog_dir(root, area, bucket)
-    for _, entry in ipairs(classify(dir, markdown_files(dir, opts or {}))) do
+    for _, entry in ipairs(classify(dir, markdown_files(dir, opts or {}, root))) do
       if model.slug_of(entry.path, "backlog") == slug then
         return model.from_file(entry.path, {
           area = area,

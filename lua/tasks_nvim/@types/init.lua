@@ -45,6 +45,7 @@
 ---@field warnings string[]           # Lines the frontmatter reader kept verbatim without understanding.
 ---@field hints { code: string, msg: string }[]  # Non-fatal remarks (`title-comment`): the file reads, but not as written.
 ---@field valid boolean               # `#errors == 0`
+---@field etag? string                # `sha256:` and 16 hex digits of the file's bytes as they were parsed (`fsio.etag`); nil when unreadable.
 
 --- Filter for `model.filter`. Every set-like field matches any of its values.
 ---@class Tasks.Filter

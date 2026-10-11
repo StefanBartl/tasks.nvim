@@ -96,6 +96,12 @@ function M.classify(ref)
   if s:match("^%a[%w+.-]*://") or s:match("^mailto:") then
     return "skip", nil
   end
+  -- `\\server\share\x`, `//server/share/x`, `\\?\C:\x`, `\\.\pipe\x`: a network or device path. Looking at it
+  -- (a stat) makes Windows connect to a host the task's author chose (SMB, NTLM credentials, a wait of many seconds
+  -- when it does not answer): never a ref.
+  if fsio.norm(s):sub(1, 2) == "//" then
+    return "skip", nil
+  end
   -- The colon of a drive letter is no separator; the rest of the ref is read on its own.
   local drive, body = s:match("^(%a:)([/\\].*)$")
   local rest = body or s
@@ -453,18 +459,45 @@ local UNDATED = "0000-00-00"
 ---@field tasks integer       # Tasks with at least one checkable ref.
 ---@field files integer       # Distinct files.
 
+---The folders an absolute ref may point into: the folders that hold the repos, the config checkout, the vault and the
+---extra bases. A ref is no way to ask about any file of the disk (`/etc/passwd`, `C:/Users/x/.ssh/id_rsa`): outside
+---these it is not found.
+---@param ctx { repo_bases: string[], config_dir: string|nil, root: string, extra: string[] }
+---@return string[]
+local function allowed_roots(ctx)
+  local out = {}
+  for _, dir in ipairs(ctx.repo_bases) do
+    out[#out + 1] = dir
+  end
+  for _, dir in ipairs(ctx.extra) do
+    out[#out + 1] = dir
+  end
+  out[#out + 1] = ctx.root
+  if ctx.config_dir and ctx.config_dir ~= "" then
+    out[#out + 1] = ctx.config_dir
+  end
+  return out
+end
+
 ---Where `rel` lives for a task of `area`: the base it was found in, the full path and the path relative to that base.
 ---`..` segments are resolved against the folder the file really lives in (git refuses a pathspec outside its work tree,
----for the whole call).
+---for the whole call). An absolute `rel` is looked up only inside `allowed` (`allowed_roots`), after its `..` are resolved.
 ---@param rel string
 ---@param bases string[]
+---@param allowed string[]
 ---@return string|nil base
 ---@return string|nil full
 ---@return string|nil rel
-local function locate(rel, bases)
+local function locate(rel, bases, allowed)
   if is_absolute(rel) then
-    if uv.fs_stat(rel) then
-      return fsio.dirname(rel), rel, rel:match("([^/]+)$") or rel
+    local full = collapse_dots(rel)
+    for _, dir in ipairs(allowed) do
+      if fsio.is_inside(dir, full) then
+        if uv.fs_stat(full) then
+          return fsio.dirname(full), full, full:match("([^/]+)$") or full
+        end
+        return nil, nil, nil
+      end
     end
     return nil, nil, nil
   end
@@ -496,6 +529,7 @@ local function resolve_refs(tasks, ctx, cap, report)
   -- The places to look in depend only on the area; every ref of its tasks reuses them.
   ---@type table<string, string[]>
   local bases_of_area = {}
+  local allowed = allowed_roots(ctx)
   ---@param area string
   ---@return string[]
   local function bases_of(area)
@@ -516,7 +550,7 @@ local function resolve_refs(tasks, ctx, cap, report)
       if kind ~= "path" or not rel then
         report.skipped = report.skipped + 1
       else
-        local base, full, base_rel = locate(rel, bases_of(t.area))
+        local base, full, base_rel = locate(rel, bases_of(t.area), allowed)
         if not base or not full or not base_rel then
           report.unresolved = report.unresolved + 1
         else
@@ -650,6 +684,7 @@ function M.file_key(opts)
     return nil
   end
   local ctx = make_ctx(opts, root)
+  local allowed = allowed_roots(ctx)
   local bases_of_area, memo = {}, {}
   return function(task, rel)
     local memo_key = task.area .. "\0" .. rel
@@ -662,7 +697,7 @@ function M.file_key(opts)
       bases = bases_for(task.area, ctx)
       bases_of_area[task.area] = bases
     end
-    local _, full = locate(rel, bases)
+    local _, full = locate(rel, bases, allowed)
     local key = full and collapse_dots(full)
       or (is_absolute(rel) and rel)
       or (task.area .. "/" .. rel)

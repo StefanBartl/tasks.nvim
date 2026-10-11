@@ -60,15 +60,10 @@ M.MAX_DOC_BYTES = 8 * 1024 * 1024
 
 -- ── small helpers ────────────────────────────────────────────────────────────
 
----The SHA-256 of some bytes. `vim.fn.sha256` refuses a string with a NUL byte (a Blob), so a file that has one
----is hashed with each NUL replaced by two other bytes: still a function of the bytes, which is all a version tag is.
 ---@param s string
 ---@return string  # 64 hex digits
 local function sha256(s)
-  if s:find("%z") then
-    s = s:gsub("%z", "\255\254")
-  end
-  return vim.fn.sha256(s)
+  return fsio.sha256(s)
 end
 
 ---@param s string
@@ -204,11 +199,14 @@ end
 ---@param path string
 ---@return string|nil
 local function etag_of(path)
+  if fsio.is_link(path) then
+    return nil
+  end
   local text = fsio.read(path)
   if not text then
     return nil
   end
-  return "sha256:" .. sha16(text)
+  return fsio.etag(text)
 end
 
 -- ── entries ──────────────────────────────────────────────────────────────────
@@ -266,7 +264,7 @@ local function task_entry(root, task, node, rank)
     entry.problems[#entry.problems + 1] =
       { code = task.error_codes[i] or "invalid", msg = redact(root, msg) }
   end
-  entry.etag = etag_of(task.path)
+  entry.etag = task.etag or etag_of(task.path)
   if node then
     local r = {
       state = node.state,
@@ -551,7 +549,7 @@ function M.snapshot(opts)
       valid = f.valid,
     }
   end, view.files)
-  doc.tasks = entries
+  doc.tasks = json.memo(entries)
   doc.incomplete = view.errors
   local sums = estimate.rollup(view.open)
   doc.estimate = json.object({
@@ -646,7 +644,7 @@ function M.list(params, opts)
   doc.total = #matching
   doc.offset = offset
   doc.limit = limit
-  doc.items = items
+  doc.items = json.memo(items)
   if offset + limit < #matching then
     doc.next_offset = offset + limit
   end
@@ -687,7 +685,7 @@ function M.task(id, opts)
     return nil,
       { code = "not_found", message = "no such task: " .. tostring(id), retryable = false }
   end
-  local text = fsio.read(found.path)
+  local text = not fsio.is_link(found.path) and fsio.read(found.path) or nil
   local body = ""
   if text then
     local parsed = require("lib.nvim.markdown.frontmatter").parse(text)

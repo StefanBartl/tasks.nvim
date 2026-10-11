@@ -70,7 +70,7 @@ TESTS/              specs (run with scripts/test.sh, i.e. testing.nvim)
 | `tasks_nvim.next_pick` | What to start next, pure: candidates are what `plan` calls ready; freed by the finished task, then area, then vault; status, effective prio, roi, effort, id. Tasks written `cdx` are listed apart unless that queue is asked for. An empty answer says which kind (`all_done` only when nothing is open at all, `nothing_startable` with counts, `only_cdx`). | `pick`, `pick_from_vault` |
 | `tasks_nvim.done_flow` | The one entry for finishing a task: `run(id, opts)` calls `mutate.done` and returns `{ done, steps_ticked, freed, plans_closed, docs_refreshed, notes, next }`. The `:Tasks done` command, the dashboard (through `batch.done_many`) and the CLI call only this. The chain names the tasks it freed and picks the next task (`next_pick`); plan steps, plan files and generated blocks land behind the same seam. A failure after the finish never undoes it and goes to `notes`; an already finished task runs no chain; `batch.done_many` picks once for a whole stack and checks each plan once (`close_plans`). `marker_docs` is the list of documents a finish refreshes (config plus `$TASKS_MARKER_DOCS`). | `run`, `close_plans`, `marker_docs`, `refresh_marker_docs` |
 | `tasks_nvim.batch` | `set_many` applies steps `{ id, patch, expect = { key, value } }` (a step whose task changed since it was read is refused) and `done_many` finishes several tasks; both write each area index once. `plan_cycle` plans advancing `status` / `prio` of a selection (each task from its own value; the steps carry `expect`), `model.cycle_status` / `cycle_prio` are the cycles: the dashboard only presses the keys. | `set_many`, `done_many`, `plan_cycle` |
-| `tasks_nvim.scan` | `lib.nvim.fs.collect_recursive` (or the TTL cache `scan_cached` with `ttl_seconds`) over `ROADMAP/tasks/` and `Backlog/`. A folder task's `<slug>/<slug>.md` is a task (`task.folder`), the other files in its folder are assets and ignored; any other nested file is returned, flagged. Backlog files count as tasks only with frontmatter and a `status`. | `area`, `all`, `backlog`, `find`, `find_done`, `backlog_slugs` |
+| `tasks_nvim.scan` | `lib.nvim.fs.collect_recursive` (or the TTL cache `scan_cached` with `ttl_seconds`) over `ROADMAP/tasks/` and `Backlog/`. A folder task's `<slug>/<slug>.md` is a task (`task.folder`), the other files in its folder are assets and ignored; any other nested file is returned, flagged. Backlog files count as tasks only with frontmatter and a `status`. A folder whose real path is outside the vault (a `ROADMAP` or `tasks` that is a link or a junction) is not read and is reported as a walk error (`vault.leaves`). | `area`, `all`, `backlog`, `find`, `find_done`, `backlog_slugs` |
 | `tasks_nvim.index` | `render` is pure and deterministic: the same tasks give the same bytes, whatever order they are found in. `write_area` writes only when the content differs (a CRLF checkout counts as equal and keeps its line endings), removes the file when no task is open, and with `check = true` only reports `stale` (`missing` / `outdated` / `orphan`). `render_global` returns the all-areas overview as text; nothing writes `ALL/TASKS.md` (decision E2: it is never committed). | `render`, `write_area`, `write_all`, `render_global` |
 | `tasks_nvim.mutate` | `new` creates the file with `O_CREAT\|O_EXCL` (a taken slug gets `-2`, `-3`, ...; a slug used in `Backlog/` or as a folder counts as taken; `folder = true` makes a folder task). `set` validates the patch, changes only the named keys through `lib.nvim.markdown.frontmatter` and bumps `updated` only when something changed. `done` is rule R6 (below). `folderize` and `attach` turn a task into a folder task and copy assets into it. All regenerate the area index. | `template`, `new`, `set`, `done`, `folderize`, `attach`, `slugify`, `readme_add_row`, `SETTABLE` |
 | `tasks_nvim.form` | The form behind `task new` without arguments, with no UI: `template` builds the Markdown text (`Area:` / `Title:` / `Tags:` / `Refs:` lines and one `- [ ]` / `- [x]` bullet list per choice field, the value sets read from `tasks.model`), `parse` reads what the user left in it, `validate` checks it (area known, title present, one tick on a single-choice list) and returns `tasks.mutate.new` options, `toggle` flips one bullet and keeps a single-choice list at one tick (`category` takes several). It creates nothing: the editor layer passes the values to `mutate.new`, the same write path as the CLI. | `fields`, `template`, `parse`, `validate`, `toggle`, `normalize`, `error_lines`, `strip_errors` |
@@ -79,6 +79,10 @@ TESTS/              specs (run with scripts/test.sh, i.e. testing.nvim)
 | `tasks_nvim.frecency` | The score behind `--sort=frecency` (below): `bump` / `decayed` / `scores` / `prune` are pure and take the time as an argument; `load` / `save` / `record` / `load_scores` touch `stdpath("state")/tasks/frecency.json` (or `$TASKS_FRECENCY_FILE`, `set_path`). Half-life 14 days, at most 500 entries, a corrupt file starts empty. | `record`, `load_scores`, `bump`, `scores` |
 | `tasks_nvim.ci` | The vault gate for pipelines: `check` (errors fail; `strict` fails on warnings too), `index --check`, and the vault's `md_lint.lua` over every generated `ROADMAP/TASKS.md`. Returns exit code, step names and printed lines. | `run` |
 | `tasks_nvim.cli` | Parses a command line, calls the engine, prints tab-separated lines, returns an exit code, never raises. | `run` |
+| `tasks_nvim.contract` | The read side of the machine contract `tasks-export/1` ([CONTRACT.md](CONTRACT.md)): one Lua table per document (`hello`, `snapshot`, `list`, `task`, `next`, `areas`, `error_doc`) built from one scan and one plan (`view`), no path of this machine in it, a task without an estimate has no number. `seal` adds `rev` and `digest`; `encode` writes the canonical bytes and turns a document over 8 MiB into `payload_too_large`. Only reads. | `view`, `hello`, `snapshot`, `list`, `task`, `next`, `areas`, `error_doc`, `encode`, `seal` |
+| `tasks_nvim.api` | The one door for everything outside the engine: `call(method, request, opts)` answers with the text of one document (or a `tasks.error`) and **never throws**. Checks the request strictly (an unknown field or parameter is `invalid_argument`, a higher `schema` is `unsupported_schema`, at most 256 KiB) and maps the engine's error strings to the stable codes. | `call`, `methods`, `METHODS` |
+| `tasks_nvim.json` | The canonical JSON encoder of the documents: sorted keys, `object()` / `array()` markers so an empty container keeps its kind, deterministic numbers (`NaN`, `inf` and 2^53 or more are errors), valid UTF-8, control bytes and `<` escaped, `memo()` for a big part that is written twice (digest and answer). | `encode`, `object`, `array`, `memo` |
+| `tasks_nvim.cli_contract` | The command-line side of the contract: `call`, `show`, `plans`, `areas`, the JSON forms of `list` and `next`, `list --done`, `--capabilities`. Maps words to a request and the answer to an exit code. | `register`, `areas`, `list_json`, `next_json`, `list_done`, `capabilities` |
 
 ## Front ends
 
@@ -240,6 +244,7 @@ finished task with the same id under another date, is refused.
 | Code | Meaning |
 |---|---|
 | `frontmatter-missing`, `frontmatter-invalid`, `title-missing`, `status-missing`, `field-type`, `unreadable` | the file cannot be read as a task |
+| `symlink-task` (error) | the task file is a symbolic link or a junction: it is not read (the vault must not point outside itself); the task is invalid and has no `etag` |
 | `unknown-status`, `unknown-kind`, `unknown-category`, `unknown-severity`, `bad-prio`, `bad-effort`, `bad-value`, `bad-actor`, `bad-date` | a field has a value outside its enum / format |
 | `blocked-by-cycle` (error) | the hard edges form a circle; one finding per cycle, the members named (a task that blocks only itself is `blocked-by-self`) |
 | `doing-while-blocked`, `blocked-without-blocker`, `blocker-freed`, `blocked-by-parked` (warnings) | the status runs behind what the blockers say; each is a warning because a status may trail the facts for a moment, a cycle may not |
@@ -274,6 +279,8 @@ How a ref is read:
 |---|---|
 | `lua/a.lua`, `docs/x.md`, `lua\a.lua`, `dir/` | a path: backslashes become `/`, a trailing `:42` or `#anchor` is dropped |
 | `lib.nvim@803de65`, `https://...`, `filetree.nvim:cheatsheet-paged` | skipped (a commit, a URL, an anchor: nothing on disk to date) |
+| `\\server\share\x`, `//server/share/x`, `\\?\C:\x`, `\\.\pipe\x` | skipped: a network or device path. A stat on it makes Windows connect to a host the task's author chose (SMB, NTLM credentials, a long wait) |
+| `/etc/hosts`, `C:/Users/x/.ssh/id_rsa` | an absolute path is looked up only inside the places below the engine was told to look in (the folders that hold the repos, the nvim config, the vault, `extra_bases`), after its `..` are resolved; anywhere else it is "found nowhere" |
 | a task id like `ui.nvim/some-slug` | found as no path, so it is only counted as "found nowhere" |
 
 A path is looked for, in order, in: the repo named like the task's area (`<repos>/<area>`, where
@@ -339,13 +346,13 @@ nvim --headless -u NONE -l scripts/tasks.lua check
 
 | Command | Effect |
 |---|---|
-| `list [area] [--status=a,b] [--prio=1,2\|<=2] [--effort=S,M\|<=M] [--kind=k] [--category=c,d] [--severity=high,critical] [--value=4,5\|>=4] [--actor=cdx,me,pair,none] [--tag=t] [--stale=N|refs] [--stale-refs] [--blocked] [--sort=default\|prio-effort\|severity\|frecency\|roi] [--format=tsv\|ids]` | open tasks, sorted; `id status prio effort kind updated title`, tab-separated |
+| `list [area] [--status=a,b] [--prio=1,2\|<=2] [--effort=S,M\|<=M] [--kind=k] [--category=c,d] [--severity=high,critical] [--value=4,5\|>=4] [--actor=cdx,me,pair,none] [--tag=t] [--stale=N|refs] [--stale-refs] [--blocked] [--sort=default\|prio-effort\|severity\|frecency\|roi] [--format=tsv\|ids\|json] [--limit=N --offset=N] [--done]` | open tasks, sorted; `id status prio effort kind updated title`, tab-separated. `--format=json` is the `tasks.list` document of the contract (plan order, pages of at most 100; `--sort` is refused), `list all` / `--done` the finished tasks of the Backlogs |
 | `lists [save <name>\|delete <name>\|rename <old> <new>\|show <name>] [filters] [--sort --area --desc]` | the named lists (name, source, summary); `list`, `plan` and `estimate` take `@<name>` as their first word and run the list, options typed on top win |
 | `quickwins [area] [filters] [--min-value --max-effort] [--format=tsv\|md\|ids] [--by-actor] [--paths] [--report=<file>]` | the quick wins, best roi first, plus the small tasks that miss a value; default status `open,doing,decision` |
 | `index [area] [--check]` | write / verify `ROADMAP/TASKS.md` (all areas without argument) |
 | `new <area> <title> [--kind --prio --effort --tags=a,b --category=c,d --severity=s --value=1..5 --actor=cdx\|me\|pair --refs=a,b --lang=de\|en --summary --slug --status] [--folder] [--no-index]` | create a task file (`--lang` picks the language of the body headings, default `de`; `--folder` a folder task) |
 | `plan [area] [--for=id] [filters] [--ready] [--format=md\|tsv\|ids]` | the plan: ready now, decisions by leverage, stages, critical path |
-| `next [area] [--n=3] [--actor=cdx\|me\|pair\|none]` | `next: <id> <title> <reason>`, `then: ...`, `freed:`, `cdx:` and `empty:` lines |
+| `next [area] [--n=3] [--actor=cdx\|me\|pair\|none] [--format=json]` | `next: <id> <title> <reason>`, `then: ...`, `freed:`, `cdx:` and `empty:` lines; `--format=json` is the `tasks.next` document |
 | `estimate [area] [--for=id] [filters]` | the estimate line, `quick wins:`, `unestimated:` |
 | `plan-new <area> <title> [--areas --target --phases --gate --summary]` | create a plan file under `ROADMAP/plans/` |
 | `migrate-actor [area] [--write]` | propose `actor=me` for tasks that wait for you (status decision, tag needs-user), leave the rest empty; dry run unless `--write` |
@@ -356,7 +363,10 @@ nvim --headless -u NONE -l scripts/tasks.lua check
 | `check [area]` | rule check |
 | `ci [--strict] [--no-lint] [--md-lint=<file>]` | the CI gate: check + `index --check` + md_lint of the generated indexes (see above) |
 | `template [--title --kind --prio --effort --tags --lang=de\|en]` | print the task template |
-| `areas` | list the vault's areas |
+| `areas [--format=names\|tsv\|json]` | the vault's areas (names, name and open count, or the `tasks.areas` document) |
+| `call <method> [--params=<json>] [--pretty]` | the machine contract ([CONTRACT.md](CONTRACT.md)): `hello`, `snapshot`, `list`, `task`, `next`, `areas`; the document on stdout, exit `0` for an answer, `2` for `invalid_argument`, `1` for any other error (the error is a `tasks.error` document on stdout too) |
+| `show <id> [--format=json\|text]` / `plans [area]` | one task with its body and steps (`tasks.task`), the plan files of the vault |
+| `--capabilities` | the `tasks.hello` document (`call hello`) |
 | `export [--top=N] [--no-links]` | all-areas overview as Markdown on stdout (never written to a file) |
 
 Global options (before or after the command): `--vault=<dir>`,
@@ -378,6 +388,10 @@ A vault is data that other people and tools write, so the engine is strict about
 - `fsio.read` loads a regular file of at most `fsio.MAX_READ_BYTES` (2 MiB); a directory, a FIFO, a
   `/dev/zero` symlink or a bigger file is `nil, err`. A task file like that is an invalid task (`unreadable`),
   not a stall. A Backlog README that cannot be read stops `done` instead of being treated as missing.
+- A link is not followed: a task file that is a symbolic link or a junction is not read (`symlink-task`), a folder
+  of the vault whose real path leaves the vault (`vault.leaves`) is not scanned and is reported, and a folder of the
+  vault root that is a link is no area. A vault that itself lies below a link is fine. A task file that points
+  elsewhere would otherwise be read, and written, as if it lived in the vault. See [CONTRACT.md](CONTRACT.md).
 - A frontmatter line, a title or a summary is never matched with a pattern that backtracks on whitespace or
   backslashes; table cells are escaped in one linear pass (`fsio.md_cell`). The checkbox line of `## Plan`, the asset
   links of a folder task and the marker lines of a document are read with linear scans too.

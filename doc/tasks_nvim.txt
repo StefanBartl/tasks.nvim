@@ -14,6 +14,7 @@ CONTENTS                                                   *tasks_nvim-contents*
   6. Task file format .................................... |tasks_nvim-format|
   7. Headless CLI ........................................ |tasks_nvim-cli|
   8. Health .............................................. |tasks_nvim-health|
+  9. Machine contract .................................... |tasks_nvim-contract|
 
 ==============================================================================
 1. INTRODUCTION                                                    *tasks_nvim*
@@ -191,11 +192,36 @@ finding or failed operation, 2 a usage error. `scripts/tasks-ci.lua` runs
 `check`, `index --check` and the vault's `md_lint.lua`. That script is RUN, so
 it is refused unless you pass `--trust-vault-lint` (or `--md-lint=<own copy>`).
 
+A task file that is a symbolic link or a junction is not read (`check` reports
+`symlink-task`), and a folder of the vault that leads out of it is not scanned.
+
 ==============================================================================
 8. HEALTH                                                     *tasks_nvim-health*
 
 `:checkhealth tasks_nvim` reports Neovim and lib.nvim, the resolved vault and
 its areas, options that `setup()` ignored, whether |:Tasks| is registered, and
 which optional pieces are present.
+
+==============================================================================
+9. MACHINE CONTRACT                                       *tasks_nvim-contract*
+
+For apps, agents and pipelines: versioned JSON documents, read only. The
+shapes, rules and errors are in docs/CONTRACT.md; the JSON Schemas are in
+`schemas/tasks-export/1/`.
+
+>sh
+  nvim --headless -u NONE -l scripts/tasks.lua call hello
+  nvim --headless -u NONE -l scripts/tasks.lua call snapshot
+  nvim --headless -u NONE -l scripts/tasks.lua call list --params='{"limit":20}'
+  nvim --headless -u NONE -l scripts/tasks.lua call task --params='{"id":"area/slug"}'
+<
+
+Methods: `hello`, `snapshot`, `list`, `task`, `next`, `areas`. Exit codes: 0
+an answer, 2 `invalid_argument`, 1 any other error (a `tasks.error`
+document, also on stdout). From Lua: `require("tasks_nvim.api").call()`,
+which never throws. A document has no path of this machine, a missing
+number is unknown (never 0), a broken task is listed with `valid: false`,
+and each task carries an `etag`; `rev` and `digest` say whether anything
+changed.
 
  vim:tw=78:ts=8:ft=help:norl:

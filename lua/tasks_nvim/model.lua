@@ -738,7 +738,19 @@ end
 function M.from_file(path, ctx)
   local uv = vim.uv or vim.loop
   local key = ctx_key(ctx)
-  local st = uv.fs_stat(path)
+  -- `lstat`, not `stat`: one call tells a link from a file and gives the mtime and size of a file.
+  local st = uv.fs_lstat(path)
+  -- A link in the vault is a way out of it (a task that is really some other file, read and written through the
+  -- vault): it is not followed. `check` reports it as `symlink-task`.
+  if st and st.type == "link" then
+    local task = M.parse_text("", vim.tbl_extend("force", { path = path }, ctx))
+    task.errors = {
+      "the task file is a symbolic link or junction; it is not read (the vault must not point outside itself)",
+    }
+    task.error_codes = { "symlink-task" }
+    task.valid = false
+    return task
+  end
   local mtime = st and st.mtime
   if st and mtime and st.type == "file" then
     local hit = parsed[path]
@@ -762,6 +774,8 @@ function M.from_file(path, ctx)
     return task
   end
   local task = M.parse_text(text, full)
+  -- the version of exactly the bytes that were parsed (a later write compares against it; no second read, no race)
+  task.etag = fsio.etag(text)
   if st and mtime and st.type == "file" and mtime.sec < os.time() - RACY_SECONDS then
     if parsed[path] == nil then
       if parsed_count >= PARSED_MAX then

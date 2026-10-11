@@ -7,6 +7,14 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- The machine contract `tasks-export/1` ([docs/CONTRACT.md](docs/CONTRACT.md)), read only: the documents `hello`,
+  `snapshot`, `list`, `task`, `next`, `areas` and `error`, each with `rev` / `digest` and a version tag (`etag`) per
+  task; one door `tasks_nvim.api.call` that never throws; `tasks call <method> --params=<json>`, `--capabilities`,
+  `list --format=json|--limit|--offset|--done`, `next --format=json`, `areas --format=names|tsv|json`, `show`, `plans`;
+  a canonical JSON encoder (`tasks_nvim.json`: sorted keys, `{}` stays `{}`, deterministic numbers, escaped `<` and
+  control bytes); JSON Schemas (draft 2020-12), generated TypeScript types, golden files of a synthetic fixture vault
+  and the CI job `contract` (Ajv, strict).
+- `check`: `symlink-task`.
 - Named lists: `setup({ lists = {...} })`, saved lists (a state file, written from the dashboard menu `gl` or by
   `tasks lists save`), three built-in lists, `:Tasks lists`, `--list=<name>` / `tasks list @<name>` (also for `plan`,
   `estimate`, `quickwins`), `:checkhealth` reports skipped lists.
@@ -134,3 +142,12 @@ the version is not tagged yet (the repository is not published).
   original.
 - A foreign `TASKS.md` is never overwritten; an unreadable index is an error, not "missing".
 - `slugify` no longer raises on a NUL byte.
+
+### Security
+
+- The read side stays inside the vault: a task file that is a symbolic link or a junction is not read (`symlink-task`);
+  a `ROADMAP`, `tasks`, `Backlog` or `plans` folder whose real path leaves the vault is not scanned and is reported; a
+  folder of the vault root that is a link is no area.
+- `--stale=refs`: a `refs:` entry that is a network or device path (`\\server\share`, `//server/share`, `\\?\C:`) is skipped instead of being
+  stat'ed (on Windows that connects to a host the task's author chose), and an absolute ref is looked up only inside the
+  places the engine was told to look in.

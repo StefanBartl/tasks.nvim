@@ -64,6 +64,31 @@ function M.same_path(a, b)
   return a == b
 end
 
+---Whether `path` is itself a symbolic link or a junction (not what it points to).
+---@param path string
+---@return boolean
+function M.is_link(path)
+  local st = uv.fs_lstat(path)
+  return st ~= nil and st.type == "link"
+end
+
+---Whether `child` is `parent` or lies below it (a text test on normalised paths, case-insensitive on Windows): it does
+---not look at the disk, so resolve links first (`uv.fs_realpath`) when the question is where a file really is.
+---@param parent string
+---@param child string
+---@return boolean
+function M.is_inside(parent, child)
+  parent, child = M.norm(parent), M.norm(child)
+  if require("lib.nvim.cross.platform.is_windows")() then
+    parent, child = parent:lower(), child:lower()
+  end
+  if child == parent then
+    return true
+  end
+  local prefix = parent:sub(-1) == "/" and parent or (parent .. "/")
+  return child:sub(1, #prefix) == prefix
+end
+
 ---@param path string
 ---@return boolean
 function M.is_file(path)
@@ -304,6 +329,25 @@ function M.with_lock(path, fn, opts)
     error(res, 0)
   end
   return res, res2
+end
+
+---The SHA-256 of some bytes, 64 hex digits. `vim.fn.sha256` refuses a string with a NUL byte (a Blob), so such a text
+---is hashed with each NUL replaced by two other bytes: still a function of the bytes, which is all a version tag and
+---a content digest have to be.
+---@param text string
+---@return string
+function M.sha256(text)
+  if text:find("%z") then
+    text = text:gsub("%z", "\255\254")
+  end
+  return vim.fn.sha256(text)
+end
+
+---The version tag of some bytes: `sha256:` and the first 16 hex digits of their SHA-256.
+---@param text string
+---@return string
+function M.etag(text)
+  return "sha256:" .. M.sha256(text):sub(1, 16)
 end
 
 ---Rename a file or folder (one filesystem, so atomic). The target must not exist.

@@ -187,6 +187,11 @@ Same rules, same files, tab-separated output, exit codes `0` / `1` (finding or f
 error). A task a session creates is indistinguishable from one you created. Nothing in the format needs the editor
 open.
 
+A program that wants the whole picture in one piece asks for JSON instead: `tasks call snapshot` (every open task
+with its readiness, the plan head, the sums), `tasks call list --params='{"limit":20}'`, `tasks call task
+--params='{"id":"my-area/some-slug"}'`. The documents have a schema, no path of your machine and a version
+tag per task; nothing in them writes. [docs/CONTRACT.md](CONTRACT.md).
+
 ### 12. A pipeline guards the vault — works today
 
 ```sh
