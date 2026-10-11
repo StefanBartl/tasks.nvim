@@ -15,6 +15,8 @@ local done_flow = require("tasks_nvim.done_flow")
 local index = require("tasks_nvim.index")
 local mutate = require("tasks_nvim.mutate")
 local next_pick = require("tasks_nvim.next_pick")
+local planner = require("tasks_nvim.plan")
+local plan_scope = require("tasks_nvim.plan_scope")
 local vault = require("tasks_nvim.vault")
 
 local M = {}
@@ -147,6 +149,284 @@ function M.actor_steps(proposals)
       { id = p.id, patch = { actor = p.actor }, expect = { key = "actor", value = nil } }
   end
   return steps
+end
+
+-- ── reorder ──────────────────────────────────────────────────────────────────
+
+---Two `order` values closer than this are not told apart reliably after many halvings: the group is renumbered.
+M.MIN_ORDER_GAP = 1e-6
+
+---Most files one move may write (a move among tasks that have no `order` yet gives the ones before it a value).
+M.MAX_REORDER_WRITES = 50
+
+---@param t Tasks.Task
+---@return boolean
+local function has_order(t)
+  local o = t.order
+  return type(o) == "number" and o == o and o ~= math.huge and o ~= -math.huge
+end
+
+---@class Tasks.ReorderWrite
+---@field id string
+---@field order number
+---@field was number|nil   # The value the task has now (nil: none): the write is refused when it changed meanwhile.
+
+---Where a task goes in its group, as the `order` values that put it there. Pure.
+---
+---`order` is a tie-breaker behind status and priority: the tasks of a group are sorted by `order` (those without one
+---last, in the plan's own order), so a spot is made by giving the moved task a value between its neighbours'. When the
+---neighbours have none, the tasks before the spot get values first (the ones after it stay as they are, behind every
+---number). When two values are closer than `MIN_ORDER_GAP`, the numbered tasks are renumbered 1, 2, 3, ...
+---@param seq Tasks.Task[]   # The group WITHOUT the moved task, in plan order.
+---@param moved Tasks.Task
+---@param pos integer        # The moved task goes before `seq[pos + 1]`: 0 is the front, `#seq` the end.
+---@return Tasks.ReorderWrite[] writes  # The neighbours first, the moved task last.
+---@return boolean renumbered
+function M.plan_reorder(seq, moved, pos)
+  local numbered = 0
+  for i, t in ipairs(seq) do
+    if has_order(t) then
+      numbered = i
+    else
+      break
+    end
+  end
+  ---@type Tasks.ReorderWrite[]
+  local writes = {}
+  ---@param t Tasks.Task
+  ---@param v number
+  local function give(t, v)
+    if t.order ~= v then
+      writes[#writes + 1] = { id = t.id, order = v, was = t.order }
+    end
+  end
+  local value, renumbered
+  -- the last value of the numbered part: what the numbering of the unnumbered tasks continues from
+  local top = numbered > 0 and seq[numbered].order or 0
+  if pos == 0 then
+    value = numbered > 0 and seq[1].order - 1 or 1
+  elseif pos == numbered then
+    -- behind the last numbered task, in front of the unnumbered ones
+    value = seq[numbered].order + 1
+  elseif pos > numbered then
+    -- among the unnumbered: the ones before the spot get the next numbers, the moved task the one after them
+    for i = numbered + 1, pos do
+      give(seq[i], top + (i - numbered))
+    end
+    value = top + (pos - numbered) + 1
+  else
+    local lo, hi = seq[pos].order, seq[pos + 1].order
+    if hi - lo >= M.MIN_ORDER_GAP then
+      value = (lo + hi) / 2
+    else
+      renumbered = true
+      for i = 1, numbered do
+        give(seq[i], i <= pos and i or i + 1)
+      end
+      value = pos + 1
+    end
+  end
+  writes[#writes + 1] = { id = moved.id, order = value, was = moved.order }
+  return writes, renumbered == true
+end
+
+---`order` as it is written: a whole number plainly, a fraction with twelve significant digits (two values at least
+---`MIN_ORDER_GAP` apart stay apart, and so does their midpoint).
+---@param n number
+---@return string
+local function order_text(n)
+  if n == math.floor(n) and math.abs(n) < 1e15 then
+    return ("%d"):format(n)
+  end
+  return ("%.12g"):format(n)
+end
+
+---@class Tasks.ReorderSpec
+---@field after? string       # The task the moved one goes right behind.
+---@field before? string      # The task it goes right in front of.
+---@field group? string       # The group the caller saw (`status|eff_prio`): a different one is a conflict.
+---@field if_match? string    # The `etag` of the moved task the caller read.
+
+---@class Tasks.ReorderResult
+---@field id string
+---@field changed boolean
+---@field group string
+---@field renumbered boolean
+---@field writes { id: string, order: number, was: number|nil }[]   # Every file this move wrote (or would write), the moved task last.
+---@field changed_ids string[]
+---@field etag_before? string          # Of the moved task.
+---@field etag_after? string
+---@field inverse? Tasks.ReorderSpec   # Puts the moved task back where it was.
+---@field areas string[]
+---@field index_errors string[]
+
+---Move a task inside its group: the same stage, the same status and effective priority. The spot is named by the
+---neighbour it goes behind (`after`) or in front of (`before`); none of the two is the front, `before` alone with
+---nothing behind is the front, `after` alone at the last task is the end. A neighbour from another group, a group the
+---caller did not see, or neighbours that are no longer next to each other is a conflict (the list moved on).
+---
+---Every write goes through `mutate.set` with `expect` on `order`, so a task another writer ordered meanwhile is not
+---overwritten. Not all-or-nothing: what was written stays (the numbers keep the relative order of the tasks they were
+---given to, so a half-finished move does not scramble the list).
+---@param id string
+---@param spec Tasks.ReorderSpec
+---@param opts { root: string, today?: string, index?: boolean, dry_run?: boolean, max_writes?: integer }
+---@return Tasks.ReorderResult|nil result
+---@return string|nil err
+---@return table|nil info
+function M.reorder(id, spec, opts)
+  spec = spec or {}
+  local shared, serr = plan_scope.shared(opts.root)
+  if not shared then
+    return nil, tostring(serr), { code = "io" }
+  end
+  local built = planner.build(shared.open, shared.index)
+  local node = built.nodes[id]
+  if not node then
+    local known = shared.index.open[id]
+    if known then
+      return nil,
+        id .. " is in a dependency cycle (or behind one) and has no place in the order",
+        { code = "invalid_argument" }
+    end
+    return nil, "no such open task: " .. id, { code = "not_found" }
+  end
+  local moved = node.task
+  local group = planner.group_key(node)
+  if spec.group ~= nil and spec.group ~= group then
+    return nil,
+      ("%s is in the group %s now, not %s"):format(id, group, tostring(spec.group)),
+      { code = "conflict", id = id, key = "group", expected = spec.group, actual = group }
+  end
+  if spec.if_match ~= nil and moved.etag ~= spec.if_match then
+    return nil,
+      ("%s changed since it was read (its version is %s, not %s)"):format(
+        id,
+        tostring(moved.etag),
+        tostring(spec.if_match)
+      ),
+      { code = "conflict", id = id, expected = spec.if_match, actual = moved.etag }
+  end
+  if spec.after == id or spec.before == id then
+    return nil, "a task cannot go next to itself", { code = "invalid_argument" }
+  end
+
+  -- the group: this stage, this status and effective priority, in plan order
+  ---@type Tasks.Task[]
+  local seq = {}
+  local current = 0
+  for _, other_id in ipairs(built.stages[node.stage + 1] or {}) do
+    local other = built.nodes[other_id]
+    if planner.group_key(other) == group then
+      if other_id == id then
+        current = #seq + 1
+      else
+        seq[#seq + 1] = other.task
+      end
+    end
+  end
+  ---@type table<string, integer>
+  local at = {}
+  for i, t in ipairs(seq) do
+    at[t.id] = i
+  end
+  for _, name in ipairs({ "after", "before" }) do
+    local neighbour = spec[name]
+    if neighbour ~= nil and not at[neighbour] then
+      local msg = shared.index.open[neighbour]
+          and ("%s is not in the group of %s (%s, same stage)"):format(neighbour, id, group)
+        or ("%s is no open task"):format(neighbour)
+      return nil, msg, { code = "conflict", id = id, key = name, expected = neighbour }
+    end
+  end
+  local pos
+  if spec.after ~= nil and spec.before ~= nil then
+    if at[spec.before] ~= at[spec.after] + 1 then
+      return nil,
+        ("%s and %s are no longer next to each other"):format(spec.after, spec.before),
+        {
+          code = "conflict",
+          id = id,
+          key = "neighbours",
+          expected = spec.after .. " | " .. spec.before,
+        }
+    end
+    pos = at[spec.after]
+  elseif spec.after ~= nil then
+    pos = at[spec.after]
+  elseif spec.before ~= nil then
+    pos = at[spec.before] - 1
+  else
+    pos = 0
+  end
+
+  ---@type Tasks.ReorderResult
+  local result = {
+    id = id,
+    changed = false,
+    group = group,
+    renumbered = false,
+    writes = {},
+    changed_ids = {},
+    etag_before = moved.etag,
+    etag_after = moved.etag,
+    areas = {},
+    index_errors = {},
+    inverse = {
+      after = current > 1 and (seq[current - 1] and seq[current - 1].id) or nil,
+      before = seq[current] and seq[current].id or nil,
+    },
+  }
+  -- already there: the task stands right behind seq[pos] and in front of seq[pos + 1]
+  if current > 0 and pos == current - 1 then
+    return result, nil
+  end
+
+  local writes, renumbered = M.plan_reorder(seq, moved, pos)
+  result.writes = writes
+  result.renumbered = renumbered
+  local cap = opts.max_writes or M.MAX_REORDER_WRITES
+  if #writes > cap then
+    return nil,
+      ("this move would write %d files (at most %d): give the tasks around it an order or a priority first"):format(
+        #writes,
+        cap
+      ),
+      { code = "invalid_argument", writes = #writes }
+  end
+  result.changed = true
+  if opts.dry_run then
+    return result, nil
+  end
+
+  local touched = {}
+  for i, w in ipairs(writes) do
+    local is_moved = i == #writes
+    local r, err, info = mutate.set(w.id, { order = order_text(w.order) }, {
+      root = opts.root,
+      today = opts.today,
+      index = false,
+      expect = { key = "order", value = w.was },
+      if_match = is_moved and spec.if_match or nil,
+    })
+    if not r then
+      -- what was written stays; say how far it got
+      info = info or { code = "io" }
+      info.written = vim.deepcopy(result.changed_ids)
+      return nil, tostring(err), info
+    end
+    touched[#touched + 1] = w.id
+    result.changed_ids[#result.changed_ids + 1] = w.id
+    if is_moved then
+      result.etag_before = r.etag_before
+      result.etag_after = r.etag_after
+    end
+  end
+  result.areas = areas_of(touched)
+  if opts.index ~= false then
+    result.index_errors = reindex(result.areas, opts.root)
+  end
+  return result, nil
 end
 
 ---@class Tasks.BatchSetResult

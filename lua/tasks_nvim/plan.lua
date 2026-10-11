@@ -80,6 +80,18 @@ local M = {}
 ---@field critical Tasks.PlanCritical
 ---@field warnings { code: string, id?: string, msg: string }[]
 
+---The group a task is reordered in: `<status>|<effective prio>` (`-` without a priority). `order` only decides
+---between tasks of one stage that share this key, because the sort compares status and effective priority first.
+---@param node Tasks.PlanNode
+---@return string
+function M.group_key(node)
+  return ("%s|%s"):format(
+    node.task.status or "?",
+    node.eff_prio and tostring(node.eff_prio)
+      or (node.task.prio and tostring(node.task.prio) or "-")
+  )
+end
+
 ---The status order inside a stage and a list: doing first, parked last.
 ---@type table<string, integer>
 local STATUS_ORDER = { doing = 1, decision = 2, open = 3, blocked = 4, parked = 5 }

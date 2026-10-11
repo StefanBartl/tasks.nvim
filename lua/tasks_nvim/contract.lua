@@ -288,10 +288,7 @@ local function task_entry(root, task, node, rank)
       r.same_file = vim.list_slice(node.same_file, 1)
     end
     entry.readiness = json.object(r)
-    entry.group = ("%s|%s"):format(
-      task.status or "?",
-      node.eff_prio and tostring(node.eff_prio) or "-"
-    )
+    entry.group = plan.group_key(node)
   end
   return entry
 end
