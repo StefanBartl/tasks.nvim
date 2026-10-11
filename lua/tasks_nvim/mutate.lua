@@ -1196,6 +1196,7 @@ end
 ---@field index? boolean             # Regenerate the area index (default true).
 ---@field checkpoint_dir? string     # Where the safety snapshot goes.
 ---@field tick_steps? boolean        # Tick the open steps of the task's `## Plan` section in the finished copy (default false).
+---@field if_match? string           # The `etag` of the task file the caller saw: a different file is `nil, message, { code = "conflict" }`.
 
 ---Everything `done` decides before it touches a file (so the part that writes has nothing left to validate).
 ---@class Tasks.DonePlan
@@ -1233,6 +1234,7 @@ end
 ---@param opts Tasks.DoneOpts
 ---@return Tasks.DonePlan|table|nil plan
 ---@return string|nil err
+---@return table|nil info  # `{ code = "conflict", ... }` when `opts.if_match` is not the file's version
 local function plan_done(id, opts)
   local root, rerr = vault.root(opts)
   if not root then
@@ -1280,6 +1282,19 @@ local function plan_done(id, opts)
   local old_text, rd_err = fsio.read(task.path)
   if not old_text then
     return nil, "cannot read " .. task.path .. ": " .. tostring(rd_err)
+  end
+  -- The caller decided on a version of this file (a preview): it is the one that is finished, or nothing is.
+  if opts.if_match ~= nil then
+    local etag = fsio.etag(old_text)
+    if etag ~= opts.if_match then
+      return nil,
+        ("%s changed since it was read (its version is %s, not %s)"):format(
+          id,
+          etag,
+          tostring(opts.if_match)
+        ),
+        { code = "conflict", id = id, expected = opts.if_match, actual = etag }
+    end
   end
   local new_text, uerr = fm.update_text(old_text, patch)
   if not new_text then
@@ -1571,11 +1586,12 @@ end
 ---@param opts? Tasks.DoneOpts
 ---@return table|nil result
 ---@return string|nil err
+---@return table|nil info  # `{ code = "conflict", ... }` when `opts.if_match` is not the file's version
 function M.done(id, opts)
   opts = opts or {}
-  local plan, perr = plan_done(id, opts)
+  local plan, perr, pinfo = plan_done(id, opts)
   if not plan then
-    return nil, perr
+    return nil, perr, pinfo
   end
   if plan.already then
     return plan, nil
@@ -1610,6 +1626,86 @@ function M.done(id, opts)
     plan_id = plan.task.plan,
     readme = plan.readme_state,
     index = type(res) == "table" and res or nil,
+  },
+    nil
+end
+
+-- ── done_preview and the confirm token ───────────────────────────────────────
+
+---The token that says "I looked at this version of this task and want it finished": `done-` and the 16 hex digits of
+---its `etag`, then six digits that bind it to the id. Nobody keeps a secret here (the engine is stateless between
+---calls): the token is what a front end gets from `done_preview` and must hand back to `done`, so finishing is a
+---deliberate second step on the version that was shown, never a reflex. A host that needs authorisation adds its own.
+---@param id string
+---@param etag string  # `sha256:` and 16 hex digits
+---@return string
+function M.confirm_token(id, etag)
+  local hex = etag:match("^sha256:(%x+)$") or etag
+  return ("done-%s-%s"):format(hex, fsio.sha256("done\0" .. id .. "\0" .. hex):sub(1, 6))
+end
+
+---The `etag` a confirm token was made for, or `nil` when it is not a token for `id`.
+---@param id string
+---@param token any
+---@return string|nil etag  # `sha256:` and 16 hex digits
+function M.confirm_etag(id, token)
+  if type(token) ~= "string" then
+    return nil
+  end
+  local hex, mac = token:match("^done%-(%x+)%-(%x+)$")
+  if not hex or #hex ~= 16 or mac ~= fsio.sha256("done\0" .. id .. "\0" .. hex):sub(1, 6) then
+    return nil
+  end
+  return "sha256:" .. hex
+end
+
+---@class Tasks.DonePreview
+---@field id string
+---@field already? boolean           # The task is finished already: there is nothing to confirm.
+---@field area? string
+---@field bucket? string
+---@field from? string               # The task file now.
+---@field to string                  # Where the finished file goes (or is).
+---@field resumed? boolean
+---@field steps_ticked? integer
+---@field readme? string             # `missing`, `updated` or `unchanged`: what happens to the Backlog README.
+---@field readme_row? string
+---@field plan_id? string
+---@field etag? string               # The version of the task file this preview is about.
+---@field confirm? string            # Hand this to `done` to finish exactly that version.
+
+---What `done` would do, worked out the way it will do it, with nothing written: the target path, the README row, the
+---steps it ticks, and a `confirm` token for the version of the file that was read. `nil, err` when the task cannot be
+---finished (the same reasons `done` has).
+---@param id string
+---@param opts? Tasks.DoneOpts
+---@return Tasks.DonePreview|nil preview
+---@return string|nil err
+---@return table|nil info
+function M.done_preview(id, opts)
+  opts = vim.tbl_extend("force", { tick_steps = true }, opts or {})
+  local plan, err, info = plan_done(id, opts)
+  if not plan then
+    return nil, err, info
+  end
+  if plan.already then
+    return { id = id, already = true, to = plan.to }, nil
+  end
+  ---@cast plan Tasks.DonePlan
+  local etag = fsio.etag(plan.old_text)
+  return {
+    id = id,
+    area = plan.area,
+    bucket = plan.bucket,
+    from = plan.task.path,
+    to = plan.target,
+    resumed = plan.resume,
+    steps_ticked = plan.steps_ticked,
+    readme = plan.readme_state,
+    readme_row = plan.readme_row,
+    plan_id = plan.task.plan,
+    etag = etag,
+    confirm = M.confirm_token(id, etag),
   },
     nil
 end

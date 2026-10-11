@@ -15,6 +15,7 @@ the version is not tagged yet (the repository is not published).
   control bytes); JSON Schemas (draft 2020-12), generated TypeScript types, golden files of a synthetic fixture vault
   and the CI job `contract` (Ajv, strict).
 - `check`: `symlink-task`.
+- `done_flow.preview` / `mutate.done_preview`: what finishing a task would do (target, README row, steps, the plan it closes, the tasks it frees), nothing written, with a `confirm` token that binds the version of the file; `done` takes `if_match`.
 - `batch.reorder`: move a task inside its group by giving it an `order` between its neighbours' (numbering the tasks before the spot only when they have none, renumbering when two values get too close), with the `inverse` for an undo; `plan.group_key`.
 - `tasks_nvim.edges`: `validate` judges a change of `blocked_by` / `after` / `plan` / `phase` before it is written, with
   the codes of `check` (self, dangling, cycle, unknown plan, a phase the plan does not list).

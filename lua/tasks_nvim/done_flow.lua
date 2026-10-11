@@ -201,18 +201,75 @@ function M.close_plans(plan_ids, opts)
   return out
 end
 
+---@class Tasks.DoneFlowPreview : Tasks.DonePreview
+---@field closes_plan? string   # The plan file this finish closes: the task is its last open member.
+---@field freed string[]        # Open tasks that wait on nothing but this one.
+
+---What finishing `id` would do, chain included, with nothing written: `mutate.done_preview` plus the plan it would
+---close and the tasks it would free. The `confirm` token in the answer is what `run` is confirmed with.
+---@param id string
+---@param opts? Tasks.DoneFlowOpts
+---@return Tasks.DoneFlowPreview|nil preview
+---@return string|nil err
+---@return table|nil info
+function M.preview(id, opts)
+  opts = opts or {}
+  local pv, err, info = mutate.done_preview(id, opts)
+  if not pv then
+    return nil, err, info
+  end
+  ---@cast pv Tasks.DoneFlowPreview
+  pv.freed = {}
+  if pv.already then
+    return pv, nil
+  end
+  -- the chain: judged on one pass over the vault, as `plan` and `next` judge it
+  local all, scan_errors = scan.all({ root = opts.root })
+  local shared = all
+    and plan_scope.shared(
+      opts.root,
+      { all = all, errors = type(scan_errors) == "table" and scan_errors or {} }
+    )
+  if all and shared then
+    local built = require("tasks_nvim.plan").build(shared.open, shared.index)
+    for _, t in ipairs(shared.open) do
+      local node = built.nodes[t.id]
+      if node and #node.open_blockers == 1 and node.open_blockers[1] == id then
+        pv.freed[#pv.freed + 1] = t.id
+      end
+    end
+    table.sort(pv.freed)
+    if pv.plan_id then
+      local file = plans.find(pv.plan_id, { root = opts.root })
+      if file then
+        local others = 0
+        for _, m in ipairs(plans.members(file.id, all)) do
+          if m.id ~= id and m.status ~= "done" then
+            others = others + 1
+          end
+        end
+        if others == 0 then
+          pv.closes_plan = file.id
+        end
+      end
+    end
+  end
+  return pv, nil
+end
+
 ---Finish `id`.
 ---@param id string
 ---@param opts? Tasks.DoneFlowOpts
 ---@return Tasks.DoneFlow|nil flow
 ---@return string|nil err   # The finish failed (nothing changed, or the rollback says what it could not undo).
+---@return table|nil info   # `{ code = "conflict", ... }` when `opts.if_match` is not the version of the file.
 function M.run(id, opts)
   opts = opts or {}
   -- Step a is part of the finish itself: the ticked text is what `mutate.done` writes as the finished copy.
-  local done, err =
+  local done, err, info =
     mutate.done(id, vim.tbl_extend("force", opts, { tick_steps = opts.chain ~= false }))
   if not done then
-    return nil, err
+    return nil, err, info
   end
   ---@type Tasks.DoneFlow
   local flow = {
