@@ -610,6 +610,17 @@ function M.next_lines(pick)
   if pick.empty then
     out[#out + 1] = "empty: " .. M.empty_text(pick.empty)
   end
+  local reminders = pick.reminders
+  if reminders then
+    for _, t in ipairs(reminders.open) do
+      out[#out + 1] = ("remind: %s	%s	%s"):format(fsio.clean(t.id), fsio.clean(t.title), t.remind)
+    end
+    if reminders.done > 0 then
+      out[#out + 1] = ("remind: %d finished task(s) with a reminder due (`list --reminders`)"):format(
+        reminders.done
+      )
+    end
+  end
   return out
 end
 

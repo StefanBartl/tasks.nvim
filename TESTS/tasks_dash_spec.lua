@@ -144,6 +144,12 @@ return function(H)
   eq(core.set_dim({}, "tag", "ui").tag, { "ui" })
   eq(core.set_dim({}, "blocked", true).blocked, true)
   eq(core.set_dim({ blocked = true }, "blocked", nil).blocked, nil)
+  eq(core.set_dim({}, "reminders", true).reminders, true)
+  eq(core.set_dim({ reminders = true }, "reminders", nil).reminders, nil)
+  eq(core.chips({ reminders = true }), { "reminder due" })
+  eq(core.filter_to_options({ reminders = true }), { reminders = true })
+  eq(core.filter_from_stored({ reminders = true }).reminders, true, "stored")
+  ok(vim.tbl_contains(core.FILTER_DIMS, "reminders"), "offered by the filter menu")
   eq(
     core.set_dim({ status = { "open" } }, "nonsense", "x"),
     { status = { "open" } },

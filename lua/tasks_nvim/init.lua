@@ -65,6 +65,12 @@ function M.setup(opts)
       end
     end)
   end
+  -- A line at startup when reminders are due (deferred; on by default, `reminders = { on_start = false }` turns it off).
+  if config.get().reminders.on_start then
+    vim.schedule(function()
+      require("tasks_nvim.ui.reminder_hint").schedule()
+    end)
+  end
   -- `:Tasks` is registered by `plugin/tasks_nvim.lua` (which a plugin manager sources when it loads the
   -- plugin); the engine facade does not reach into the front end.
 end

@@ -304,7 +304,7 @@ local function filter_note(flags)
   if flags.blocked then
     parts[#parts + 1] = "blocked"
   end
-  for _, name in ipairs({ "ready", "waiting", "unestimated", "quick-win" }) do
+  for _, name in ipairs({ "ready", "waiting", "reminders", "unestimated", "quick-win" }) do
     if flags[name] then
       parts[#parts + 1] = name
     end
@@ -333,6 +333,7 @@ local function filter_options(flags)
     tag = flags.tag,
     stale = flags.stale,
     blocked = flags.blocked,
+    reminders = flags.reminders,
     unestimated = flags.unestimated,
     quick_win = flags["quick-win"],
     plan = flags.plan,
@@ -796,6 +797,7 @@ function M.list(ctx)
     tag = flags.tag,
     stale = flags.stale,
     blocked = flags.blocked,
+    reminders = flags.reminders,
     unestimated = flags.unestimated,
     quick_win = flags["quick-win"],
     plan = flags.plan,
