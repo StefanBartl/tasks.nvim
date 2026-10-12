@@ -37,6 +37,7 @@ lowercase word `all` is the keyword; `ALL` with capitals is the area of that nam
 | `--stale=<days>` | not updated for at least that many days (no date counts as stale) |
 | `--stale=refs` | a file named in the task's `refs:` changed on a later day than `updated` (git commit date, mtime as fallback); the heading names the changed files. Details in [ENGINE.md](ENGINE.md#--stalerefs----tasks-whose-referenced-files-changed) (section `--stale=refs`) |
 | `--blocked` | status `blocked`, or a non-empty `blocked_by` |
+| `--reminders` | a reminder (`remind:`) that is due: its date is today or earlier. Set with `set <id> remind=+7d` (a date, `+<n>d` or `+<n>w`), taken away with `remind=`; `done <id> --remind=7d` sets one on the finished task |
 | `--ready` / `--waiting` | the tasks that can be started now (nothing open blocks them; a `decision` counts: it waits for you, not for a task) / the tasks that wait on an open blocker. One definition for the plan, the dashboard, `next` and these flags, judged against every open task of the vault (a blocker in another area counts). The two exclude each other |
 | `--unestimated` | missing the effort or the value |
 | `--quick-win` | a quick win: value and effort at the thresholds of `setup({ quick_wins })` (default value 4+, effort S-). Shorthand for `--value=>=N --effort=<=X`, so it cannot be combined with `--value` or `--effort` (an error, never a silent pick) |

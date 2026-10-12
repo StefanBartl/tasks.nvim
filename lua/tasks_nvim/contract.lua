@@ -60,6 +60,7 @@ M.CAPABILITIES = {
   "move_area_preview",
   "next",
   "ops",
+  "reminders",
   "reorder",
   "snapshot",
   "task",
@@ -250,6 +251,8 @@ local function task_entry(root, task, node, rank)
     severity = model.is_severity(task.severity) and task.severity or nil,
     created = model.is_date(task.created) and task.created or nil,
     updated = model.is_date(task.updated) and task.updated or nil,
+    -- the date only; whether it is due is for the reader to say (a digest does not change with the day)
+    remind = model.is_date(task.remind) and task.remind or nil,
     plan = task.plan,
     phase = task.phase,
     done_in = task.done_in,

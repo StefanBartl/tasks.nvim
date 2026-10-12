@@ -384,6 +384,10 @@ export interface TaskEntry {
   severity?: Severity;
   created?: Date;
   updated?: Date;
+  /**
+   * A calendar day, YYYY-MM-DD.
+   */
+  remind?: string;
   plan?: string;
   phase?: string;
   done_in?: string;

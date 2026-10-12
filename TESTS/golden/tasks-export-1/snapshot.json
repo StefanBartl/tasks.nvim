@@ -46,7 +46,7 @@
     "listed": 14,
     "unlisted": 2
   },
-  "digest": "sha256:4a2757fc147a4cc5",
+  "digest": "sha256:746b785f4d8ea572",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -150,7 +150,7 @@
     }
   ],
   "plugin": "tasks.nvim",
-  "rev": "rev:b010ad",
+  "rev": "rev:6a1aa5",
   "schema": 1,
   "tasks": [
     {
@@ -455,7 +455,7 @@
       "created": "2026-01-01",
       "effort": "2d",
       "effort_days": 2,
-      "etag": "sha256:612aad15dc987038",
+      "etag": "sha256:caad77a51c2f538c",
       "file": "lib.nvim/ROADMAP/tasks/beta.md",
       "folder": false,
       "group": "doing|2",
@@ -473,6 +473,7 @@
         "state": "waiting"
       },
       "refs": [],
+      "remind": "2026-01-20",
       "slug": "beta",
       "status": "doing",
       "summary": "A summary line for beta.",

@@ -296,6 +296,58 @@ local function day_number(s)
   return era * 146097 + doe - 719468
 end
 
+---The date `n` days after (before, for a negative `n`) a valid `YYYY-MM-DD`.
+---@param date string
+---@param n integer
+---@return string|nil date  nil when `date` is not a date
+function M.add_days(date, n)
+  if not M.is_date(date) or type(n) ~= "number" or n ~= math.floor(n) then
+    return nil
+  end
+  local z = day_number(date) + n + 719468
+  local era = math.floor(z / 146097)
+  local doe = z - era * 146097
+  local yoe = math.floor(
+    (doe - math.floor(doe / 1460) + math.floor(doe / 36524) - math.floor(doe / 146096)) / 365
+  )
+  local y = yoe + era * 400
+  local doy = doe - (365 * yoe + math.floor(yoe / 4) - math.floor(yoe / 100))
+  local mp = math.floor((5 * doy + 2) / 153)
+  local d = doy - math.floor((153 * mp + 2) / 5) + 1
+  local m = mp < 10 and mp + 3 or mp - 9
+  if m <= 2 then
+    y = y + 1
+  end
+  return ("%04d-%02d-%02d"):format(y, m, d)
+end
+
+---What a person writes for a reminder: a date, or a number of days or weeks from `today` (`+3d`, `+2w`,
+---at most a year), as the date it stands for.
+---@param value any
+---@param today string  `YYYY-MM-DD`
+---@return string|nil date
+---@return string|nil err
+function M.resolve_remind(value, today)
+  if type(value) ~= "string" then
+    return nil, "remind must be a date (YYYY-MM-DD) or +<n>d / +<n>w, got " .. tostring(value)
+  end
+  if M.is_date(value) then
+    return value, nil
+  end
+  local n, unit = value:match("^%+(%d+)([dw])$")
+  if n then
+    local days = tonumber(n) * (unit == "w" and 7 or 1)
+    if days >= 0 and days <= 366 then
+      local date = M.add_days(today, days)
+      if date then
+        return date, nil
+      end
+    end
+    return nil, "remind is at most a year ahead: " .. value
+  end
+  return nil, ("remind '%s' is neither a date (YYYY-MM-DD) nor +<n>d / +<n>w"):format(value)
+end
+
 ---Whole days from date `a` to date `b` (positive when `b` is later).
 ---@param a string
 ---@param b string
@@ -596,7 +648,7 @@ function M.parse_text(text, ctx)
       end
     end
 
-    for _, field in ipairs({ "created", "updated" }) do
+    for _, field in ipairs({ "created", "updated", "remind" }) do
       local date = as_text(meta[field], field, bad)
       if date then
         task[field] = date
@@ -1088,6 +1140,10 @@ function M.filter(tasks, f)
       keep = false
     end
     if keep and f.blocked and not (t.status == "blocked" or #t.blocked_by > 0) then
+      keep = false
+    end
+    -- a reminder that is due: its date is today or earlier
+    if keep and f.reminders and not (M.is_date(t.remind) and t.remind <= today) then
       keep = false
     end
     if keep and f.stale and not is_stale(t, today, f.stale) then

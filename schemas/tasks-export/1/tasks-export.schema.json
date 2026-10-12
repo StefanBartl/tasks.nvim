@@ -326,6 +326,10 @@
         "updated": {
           "$ref": "#/$defs/Date"
         },
+        "remind": {
+          "$ref": "#/$defs/Date",
+          "description": "When to look at the task again (a reminder). The date only: whether it is due is for the reader to say, so that a digest does not change with the day."
+        },
         "plan": {
           "type": "string"
         },

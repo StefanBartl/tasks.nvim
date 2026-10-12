@@ -102,7 +102,7 @@ commands:
        [--lang=de|en] [--folder]             create a task file (--lang: body headings;
                                                --folder: a folder task that can hold assets)
   set <area>/<slug> key=value ...         change frontmatter (empty value removes the key)
-  done <area>/<slug> [--done-in=text] [--date=YYYY-MM-DD] [--no-next] [--unblock]
+  done <area>/<slug> [--done-in=text] [--date=YYYY-MM-DD] [--remind=7d|YYYY-MM-DD] [--no-next] [--unblock]
                                           finish: move to Backlog/; prints the tasks it freed and what to start
                                           next; --unblock sets the freed tasks that still say blocked to open
   attach <area>/<slug> <file> [--name=n]  copy a file to <slug>/assets/ (a plain task becomes a
@@ -150,6 +150,7 @@ local SPECS = {
       "blocked",
       "all",
       "done",
+      "reminders",
       "stale-refs",
       "ready",
       "waiting",
@@ -265,7 +266,7 @@ local SPECS = {
   },
   set = { value = {}, flag = { "no-index" } },
   ["migrate-actor"] = { value = {}, flag = { "write", "no-index" } },
-  done = { value = { "done-in", "date" }, flag = { "no-index", "no-next", "unblock" } },
+  done = { value = { "done-in", "date", "remind" }, flag = { "no-index", "no-next", "unblock" } },
   attach = { value = { "name" }, flag = { "no-index" } },
   folderize = { value = {}, flag = { "no-index" } },
   check = { value = {}, flag = { "all" } },
@@ -381,6 +382,7 @@ local function filter_option_map(opt)
     plan = opt.plan --[[@as string|nil]],
     phase = opt.phase --[[@as string|nil]],
     blocked = opt.blocked == true,
+    reminders = opt.reminders == true,
     unestimated = opt.unestimated == true,
     quick_win = opt["quick-win"] == true,
     today = opt.today --[[@as string|nil]],
@@ -1231,13 +1233,18 @@ function commands.done(ctx)
   local args, eo = ctx.args, ctx.eo
   local id = args.pos[1]
   if not id or #args.pos > 1 then
-    ctx.warn("error: usage: done <area>/<slug> [--done-in=text] [--date=YYYY-MM-DD]")
+    ctx.warn(
+      "error: usage: done <area>/<slug> [--done-in=text] [--date=YYYY-MM-DD] [--remind=7d|YYYY-MM-DD]"
+    )
     return 2
   end
   local flow, err = done_flow.run(id, {
     root = eo.root,
     today = eo.today,
     done_in = args.opt["done-in"] --[[@as string|nil]],
+    remind = args.opt.remind
+        and (args.opt.remind:match("^%d+[dw]$") and "+" .. args.opt.remind or args.opt.remind)
+      or nil,
     date = args.opt.date --[[@as string|nil]],
     index = not args.opt["no-index"],
   })
