@@ -226,6 +226,52 @@ return function(H)
     eq(H.read(elsewhere .. "/ROADMAP/tasks/stolen.md") ~= nil, true, "the target is still there")
   end
 
+  -- ── a linked Backlog bucket that leaves the vault is not searched for reminders ─────
+  do
+    local root = F.vault(H)
+    local due = { { "title", "Finished" }, { "status", "done" }, { "remind", "2020-01-01" } }
+    H.write(root .. "/lib.nvim/Backlog/TASKS/2026-01-02_inside.md", F.text(due))
+    local elsewhere = H.tmpdir() .. "/elsewhere-backlog"
+    H.write(elsewhere .. "/2026-01-02_stolen.md", F.text(due))
+    vim.fn.delete(root .. "/cascade.nvim/Backlog/TASKS", "rf")
+    ok(link(elsewhere, root .. "/cascade.nvim/Backlog/TASKS", true), "a junction can be made")
+    local found, _, errors = scan.backlog_reminders({ root = root })
+    eq(
+      vim.tbl_map(function(t)
+        return t.id
+      end, found),
+      { "lib.nvim/inside" },
+      "only the finished task inside the vault"
+    )
+    eq(#errors, 1, "and the scan says what it did not read")
+    has(errors[1], "leaves the vault")
+    has(errors[1], "cascade.nvim/Backlog/TASKS")
+    local open, done = require("tasks_nvim.ui.reminder_hint").count({
+      root = root,
+      today = "2026-01-03",
+    })
+    eq({ open, done }, { 0, 1 }, "the hint counts the one inside")
+    local pick = assert(require("tasks_nvim.next_pick").pick_from_vault({
+      root = root,
+      today = "2026-01-03",
+      reminders = true,
+    }))
+    eq(pick.reminders.done, 1, "so does `next`")
+    local snap = assert(contract.snapshot({ root = root }))
+    eq(#snap.reminders, 1, "the snapshot lists the one inside")
+    eq(snap.reminders[1].id, "lib.nvim/inside")
+    eq(#snap.incomplete, 1, "and says that a folder was not read")
+    has(snap.incomplete[1], "leaves the vault")
+    has(snap.incomplete[1], "cascade.nvim/Backlog/TASKS")
+    eq(
+      json.encode(snap):find(elsewhere, 1, true),
+      nil,
+      "and no path of this machine is in the document"
+    )
+    unlink(root .. "/cascade.nvim/Backlog/TASKS")
+    eq(H.read(elsewhere .. "/2026-01-02_stolen.md") ~= nil, true, "the target is still there")
+  end
+
   -- ── a linked plans folder that leaves the vault is not read ─────────────────
   do
     local root = F.vault(H)

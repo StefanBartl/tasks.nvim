@@ -616,7 +616,7 @@ function M.next_lines(pick)
       out[#out + 1] = ("remind: %s	%s	%s"):format(fsio.clean(t.id), fsio.clean(t.title), t.remind)
     end
     if reminders.done > 0 then
-      out[#out + 1] = ("remind: %d finished task(s) with a reminder due (`list --reminders`)"):format(
+      out[#out + 1] = ("remind: %d finished task(s) with a reminder due (`list --done --reminders`)"):format(
         reminders.done
       )
     end

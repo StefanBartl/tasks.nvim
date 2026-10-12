@@ -52,7 +52,7 @@ local M = {}
 ---@field open { area: integer, vault: integer }
 ---@field empty? Tasks.NextEmpty
 ---@field incomplete? string[]                  # Folders that could not be read: the answer may be incomplete.
----@field reminders? { open: Tasks.Task[], done: integer }  # Reminders that are due: the open tasks (oldest date first) and how many finished tasks carry one (`pick_from_vault` only).
+---@field reminders? { open: Tasks.Task[], done: integer }  # Reminders that are due: the open tasks (oldest date first) and how many finished tasks carry one (`pick_from_vault` with `reminders = true` only).
 
 ---@class Tasks.NextEmpty
 ---@field kind "all_done"|"nothing_startable"|"only_cdx"
@@ -267,7 +267,7 @@ function M.due_reminders(open, finished, today)
 end
 
 ---The same over the vault on disk: every open task, the finished ids looked up in the Backlogs when needed.
----@param opts { root?: string, done?: { id: string, area: string }, area?: string, actor?: string, n?: integer, cdx?: integer, today?: string }
+---@param opts { root?: string, done?: { id: string, area: string }, area?: string, actor?: string, n?: integer, cdx?: integer, today?: string, reminders?: boolean }
 ---@return Tasks.NextPick|nil result
 ---@return string|nil err
 function M.pick_from_vault(opts)
@@ -302,7 +302,11 @@ function M.pick_from_vault(opts)
   if type(errors) == "table" and #errors > 0 then
     result.incomplete = errors
   end
-  result.reminders = M.due_reminders(open, scan.backlog_reminders({ root = opts.root }), opts.today)
+  -- Only the text front end of `next` lists them, and the finished ones cost a sweep of every Backlog: asked for.
+  if opts.reminders then
+    result.reminders =
+      M.due_reminders(open, scan.backlog_reminders({ root = opts.root }), opts.today)
+  end
   return result, nil
 end
 
