@@ -333,7 +333,6 @@ local function filter_options(flags)
     tag = flags.tag,
     stale = flags.stale,
     blocked = flags.blocked,
-    reminders = flags.reminders,
     unestimated = flags.unestimated,
     quick_win = flags["quick-win"],
     plan = flags.plan,
@@ -383,7 +382,7 @@ function M.plan(ctx)
   if not no_stray_words(ctx) then
     return
   end
-  if not apply_list(ctx, { "waiting" }) then
+  if not apply_list(ctx, { "waiting", "reminders" }) then
     return
   end
   local flags = ctx.flags
@@ -696,7 +695,7 @@ function M.estimate(ctx)
   if not no_stray_words(ctx) then
     return
   end
-  if not apply_list(ctx, { "ready", "waiting" }) then
+  if not apply_list(ctx, { "ready", "waiting", "reminders" }) then
     return
   end
   local scope = load_scope(ctx)

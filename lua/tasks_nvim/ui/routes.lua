@@ -20,7 +20,8 @@
 ---  - `TASK_AREA`: an area of the vault (the `extra_areas` of `setup()` included); with
 ---    `allow_all = true` the keyword `all` (every area) too
 ---  - `TASK_ID`: `<area>/<slug>` of an open task; `allow_done = true` also
----    accepts a finished one
+---    accepts a finished one (and completes it, unless `complete_done = false`: `task set` takes a finished task
+---    for `remind=` only, so its candidates stay the open ones)
 ---
 --- Not its job: running anything (`tasks_cmd`), rendering (`tasks_view`).
 
@@ -258,7 +259,7 @@ function M.register_types()
       return false, nil, find_err or ("no such open task: " .. raw)
     end,
     complete = function(arg_lead, spec)
-      if spec and spec.allow_done then
+      if spec and spec.allow_done and spec.complete_done ~= false then
         local both = vim.list_extend({}, open_ids())
         vim.list_extend(both, done_ids())
         table.sort(both)
@@ -478,11 +479,21 @@ local LIST_FLAGS = {
   { name = "force", bool = true, desc = FORCE_DESC },
 }
 
----The filter flags of `list`, for the commands that take the same filters (`plan`, `estimate`).
+---The filter flags of `list`, for the commands that take the same filters (`plan`, `estimate`, `quickwins`). Not the
+---ones that only make sense for a list of tasks as such: the order, the target, `--ready` / `--waiting` (a command that
+---takes them words its own) and `--reminders` (a plan or an estimate is not about what is due).
 ---@param extra table[]
 ---@return table[]
 local function filter_flags(extra)
-  local skip = { sort = true, to = true, format = true, force = true, ready = true, waiting = true }
+  local skip = {
+    sort = true,
+    to = true,
+    format = true,
+    force = true,
+    ready = true,
+    waiting = true,
+    reminders = true,
+  }
   local out = {}
   for _, flag in ipairs(LIST_FLAGS) do
     if not skip[flag.name] then
@@ -672,9 +683,17 @@ local function nested_routes()
 
     {
       path = { "task", "set" },
-      args = { { name = "id", type = "TASK_ID" } },
+      args = {
+        {
+          name = "id",
+          type = "TASK_ID",
+          allow_done = true,
+          complete_done = false,
+          desc = "Id of the task, as area/slug (a finished task takes remind= only)",
+        },
+      },
       kv = set_kv(),
-      desc = "Change frontmatter of an open task (key=value, a value may hold spaces, an empty value removes the key) and regenerate the index",
+      desc = "Change frontmatter of an open task (key=value, a value may hold spaces, an empty value removes the key) and regenerate the index; a finished task takes remind= only (set it, or take it away)",
       run = function(ctx)
         cmd().task_set(ctx)
       end,

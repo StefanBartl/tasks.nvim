@@ -116,6 +116,33 @@ return function(H)
     run("list --ready --waiting")
     has(said(), "exclude each other")
 
+    -- ── list --reminders: only the tasks whose reminder is due ──
+    assert(mutate.set(mid.id, { remind = "2020-01-01" }, o))
+    assert(mutate.set(stale.id, { remind = "2999-01-01" }, o))
+    local due_csv = out_dir .. "/due.csv"
+    run("list lib.nvim --reminders --to=file:" .. due_csv)
+    local due_text = assert(H.read(due_csv), said())
+    has(due_text, "Cmd mid")
+    lacks(due_text, "Cmd base", "no reminder, not listed")
+    lacks(due_text, "Cmd stale", "a reminder that is not due yet, not listed")
+    -- a named list can carry the filter (`gl` in the dashboard saves it); plan and estimate refuse it
+    local named = require("tasks_nvim.lists")
+    named.set_path(out_dir .. "/lists.json")
+    named.save("due", { reminders = true })
+    vim.fn.delete(due_csv)
+    run("list lib.nvim --list=due --to=file:" .. due_csv)
+    local list_text = assert(H.read(due_csv), said())
+    has(list_text, "Cmd mid")
+    lacks(list_text, "Cmd base")
+    run("plan lib.nvim --list=due")
+    has(said(), "list 'due' sets reminders, which this command does not take")
+    run("estimate lib.nvim --list=due")
+    has(said(), "list 'due' sets reminders, which this command does not take")
+    named.delete("due")
+    named.set_path(nil)
+    assert(mutate.set(mid.id, { remind = mutate.REMOVE }, o))
+    assert(mutate.set(stale.id, { remind = mutate.REMOVE }, o))
+
     -- ── estimate: the line, then the walk ──
     run("estimate lib.nvim")
     has(said(), "lib.nvim: 3 tasks")
