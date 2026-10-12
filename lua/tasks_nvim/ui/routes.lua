@@ -220,7 +220,7 @@ function M.register_types()
       -- Exact spelling, from the listing: a case-insensitive file system
       -- (Windows, macOS) would otherwise take `all` for the folder `ALL`.
       if not vim.tbl_contains(area_names(), raw) then
-        return false, nil, ("'%s' is not an area of the vault"):format(raw)
+        return false, nil, vault.not_an_area_message(raw, area_names())
       end
       return true, raw, nil
     end,
@@ -245,7 +245,7 @@ function M.register_types()
         return false, nil, id_err or ("expected <area>/<slug>, got '%s'"):format(raw)
       end
       if not vim.tbl_contains(area_names(), area) then
-        return false, nil, ("'%s' is not an area of the vault"):format(area)
+        return false, nil, vault.not_an_area_message(area, area_names())
       end
       local found, find_err = scan.find(raw, { root = root })
       if found then

@@ -114,6 +114,10 @@ return function(H)
   local _, e_pick =
     form.validate(form.parse(pick), { "a.nvim", "nvim.one", "b.nvim", "nvim.two", "nvim.three" })
   has(e_pick[1], "(did you mean: nvim.one, nvim.two, nvim.three?)")
+  -- the one helper the commands, the routes and the dashboard share
+  local vault = require("tasks_nvim.vault")
+  eq(vault.not_an_area_message("zzz", { "ALL", "lib.nvim" }), "'zzz' is not an area of the vault")
+  has(vault.not_an_area_message("lib", { "ALL", "lib.nvim" }), "(did you mean: lib.nvim?)")
   local mix = form.template({ area = "nvim", title = "X" })
   local _, e_mix = form.validate(form.parse(mix), { "a.nvim", "nvim.one" })
   has(e_mix[1], "(did you mean: nvim.one, a.nvim?)")

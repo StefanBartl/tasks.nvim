@@ -1325,11 +1325,11 @@ local function plan_done(id, opts)
     end
   end
   if opts.remind ~= nil then
-    local date, rerr = model.resolve_remind(opts.remind, today)
-    if not date then
-      return nil, rerr
+    local remind_date, remind_err = model.resolve_remind(opts.remind, today)
+    if not remind_date then
+      return nil, remind_err
     end
-    patch[#patch + 1] = { "remind", date }
+    patch[#patch + 1] = { "remind", remind_date }
   end
   patch[#patch + 1] = { "updated", today }
 

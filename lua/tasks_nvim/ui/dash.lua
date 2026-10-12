@@ -542,7 +542,13 @@ local function apply_list(state, entry)
     return false
   end
   if resolved.area and not require("tasks_nvim.vault").has_area(state.root, resolved.area) then
-    notify.error(("list '%s': '%s' is not an area of the vault"):format(entry.name, resolved.area))
+    local vault = require("tasks_nvim.vault")
+    notify.error(
+      ("list '%s': %s"):format(
+        entry.name,
+        vault.not_an_area_message(resolved.area, vault.area_names(state.root))
+      )
+    )
     return false
   end
   state.filter = resolved.filter
