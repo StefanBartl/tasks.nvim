@@ -109,6 +109,11 @@ return function(H)
   has(e_near[1], "'hover' is not an area of the vault (did you mean: hover.nvim?)")
   local _, e_far = form.validate(form.parse(near), { "ALL", "lib.nvim" })
   ok(not e_far[1]:find("did you mean", 1, true), "no guess when nothing comes close")
+  -- the ones that start with the name come first, case does not matter, three at most
+  local pick = form.template({ area = "NVIM", title = "X" })
+  local _, e_pick =
+    form.validate(form.parse(pick), { "a.nvim", "nvim.one", "b.nvim", "nvim.two", "nvim.three" })
+  has(e_pick[1], "(did you mean: nvim.one, nvim.two, nvim.three?)")
 
   -- a vault without areas: no name can pass, so the report blames the vault, not the name, and says where it looked
   local right_name = form.template({ area = "hover.nvim", title = "X" })
