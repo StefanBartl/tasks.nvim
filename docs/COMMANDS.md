@@ -37,7 +37,7 @@ lowercase word `all` is the keyword; `ALL` with capitals is the area of that nam
 | `--stale=<days>` | not updated for at least that many days (no date counts as stale) |
 | `--stale=refs` | a file named in the task's `refs:` changed on a later day than `updated` (git commit date, mtime as fallback); the heading names the changed files. Details in [ENGINE.md](ENGINE.md#--stalerefs----tasks-whose-referenced-files-changed) (section `--stale=refs`) |
 | `--blocked` | status `blocked`, or a non-empty `blocked_by` |
-| `--reminders` | a reminder (`remind:`) that is due: its date is today or earlier (in Neovim: `:Tasks list --reminders`, and the filter `reminders` in the dashboard's `f` menu; one line at startup says how many are due, `reminders = { on_start = false }` turns it off). Set with `set <id> remind=+7d` (a date, `+<n>d` or `+<n>w`), taken away with `remind=`; `done <id> --remind=7d` sets one on the finished task |
+| `--reminders` | a reminder (`remind:`) that is due: its date is today or earlier (in Neovim: `:Tasks list --reminders`, and the filter `reminders` in the dashboard's `f` menu; one line at startup says how many are due, `reminders = { on_start = false }` turns it off). The list shows the open tasks; the finished ones that carry a reminder are named in the startup line (`:Tasks open <id>`) and, headless, listed by `list --done --reminders`. Set with `set <id> remind=+7d` (a date, `+<n>d` or `+<n>w`), taken away with `remind=` (also on a finished task); `done <id> --remind=7d` sets one on the finished task. A named list can hold it (`reminders = true`); `plan` and `estimate` do not take this filter |
 | `--ready` / `--waiting` | the tasks that can be started now (nothing open blocks them; a `decision` counts: it waits for you, not for a task) / the tasks that wait on an open blocker. One definition for the plan, the dashboard, `next` and these flags, judged against every open task of the vault (a blocker in another area counts). The two exclude each other |
 | `--unestimated` | missing the effort or the value |
 | `--quick-win` | a quick win: value and effort at the thresholds of `setup({ quick_wins })` (default value 4+, effort S-). Shorthand for `--value=>=N --effort=<=X`, so it cannot be combined with `--value` or `--effort` (an error, never a silent pick) |
@@ -84,7 +84,7 @@ counts, the active filter chips and, when it is not the default, the sort order:
 | `s` | advance the status of the marked (else the current) tasks: `doing` -> `decision` -> `blocked` -> `open` -> `parked` -> `doing` |
 | `p` | advance the prio: none -> 1 -> 2 -> 3 -> none (3 -> none removes the key) |
 | `D` | finish after **one** confirmation naming every task (engine `done`, moved to `Backlog/`) |
-| `f` | set a filter chip: pick `status`, `prio`, `effort` (`XS`..`XL`, `<=S`, `<=M`), `kind`, `category`, `severity`, `value`, `actor`, `tag`, `blocked`, `unestimated`, `quick-win` (toggle: value and effort at the quick-win thresholds, shown as the one chip `[quick-win]`), `stale-refs` (toggle: shows the chip `[stale: refs]`),
+| `f` | set a filter chip: pick `status`, `prio`, `effort` (`XS`..`XL`, `<=S`, `<=M`), `kind`, `category`, `severity`, `value`, `actor`, `tag`, `blocked`, `reminders` (toggle: shown as the chip `[reminder due]`), `unestimated`, `quick-win` (toggle: value and effort at the quick-win thresholds, shown as the one chip `[quick-win]`), `stale-refs` (toggle: shows the chip `[stale: refs]`),
 `plan` and `phase` (the plans and stages in use), `readiness` (`ready` / `waiting`: the same cut as `list --ready` / `--waiting`, which the dashboard keeps when it was
 opened with them) or "clear all", then a value (`(any)` clears one chip) |
 | `gl` (input window `<M-l>`) | named lists: pick one to make it the view (its filter, sort and area), `Save the current filter and sort as a list ...` (asks for a name; replacing a saved list asks first), `Rename a saved list ...`, `Delete a saved list ...`. Lists of `setup()` and built-in lists cannot be deleted here |
@@ -260,11 +260,12 @@ opens with the same title and ref filled in.
 
 Changes frontmatter of an *open* task and sets `updated` -- but only when something really
 changed (an identical value rewrites nothing). Settable: `title status kind prio effort tags
-category severity value actor summary blocked_by after order plan phase refs rules done_in created`. A value may contain spaces
+category severity value actor summary blocked_by after order plan phase refs rules done_in created remind`. A value may contain spaces
 (`title=Fix the thing status=doing`: a word that does not start with a known `key=`
 continues the value before it); an empty value removes the key (`kind=`). `status=done` is
-refused: finishing moves the file, see `task done`. A buffer showing the file is reloaded
-when it has no unsaved changes.
+refused: finishing moves the file, see `task done`. A *finished* task takes `remind=` only (a date, or `+7d` / `+2w` from today;
+an empty value takes the reminder away) and nothing else: the startup line names the finished tasks whose reminder is due, so
+there is a way to clear it. A buffer showing the file is reloaded when it has no unsaved changes.
 
 ### `:Tasks attach <id> <file> [name=<file name>]` / `task folderize <id>`
 
@@ -339,8 +340,10 @@ before `decision`; the effective prio; the return on effort; the smaller effort;
 When there is nothing, the answer says which kind of nothing: **never** "all done" while work is only waiting
 ("Nothing can be started. Still open: 4 for you, 6 blocked, 3 parked.").
 The headless `next` (text) also lists the **reminders that are due** -- `remind: <id> <title> <date>` for the open
-tasks, oldest first, and one line with the number of finished tasks that carry one -- so a session that asks what to
-do next also sees what is to be looked at again.
+tasks, oldest first, and one line with the number of finished tasks that carry one (`list --done --reminders` lists
+them) -- so a session that asks what to do next also sees what is to be looked at again. `--today=YYYY-MM-DD` pins the
+day they are judged by (anything else is a usage error, exit 2). Only `next` lists them: `next --format=json`, the
+dialog after `done` and `done` itself do not.
 
 ### `:Tasks estimate [<area>|all] [--for=<id>] [filters] [--walk]`
 
@@ -355,7 +358,7 @@ and writes everything in one batch.
 
 A **list** is a filter combination plus a sort order (and optionally one area) under a name. Its fields are the option
 words of `:Tasks list`, written as strings: `status prio effort kind category severity value actor tag stale plan phase`,
-the booleans `blocked unestimated stale_refs quick_win`, `readiness` (`ready` or `waiting`), `sort`, `area` and a one-line
+the booleans `blocked reminders unestimated stale_refs quick_win`, `readiness` (`ready` or `waiting`), `sort`, `area` and a one-line
 `desc`. A list is checked by the same parser as the command line and a complaint names the list; an unknown key is an
 error, never ignored.
 
