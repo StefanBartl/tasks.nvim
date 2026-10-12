@@ -811,12 +811,17 @@ function M.bodies(params, opts)
     end
     bytes = bytes + #body
     last = i
-    items[#items + 1] = json.object({
-      id = t.id,
-      etag = t.etag or etag_of(t.path),
-      body = body,
-      body_truncated = truncated,
-    })
+    -- A file that cannot be read has no version tag, and a text of nothing: it
+    -- is not an item (the contract wants a tag), and the page goes on.
+    local etag = t.etag or etag_of(t.path)
+    if etag then
+      items[#items + 1] = json.object({
+        id = t.id,
+        etag = etag,
+        body = body,
+        body_truncated = truncated,
+      })
+    end
   end
 
   local entries = {}
