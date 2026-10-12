@@ -157,14 +157,16 @@ local function redact(root, s)
 end
 
 local git_cache
+local git_tries = 0
 
----Short commit of this plugin checkout, once per process; "unknown" when there is no git or no checkout.
+---Short commit of this plugin checkout; "unknown" when there is no git or no checkout. A definite answer is kept for
+---the life of the process. A lookup that did not finish in time (a loaded machine, a slow start of git) is not: it is
+---asked again, three times at most, so a long-lived host does not stay "unknown" because of one slow moment.
 ---@return string
 local function engine_git()
   if git_cache then
     return git_cache
   end
-  git_cache = "unknown"
   local here = debug.getinfo(1, "S").source:sub(2)
   local plugin_root = vim.fs.dirname(vim.fs.dirname(vim.fs.dirname(fsio.norm(here))))
   local ok, res = pcall(function()
@@ -176,9 +178,17 @@ local function engine_git()
     local sha = vim.trim(res.stdout or "")
     if sha:match("^%x+$") then
       git_cache = sha
+      return git_cache
     end
   end
-  return git_cache
+  -- git ran and said there is no commit (code 1..): that stays. No answer in time (the signal of the kill, or an
+  -- error of the start): try again on a later call.
+  git_tries = git_tries + 1
+  if (ok and res and res.signal == 0) or git_tries >= 3 then
+    git_cache = "unknown"
+    return git_cache
+  end
+  return "unknown"
 end
 
 ---The time a document is stamped with (UTC, `YYYY-MM-DDTHH:MM:SSZ`). A seam: golden files and reproducible runs set a
