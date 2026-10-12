@@ -36,7 +36,7 @@ nvim --headless -u NONE -l scripts/tasks.lua --capabilities          # the same 
 | `snapshot` | none | `tasks.snapshot`: counts, areas, the plan head, the plans and every open task with its readiness |
 | `list` | `area`, `status` (list), `limit` (1..100), `offset` | `tasks.list`: a page of open tasks in plan order |
 | `task` | `id` (`<area>/<slug>`) | `tasks.task`: one task with its body and steps |
-| `bodies` | `ids` (list, up to 100) or `offset`, `limit` (1..100) | `tasks.bodies`: `{ id, etag, body, body_truncated }` of the open tasks in plan order, for a reader that searches the text; a page ends early at 2 MiB of text (`next_offset`); the `rev` is that of the snapshot of the same state |
+| `bodies` | `ids` (list, up to 1000) or `offset`, `limit` (1..1000) | `tasks.bodies`: `{ id, etag, body, body_truncated }` of the open tasks in plan order, for a reader that searches the text; a page ends early at 2 MiB of text (`next_offset`); the `rev` is that of the snapshot of the same state |
 | `next` | `n` (0..10), `actor`, `area` | `tasks.next`: what to start next, with the reason |
 | `areas` | none | `tasks.areas`: the areas with their open counts |
 | `done_preview` | `id` | `tasks.donepreview`: what finishing the task would do, and the token for it |

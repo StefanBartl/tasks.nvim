@@ -719,6 +719,9 @@ function M.task(id, opts)
   return seal(doc, rev_of(view, { doc.task })), nil
 end
 
+---The most tasks one page of `bodies` names or holds (a page ends earlier at `BODIES_PAGE_BYTES`).
+M.BODIES_MAX_ITEMS = 1000
+
 ---The most body bytes one page of `bodies` carries (a document stays far below `MAX_DOC_BYTES`, also once escaped).
 M.BODIES_PAGE_BYTES = 2 * 1024 * 1024
 
@@ -733,18 +736,18 @@ M.BODIES_PAGE_BYTES = 2 * 1024 * 1024
 ---@return Tasks.ContractError|string|nil err
 function M.bodies(params, opts)
   params = params or {}
-  local limit = params.limit or M.LIMITS.list_items
+  local limit = params.limit or M.BODIES_MAX_ITEMS
   local offset = params.offset or 0
   if
     type(limit) ~= "number"
     or limit < 1
-    or limit > M.LIMITS.list_items
+    or limit > M.BODIES_MAX_ITEMS
     or limit ~= math.floor(limit)
   then
     return nil,
       {
         code = "invalid_argument",
-        message = ("limit must be 1..%d"):format(M.LIMITS.list_items),
+        message = ("limit must be 1..%d"):format(M.BODIES_MAX_ITEMS),
         retryable = false,
       }
   end
@@ -756,11 +759,11 @@ function M.bodies(params, opts)
         retryable = false,
       }
   end
-  if params.ids ~= nil and #params.ids > M.LIMITS.list_items then
+  if params.ids ~= nil and #params.ids > M.BODIES_MAX_ITEMS then
     return nil,
       {
         code = "invalid_argument",
-        message = ("ids holds at most %d ids"):format(M.LIMITS.list_items),
+        message = ("ids holds at most %d ids"):format(M.BODIES_MAX_ITEMS),
         retryable = false,
       }
   end

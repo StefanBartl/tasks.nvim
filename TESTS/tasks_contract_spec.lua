@@ -310,8 +310,9 @@ return function(H)
   contract.BODIES_PAGE_BYTES = page_bytes
   eq(early.next_offset, #early.items, "a page that holds as many bytes as it may ends early and says where to go on")
   eq(#early.items < early.total, true)
-  local bad_limit = contract.bodies({ limit = 0 }, { root = root })
-  eq(bad_limit, nil)
+  eq(contract.bodies({ limit = 0 }, { root = root }), nil)
+  eq(contract.bodies({ limit = contract.BODIES_MAX_ITEMS + 1 }, { root = root }), nil)
+  eq(#call("bodies", { limit = contract.BODIES_MAX_ITEMS }).items, snap.counts.listed, "one page holds the fixture")
   golden("bodies-page")
 
   -- ── next ──
