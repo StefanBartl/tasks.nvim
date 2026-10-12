@@ -111,6 +111,8 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- `:Tasks new`: dismissing the "Attach assets?" question (`<Esc>`, `q`) created the task anyway, as if "No" had been
+  answered. Now it creates nothing and the form stays open with what was typed; only "No" makes the plain task.
 - CLI: a global option typed before the command (`--vault=x new area -- "--title"`) was moved behind a bare `--`, where it became part of the text; it now goes right behind the command name, so a title that starts with `--` can be given.
 - `scripts/test.sh` finds snacks.nvim (`$SNACKS_DIR`, `.deps/`, beside the repository, the plugin manager's data folder)
   and hands it to the specs: the runner gives every spec a sandboxed data folder, so the picker part of the dashboard

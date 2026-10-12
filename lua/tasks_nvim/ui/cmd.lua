@@ -1124,10 +1124,18 @@ function M.task_new_form(given)
       notify.info("task new cancelled")
     end,
     on_submit = function(values, buf)
-      confirm.yesno(
-        "Attach assets (screenshots, logs) to the new task?\n\nYes makes a folder task with an assets/ folder and opens the file explorer on it.",
-        "attach assets",
-        function(with_assets)
+      -- "No" is first (the dialog starts on it); a dismissed dialog (Esc, `q`) answers nil, which is not "No".
+      local ask = M.chooser or confirm.choose
+      ask(
+        "Attach assets (screenshots, logs) to the new task?\n\nYes makes a folder task with an assets/ folder and opens the file explorer on it.\nEsc goes back to the form: nothing is created.",
+        { "No", "Yes, attach assets" },
+        function(picked)
+          -- Esc is "not now", not "no assets": nothing is written and the form stays open with what was typed.
+          if picked == nil then
+            notify.info("task not created: the form is still open")
+            return
+          end
+          local with_assets = picked == 2
           -- after=/order=/plan=/phase= are no fields of the form: they go on as they were typed on the command line
           local carried =
             { after = given.after, order = given.order, plan = given.plan, phase = given.phase }

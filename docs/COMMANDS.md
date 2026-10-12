@@ -218,7 +218,7 @@ Submitting checks the form: the problems are written at the top of the buffer as
 form asks **"Attach assets?"**: *Yes* creates a folder task (`<slug>/<slug>.md`, as
 `--folder` does), makes `assets/` and opens the file explorer on it (filetree.nvim's
 `:Filetree open` when installed, else Neovim's directory browser); *No* creates a plain task
-file. The task is written by `tasks.mutate.new`, the one write path the CLI uses as well; an
+file; `<Esc>` / `q` creates nothing and leaves the form open with everything typed. The task is written by `tasks.mutate.new`, the one write path the CLI uses as well; an
 error of the engine (a tag with a forbidden character, say) is shown in the form, which stays
 open. Afterwards the form closes and the new file opens.
 

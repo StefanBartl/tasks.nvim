@@ -422,9 +422,9 @@ return function(H)
     local vault = require("tasks_nvim.vault")
     local scan = require("tasks_nvim.scan")
     vault.set_root(root)
-    local orig_yesno, orig_notify = confirm.yesno, vim.notify
-    confirm.yesno = function(_, _, cb)
-      cb(false)
+    local orig_choose, orig_notify = confirm.choose, vim.notify
+    confirm.choose = function(_, _, cb)
+      cb(1)
     end
     vim.notify = function() end
     local captured
@@ -462,7 +462,7 @@ return function(H)
     local ranged = assert(scan.find("lib.nvim/first-line", { root = root }))
     eq(ranged.refs, { src.ref }, "a file name with a comma stays ONE ref")
     vim.cmd("enew")
-    confirm.yesno, vim.notify = orig_yesno, orig_notify
+    confirm.choose, vim.notify = orig_choose, orig_notify
     vault.set_root(nil)
   end
 
