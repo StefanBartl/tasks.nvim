@@ -103,6 +103,13 @@ return function(H)
   has(table.concat(e2, "\n"), "'nowhere' is not an area")
   has(table.concat(e2, "\n"), "Title is required")
 
+  -- the folder's name is what is meant: a near miss says which areas come close
+  local near = form.template({ area = "hover", title = "X" })
+  local _, e_near = form.validate(form.parse(near), { "ALL", "hover.nvim", "lib.nvim" })
+  has(e_near[1], "'hover' is not an area of the vault (did you mean: hover.nvim?)")
+  local _, e_far = form.validate(form.parse(near), { "ALL", "lib.nvim" })
+  ok(not e_far[1]:find("did you mean", 1, true), "no guess when nothing comes close")
+
   local many = form.template({ area = "ALL", title = "X" })
   many[find(many, "- [ ] idea")] = "- [x] idea" -- task is ticked as well: hand-edited
   local v3, e3 = form.validate(form.parse(many), { "ALL" })
