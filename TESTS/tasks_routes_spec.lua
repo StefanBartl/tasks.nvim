@@ -1303,10 +1303,13 @@ return function(H)
         cb(answer)
       end
       local asked_choices
+      local stray_index ---@type integer|nil  an answer the dialog never offers, to see it is not taken for one
       confirm.choose = function(msg, choices, cb)
         form_asked[#form_asked + 1] = msg
         asked_choices = choices
-        if answer == nil then
+        if stray_index ~= nil then
+          cb(stray_index)
+        elseif answer == nil then
           cb(nil)
         else
           cb(answer and 2 or 1)
@@ -1402,11 +1405,33 @@ return function(H)
       eq(vim.api.nvim_get_current_buf(), form_buf, "the form stays open")
       has(buf_text(), "Title: Dismissed question", "the typed text survives")
       has(said(), "task not created")
+      -- an answer the dialog does not offer is no "No" either: nothing is created
+      stray_index = 3
+      fkeys("<C-s>")
+      flush()
+      ok(
+        not H.exists(task_path("lib.nvim", "dismissed-question")),
+        "an unknown answer creates nothing"
+      )
+      eq(vim.api.nvim_get_current_buf(), form_buf, "and the form stays open")
+      stray_index = nil
+      -- the seam of the estimate walk is not the form's: a scripted walk must not answer this question
+      local walk_asked = 0
+      cmd.chooser = function(_, _, cb)
+        walk_asked = walk_asked + 1
+        cb(2)
+      end
       -- the same form still submits: "No" now makes the plain task
       answer = false
       fkeys("<C-s>")
       flush()
+      cmd.chooser = nil
+      eq(walk_asked, 0, "the estimate walk's chooser was not asked")
       ok(H.exists(task_path("lib.nvim", "dismissed-question")), "the form was still usable")
+      ok(
+        not H.exists(root .. "/lib.nvim/ROADMAP/tasks/dismissed-question/dismissed-question.md"),
+        "answered No, so a plain file task"
+      )
 
       -- answer "yes": a folder task, assets/ exists, the explorer is pointed at it
       run("task new")
@@ -1480,6 +1505,9 @@ return function(H)
       local lost_root = H.tmpdir()
       vault.set_root(lost_root)
       run("task new")
+      -- ... and before anything is typed, not only when the form is submitted
+      has(said(), "The vault has no areas", "warned on open")
+      ok(said_level(WARN), "as a warning")
       form_buf = vim.api.nvim_get_current_buf()
       set_line("Area: ", "lib.nvim")
       set_line("Title: ", "Nowhere to go")

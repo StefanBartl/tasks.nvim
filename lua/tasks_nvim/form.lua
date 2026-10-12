@@ -194,6 +194,18 @@ end
 ---@field area string
 ---@field opts Tasks.NewOpts
 
+---The message for a vault that has no areas: the cause is the vault (a wrong folder, or one that moved while
+---Neovim still holds the old path), not the name typed. One text for the report in the form and the warning on open.
+---@param root? string  the vault folder it looked in
+---@return string
+function M.no_areas_message(root)
+  local where = (type(root) == "string" and root ~= "") and (": " .. root) or ""
+  return "The vault has no areas"
+    .. where
+    .. " (wrong folder? The vault comes from setup({ vault }) or $TASKS_VAULT and is read at startup:"
+    .. " restart Neovim after moving it)"
+end
+
 ---Check a parsed form. `areas` (when given) is the set of areas the vault has; `root` (when given) names the vault
 ---in the message that says it has none.
 ---@param parsed Tasks.FormParsed
@@ -205,11 +217,9 @@ function M.validate(parsed, areas, root)
   local errors = {}
   local area = trim(parsed.area)
   if areas and #areas == 0 then
-    -- No name can pass an empty list, so the name typed is not the problem: the vault is (a wrong folder, or one
-    -- that moved while Neovim still holds the old path). Say that, and where it looked.
-    errors[#errors + 1] = ("The vault has no areas%s (wrong folder? A vault set in setup() is read at startup: restart Neovim after moving it)"):format(
-      root and root ~= "" and (": " .. root) or ""
-    )
+    -- No name can pass an empty list, so the name typed is not the problem: the vault is. Say that, and where it
+    -- looked.
+    errors[#errors + 1] = M.no_areas_message(root)
   elseif area == "" then
     errors[#errors + 1] = "Area is required"
   elseif areas and not vim.tbl_contains(areas, area) then

@@ -120,9 +120,10 @@ the version is not tagged yet (the repository is not published).
 
 - `:Tasks new`: a vault without areas (the wrong folder, or one that moved while Neovim still held the old path) was
   reported as "'<name>' is not an area of the vault" for every name. The form now says "The vault has no areas: <folder>"
-  and why that happens (a `setup()` vault is read at startup).
+  and why that happens (the vault is read at startup), as a warning when the form opens and again in its report.
 - `:Tasks new`: dismissing the "Attach assets?" question (`<Esc>`, `q`) created the task anyway, as if "No" had been
-  answered. Now it creates nothing and the form stays open with what was typed; only "No" makes the plain task.
+  answered. Now it creates nothing and the form stays open with what was typed; only "No" makes the plain task, and
+  the question no longer shares the dialog seam of `estimate --walk` (`ui.cmd.chooser`).
 - CLI: a global option typed before the command (`--vault=x new area -- "--title"`) was moved behind a bare `--`, where it became part of the text; it now goes right behind the command name, so a title that starts with `--` can be given.
 - `scripts/test.sh` finds snacks.nvim (`$SNACKS_DIR`, `.deps/`, beside the repository, the plugin manager's data folder)
   and hands it to the specs: the runner gives every spec a sandboxed data folder, so the picker part of the dashboard

@@ -120,6 +120,9 @@ return function(H)
   ok(not e_none[1]:find("is not an area", 1, true), "the typed name is not blamed")
   local _, e_none_bare = form.validate(form.parse(right_name), {})
   has(e_none_bare[1], "The vault has no areas (")
+  eq(e_none_bare[1], form.no_areas_message(nil), "the report is the one text of the module")
+  eq(form.no_areas_message(""), form.no_areas_message(nil), "an empty folder is no folder")
+  has(form.no_areas_message("/x"), "$TASKS_VAULT", "every way the vault is named is mentioned")
   local _, e_none_blank = form.validate(form.parse(form.template({})), {}, "E:/repos/old-vault")
   lacks(
     table.concat(e_none_blank, "\n"),
