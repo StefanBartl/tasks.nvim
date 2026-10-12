@@ -161,7 +161,9 @@ local git_tries = 0
 
 ---Short commit of this plugin checkout; "unknown" when there is no git or no checkout. A definite answer is kept for
 ---the life of the process. A lookup that did not finish in time (a loaded machine, a slow start of git) is not: it is
----asked again, three times at most, so a long-lived host does not stay "unknown" because of one slow moment.
+---asked again, three times at most, so a long-lived host does not stay "unknown" because of one slow moment. Only the
+---first look gets the full wait; a retry is quick (a warm git answers in about 100 ms), so a machine that stays loaded
+---holds a request for 3 s in all, not 6.
 ---@return string
 local function engine_git()
   if git_cache then
@@ -169,10 +171,11 @@ local function engine_git()
   end
   local here = debug.getinfo(1, "S").source:sub(2)
   local plugin_root = vim.fs.dirname(vim.fs.dirname(vim.fs.dirname(fsio.norm(here))))
+  local wait_ms = git_tries == 0 and 2000 or 500
   local ok, res = pcall(function()
     return vim
       .system({ "git", "-C", plugin_root, "rev-parse", "--short", "HEAD" }, { text = true })
-      :wait(2000)
+      :wait(wait_ms)
   end)
   if ok and res and res.code == 0 then
     local sha = vim.trim(res.stdout or "")
@@ -181,10 +184,11 @@ local function engine_git()
       return git_cache
     end
   end
-  -- git ran and said there is no commit (code 1..): that stays. No answer in time (the signal of the kill, or an
-  -- error of the start): try again on a later call.
+  -- git ran and said there is no commit (code 1..): that stays. No answer in time (the code 124 of `:wait`, the signal
+  -- of the kill, or an error of the start): try again on a later call.
   git_tries = git_tries + 1
-  if (ok and res and res.signal == 0) or git_tries >= 3 then
+  local answered = ok and res and res.code ~= 124 and (res.signal or 0) == 0
+  if answered or git_tries >= 3 then
     git_cache = "unknown"
     return git_cache
   end
