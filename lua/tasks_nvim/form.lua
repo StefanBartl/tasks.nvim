@@ -194,15 +194,23 @@ end
 ---@field area string
 ---@field opts Tasks.NewOpts
 
----Check a parsed form. `areas` (when given) is the set of areas the vault has.
+---Check a parsed form. `areas` (when given) is the set of areas the vault has; `root` (when given) names the vault
+---in the message that says it has none.
 ---@param parsed Tasks.FormParsed
 ---@param areas? string[]
+---@param root? string
 ---@return Tasks.FormValues|nil values
 ---@return string[] errors
-function M.validate(parsed, areas)
+function M.validate(parsed, areas, root)
   local errors = {}
   local area = trim(parsed.area)
-  if area == "" then
+  if areas and #areas == 0 then
+    -- No name can pass an empty list, so the name typed is not the problem: the vault is (a wrong folder, or one
+    -- that moved while Neovim still holds the old path). Say that, and where it looked.
+    errors[#errors + 1] = ("The vault has no areas%s (wrong folder? A vault set in setup() is read at startup: restart Neovim after moving it)"):format(
+      root and root ~= "" and (": " .. root) or ""
+    )
+  elseif area == "" then
     errors[#errors + 1] = "Area is required"
   elseif areas and not vim.tbl_contains(areas, area) then
     -- The name has to be the folder's (`hover.nvim`, not `hover`): say which ones come close.

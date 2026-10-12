@@ -5,7 +5,7 @@
 -- Why: a value that can be nil is bound and then asserted by the next ok()/eq() of the same body, so a nil fails the spec at that line; some specs feed wrong types or incomplete tables on purpose.
 
 return function(H)
-  local eq, ok, has = H.eq, H.ok, H.has
+  local eq, ok, has, lacks = H.eq, H.ok, H.has, H.lacks
   local form = require("tasks_nvim.form")
   local model = require("tasks_nvim.model")
 
@@ -109,6 +109,24 @@ return function(H)
   has(e_near[1], "'hover' is not an area of the vault (did you mean: hover.nvim?)")
   local _, e_far = form.validate(form.parse(near), { "ALL", "lib.nvim" })
   ok(not e_far[1]:find("did you mean", 1, true), "no guess when nothing comes close")
+
+  -- a vault without areas: no name can pass, so the report blames the vault, not the name, and says where it looked
+  local right_name = form.template({ area = "hover.nvim", title = "X" })
+  local v_none, e_none = form.validate(form.parse(right_name), {}, "E:/repos/old-vault")
+  eq(v_none, nil)
+  eq(#e_none, 1, "one report, not one per field")
+  has(e_none[1], "The vault has no areas: E:/repos/old-vault")
+  has(e_none[1], "restart Neovim")
+  ok(not e_none[1]:find("is not an area", 1, true), "the typed name is not blamed")
+  local _, e_none_bare = form.validate(form.parse(right_name), {})
+  has(e_none_bare[1], "The vault has no areas (")
+  local _, e_none_blank = form.validate(form.parse(form.template({})), {}, "E:/repos/old-vault")
+  lacks(
+    table.concat(e_none_blank, "\n"),
+    "Area is required",
+    "an empty area line does not add a second area report"
+  )
+  has(table.concat(e_none_blank, "\n"), "Title is required", "the other fields are still checked")
 
   local many = form.template({ area = "ALL", title = "X" })
   many[find(many, "- [ ] idea")] = "- [x] idea" -- task is ticked as well: hand-edited
