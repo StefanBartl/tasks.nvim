@@ -401,7 +401,11 @@ local function has_remind_line(path, st, now)
   then
     return stamp.marked
   end
-  local text = fsio.is_link(path) and nil or fsio.read(path)
+  -- A link is no way out of the vault: it is not read (`a and nil or b` would read it anyway, so it is spelled out).
+  local text
+  if not fsio.is_link(path) then
+    text = fsio.read(path)
+  end
   -- the frontmatter's own line: never the first line of the file (that is the fence)
   local marked = text ~= nil and text:find("\nremind:", 1, true) ~= nil
   if now - st.mtime.sec >= STAMP_RACY_SECONDS then
