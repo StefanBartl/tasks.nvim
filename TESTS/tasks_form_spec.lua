@@ -114,6 +114,9 @@ return function(H)
   local _, e_pick =
     form.validate(form.parse(pick), { "a.nvim", "nvim.one", "b.nvim", "nvim.two", "nvim.three" })
   has(e_pick[1], "(did you mean: nvim.one, nvim.two, nvim.three?)")
+  local mix = form.template({ area = "nvim", title = "X" })
+  local _, e_mix = form.validate(form.parse(mix), { "a.nvim", "nvim.one" })
+  has(e_mix[1], "(did you mean: nvim.one, a.nvim?)")
 
   -- a vault without areas: no name can pass, so the report blames the vault, not the name, and says where it looked
   local right_name = form.template({ area = "hover.nvim", title = "X" })

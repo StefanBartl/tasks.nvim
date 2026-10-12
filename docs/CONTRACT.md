@@ -95,7 +95,7 @@ relative to the vault), `valid`, `problems` (`[{ code, msg }]`), `steps` (`total
 task has a `## Plan` section), `etag` and, for an open task, `readiness`:
 
 ```json
-"readiness": { "state": "ready", "stage": 1, "rank": 3, "eff_prio": 1, "leverage": 4, "open_blockers": [] }
+"readiness": { "state": "ready", "stage": 0, "rank": 3, "eff_prio": 1, "leverage": 4, "open_blockers": [] }
 ```
 
 `state` is `ready`, `decision`, `waiting`, `stuck`, `freed` or `parked` (the one definition of "can be started",
