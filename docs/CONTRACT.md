@@ -86,11 +86,12 @@ only what is listed), `limits` (`title`, `summary`, `body_bytes`, `list_items`, 
 | `plans` | the plan files: `id`, `title`, `status`, `areas`, `target`, `phase_order`, `gate`, `valid` |
 | `estimate` | the sums of `estimate.rollup`: `tasks`, `days`, `n_with_effort`, `n_without_effort`, `value`, `n_with_value`, `roi`, `quick_wins`, `unestimated` |
 | `tasks` | every open task, in the order a person would work in (below) |
+| `reminders` | the **finished** tasks that carry a reminder (`remind`): `{ id, area, title, remind, etag, done_in? }`, the oldest date first, at most 100 (a light scan of the Backlog). The open ones are in `tasks` |
 | `incomplete` | folders that could not be read (relative paths): the document is what could be read, and says so |
 
 A **task entry** (`tasks[]`, `items[]`, `task`) has: `id`, `area`, `slug`, `title`, `status`, `kind`, `prio`, `order`,
 `effort`, `effort_days`, `value`, `roi`, `actor`, `actor_written`, `severity`, `created`, `updated`, `plan`, `phase`,
-`done_in`, `tags`, `category`, `blocked_by`, `after`, `refs`, `summary`, `folder`, `file` (`<area>/ROADMAP/tasks/<slug>.md`,
+`done_in`, `remind` (a date: look at the task again then; whether it is due is for the reader to say, the entry does not change with the day), `tags`, `category`, `blocked_by`, `after`, `refs`, `summary`, `folder`, `file` (`<area>/ROADMAP/tasks/<slug>.md`,
 relative to the vault), `valid`, `problems` (`[{ code, msg }]`), `steps` (`total`, `ticked`, `dropped`, only when the
 task has a `## Plan` section), `etag` and, for an open task, `readiness`:
 
