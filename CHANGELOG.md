@@ -7,6 +7,12 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- The persistent engine `scripts/tasks-host.lua` (`tasks_nvim.host`): `nvim -l scripts/tasks-host.lua` answers the
+  machine contract over stdin and stdout, one line per question, until its input ends; the documents are those of
+  `api.call`, byte for byte, and a question costs milliseconds instead of a process start. Line protocol in
+  [docs/CONTRACT.md](docs/CONTRACT.md). `tasks_nvim.boot` finds lib.nvim for both scripts.
+- `json`: strings with nothing to escape skip the four substitutions (a snapshot of 630 tasks encodes about 15 % faster).
+
 - `bodies` (`tasks.bodies`), additive to `tasks-export/1`: the text of the open tasks, a page at a time or by `ids`, with
   the `etag` of each and the `rev` of the snapshot of the same state, for a reader that builds a full-text index.
   Capability `bodies`.

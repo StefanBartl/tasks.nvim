@@ -156,6 +156,10 @@ end
 ---@param s string
 ---@return string
 local function string_(s)
+  -- Most strings (ids, keys, plain words) have nothing to escape: one scan instead of four substitutions.
+  if not s:find('[%c"\\<\127\128-\255]') then
+    return '"' .. s .. '"'
+  end
   s = scrub(s)
   s = s:gsub('[%c"\\<\127]', function(c)
     return ESCAPES[c] or ("\\u%04x"):format(c:byte())
