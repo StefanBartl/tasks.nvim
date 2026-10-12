@@ -244,9 +244,11 @@ M.REMINDERS_MAX = 100
 ---exactly then ("look at the result in a week"): without this the date would be written and never seen again.
 ---@param root string
 ---@return table[] reminders  `{ id, area, title, remind, etag, done_in? }`, the oldest date first
+---@return string[] errors  folders that were not read (they lead out of the vault), relative to the vault
 local function done_reminders(root)
   local out = {}
-  for _, task in ipairs(scan.backlog_reminders({ root = root }) or {}) do
+  local found, _, walk_errors = scan.backlog_reminders({ root = root })
+  for _, task in ipairs(found or {}) do
     out[#out + 1] = json.object({
       id = task.id,
       area = task.area,
@@ -265,7 +267,11 @@ local function done_reminders(root)
   while #out > M.REMINDERS_MAX do
     out[#out] = nil
   end
-  return out
+  local errors = {}
+  for _, e in ipairs(walk_errors or {}) do
+    errors[#errors + 1] = redact(root, tostring(e))
+  end
+  return out, errors
 end
 
 -- ── entries ──────────────────────────────────────────────────────────────────
@@ -598,7 +604,8 @@ function M.snapshot(opts)
   })
   doc.areas = areas_of(view)
   doc.unlisted = view.unlisted
-  doc.reminders = done_reminders(view.root)
+  local reminders, reminder_errors = done_reminders(view.root)
+  doc.reminders = reminders
   doc.plan = json.object(plan_head(view))
   doc.plans = vim.tbl_map(function(f)
     return {
@@ -613,7 +620,7 @@ function M.snapshot(opts)
     }
   end, view.files)
   doc.tasks = json.memo(entries)
-  doc.incomplete = view.errors
+  doc.incomplete = vim.list_extend(vim.list_slice(view.errors, 1), reminder_errors)
   local sums = estimate.rollup(view.open)
   doc.estimate = json.object({
     tasks = sums.n,

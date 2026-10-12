@@ -385,60 +385,120 @@ local function bucket_files(dir)
   return out
 end
 
----The finished tasks that carry a `remind:` line, of every area. The files are not parsed to find them: one that has
----not changed since the last look costs a stat, a new or changed one is searched for the line first, and only a file
----that has it is parsed.
----@param opts? Tasks.ScanOpts
+---Whether the file `path` has a `remind:` line. A file that has not changed since the last look costs a stat; a new or
+---changed one is read and searched, not parsed.
+---@param path string
+---@param st table  # its `fs_stat`
+---@param now integer
+---@return boolean
+local function has_remind_line(path, st, now)
+  local stamp = reminder_stamp[path]
+  if
+    stamp
+    and stamp.sec == st.mtime.sec
+    and stamp.nsec == st.mtime.nsec
+    and stamp.size == st.size
+  then
+    return stamp.marked
+  end
+  local text = fsio.is_link(path) and nil or fsio.read(path)
+  -- the frontmatter's own line: never the first line of the file (that is the fence)
+  local marked = text ~= nil and text:find("\nremind:", 1, true) ~= nil
+  if now - st.mtime.sec >= STAMP_RACY_SECONDS then
+    reminder_stamp[path] =
+      { sec = st.mtime.sec, nsec = st.mtime.nsec, size = st.size, marked = marked }
+  else
+    reminder_stamp[path] = nil
+  end
+  return marked
+end
+
+---@class Tasks.RemindersOpts : Tasks.ScanOpts
+---@field area? string   # One area (default: all of them).
+
+---The open tasks that carry a `remind:` line, one area (`opts.area`) or all of them. The files are not parsed to find
+---them: only a file that has the line is.
+---@param opts? Tasks.RemindersOpts
 ---@return Tasks.Task[]|nil tasks
 ---@return string|nil err
-function M.backlog_reminders(opts)
+---@return string[]|nil errors  folders that were not read (a link that leaves the vault); the result is then incomplete
+function M.open_reminders(opts)
+  opts = opts or {}
   local root, err = resolve_root(opts)
   if not root then
     return nil, err or "vault not found"
   end
   local uv = vim.uv or vim.loop
   local now = os.time()
-  local out = {}
+  local out, errors = {}, {}
   for _, area in ipairs(vault.areas(root)) do
-    for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
-      local dir = vault.backlog_dir(root, area.name, bucket)
-      for _, entry in ipairs(bucket_files(dir)) do
+    if not opts.area or area.name == opts.area then
+      local dir = vault.tasks_dir(root, area.name)
+      local files, walk_errors = markdown_files(dir, opts, root)
+      for _, e in ipairs(walk_errors) do
+        errors[#errors + 1] = e
+      end
+      for _, entry in ipairs(classify(dir, files)) do
         local st = uv.fs_stat(entry.path)
-        if st and st.type == "file" then
-          local stamp = reminder_stamp[entry.path]
-          local marked
-          if
-            stamp
-            and stamp.sec == st.mtime.sec
-            and stamp.nsec == st.mtime.nsec
-            and stamp.size == st.size
-          then
-            marked = stamp.marked
-          else
-            local text = fsio.is_link(entry.path) and nil or fsio.read(entry.path)
-            -- the frontmatter's own line: never the first line of the file (that is the fence)
-            marked = text ~= nil and text:find("\nremind:", 1, true) ~= nil
-            if now - st.mtime.sec >= STAMP_RACY_SECONDS then
-              reminder_stamp[entry.path] =
-                { sec = st.mtime.sec, nsec = st.mtime.nsec, size = st.size, marked = marked }
-            else
-              reminder_stamp[entry.path] = nil
-            end
+        if st and st.type == "file" and has_remind_line(entry.path, st, now) then
+          local task = model.from_file(entry.path, {
+            area = area.name,
+            location = "roadmap",
+            nested = entry.nested,
+            folder = entry.folder,
+          })
+          if model.is_open_status(task.status) and model.is_date(task.remind) then
+            out[#out + 1] = task
           end
-          if marked then
-            local task = model.from_file(
-              entry.path,
-              { area = area.name, location = "backlog", folder = entry.folder }
-            )
-            if task.meta.status ~= nil and model.is_date(task.remind) then
-              out[#out + 1] = task
+        end
+      end
+    end
+  end
+  return out, nil, errors
+end
+
+---The finished tasks that carry a `remind:` line, one area (`opts.area`) or all of them. The files are not parsed to
+---find them: one that has not changed since the last look costs a stat, a new or changed one is searched for the line
+---first, and only a file that has it is parsed. A `Backlog/<bucket>` folder that leads out of the vault (a link, a
+---junction) is not read, like everywhere else.
+---@param opts? Tasks.RemindersOpts
+---@return Tasks.Task[]|nil tasks
+---@return string|nil err
+---@return string[]|nil errors  folders that were not read; the result is then incomplete
+function M.backlog_reminders(opts)
+  opts = opts or {}
+  local root, err = resolve_root(opts)
+  if not root then
+    return nil, err or "vault not found"
+  end
+  local uv = vim.uv or vim.loop
+  local now = os.time()
+  local out, errors = {}, {}
+  for _, area in ipairs(vault.areas(root)) do
+    if not opts.area or area.name == opts.area then
+      for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
+        local dir = vault.backlog_dir(root, area.name, bucket)
+        local escape = vault.leaves(root, dir)
+        if escape then
+          errors[#errors + 1] = escape
+        else
+          for _, entry in ipairs(bucket_files(dir)) do
+            local st = uv.fs_stat(entry.path)
+            if st and st.type == "file" and has_remind_line(entry.path, st, now) then
+              local task = model.from_file(
+                entry.path,
+                { area = area.name, location = "backlog", folder = entry.folder }
+              )
+              if task.meta.status ~= nil and model.is_date(task.remind) then
+                out[#out + 1] = task
+              end
             end
           end
         end
       end
     end
   end
-  return out, nil
+  return out, nil, errors
 end
 
 ---The finished task `<area>/<slug>` from `Backlog/`, whatever its date prefix.

@@ -60,7 +60,7 @@ usage: nvim --headless -u NONE -l scripts/tasks.lua <command> [args]
 commands:
   list [<area>] [--status=a,b] [--prio=1,2|<=2] [--effort=S,M|<=M] [--kind=k] [--tag=t]
        [--category=c,d] [--severity=high,critical] [--value=4,5|>=4] [--actor=cdx,me,pair,none]
-       [--stale=<days>|refs] [--stale-refs] [--blocked] [--ready|--waiting] [--unestimated] [--quick-win]
+       [--stale=<days>|refs] [--stale-refs] [--blocked] [--reminders] [--ready|--waiting] [--unestimated] [--quick-win]
        [--sort=default|prio-effort|severity|frecency|roi] [--format=tsv|ids|json] [--done]   open tasks, sorted; one line each
        (--format=json: the tasks.list document in plan order, with [--limit=1..100] [--offset=N]; --done: the finished tasks)
        (categories: bug security performance docs ruleset; --category=bug also finds kind=bug;
@@ -69,7 +69,8 @@ commands:
         --actor=me also finds status=decision and the tag needs-user; none = nobody classified it;
         --sort=frecency: what the dashboard opened or changed most, from the frecency file)
        (--ready: nothing open blocks it; --waiting: an open blocker; --unestimated: no effort or no value;
-        --quick-win: value and effort at the quick-win thresholds, see `quickwins`)
+        --quick-win: value and effort at the quick-win thresholds, see `quickwins`;
+        --reminders: a reminder (`remind:`) that is due, its date is today or earlier)
   plan-new <area> <title> [--areas=a,b] [--target=<id>] [--phases=a,b,c] [--gate=hard] [--summary=text]
                                           create ROADMAP/plans/<slug>.md; tasks join it with plan=<id> phase=<word>
   plan [<area>] [--for=<id>|--plan=<id>] [filters as for list] [--ready] [--with-steps] [--format=md|tsv|ids]
@@ -1021,12 +1022,17 @@ commands["next"] = function(ctx)
     ctx.warn("error: --format must be text or json")
     return 2
   end
+  if ctx.eo.today ~= nil and not model.is_date(ctx.eo.today) then
+    ctx.warn("error: --today must be YYYY-MM-DD, got '" .. tostring(ctx.eo.today) .. "'")
+    return 2
+  end
   if format == "json" then
     return contract_cli.next_json(ctx, area, count, actor)
   end
   local pick, err = next_pick.pick_from_vault({
     root = ctx.eo.root,
     today = ctx.eo.today,
+    reminders = true,
     area = area,
     actor = actor,
     n = count - 1,
