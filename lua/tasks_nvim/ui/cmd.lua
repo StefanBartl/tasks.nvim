@@ -1102,6 +1102,11 @@ function M.task_new_form(given)
   for _, a in ipairs(vault.areas(root)) do
     areas[#areas + 1] = a.name
   end
+  if #areas == 0 then
+    -- No area can pass, so say so before a form is typed that cannot be submitted (it still opens: the report
+    -- at the top of the submit says the same).
+    notify.warn(require("tasks_nvim.form").no_areas_message(root))
+  end
   local ticks = {}
   for _, key in ipairs({ "kind", "prio", "effort", "value", "actor", "severity", "status" }) do
     ticks[key] = given[key]
@@ -1126,13 +1131,15 @@ function M.task_new_form(given)
     end,
     on_submit = function(values, buf)
       -- "No" is first (the dialog starts on it); a dismissed dialog (Esc, `q`) answers nil, which is not "No".
-      local ask = M.chooser or confirm.choose
-      ask(
+      -- `confirm.choose` itself, not `M.chooser`: that seam stands in for the dialog of `estimate --walk`, and a
+      -- scripted walk must not answer this question with its own choices.
+      confirm.choose(
         "Attach assets (screenshots, logs) to the new task?\n\nYes makes a folder task with an assets/ folder and opens the file explorer on it.\nEsc goes back to the form: nothing is created.",
         { "No", "Yes, attach assets" },
         function(picked)
-          -- Esc is "not now", not "no assets": nothing is written and the form stays open with what was typed.
-          if picked == nil then
+          -- Only the two answers create anything. Esc, `q`, a dialog that could not open: "not now" -- nothing is
+          -- written and the form stays open with what was typed.
+          if picked ~= 1 and picked ~= 2 then
             notify.info("task not created: the form is still open")
             return
           end
