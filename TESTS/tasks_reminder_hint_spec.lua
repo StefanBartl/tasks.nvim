@@ -69,6 +69,11 @@ return function(H)
     "1 reminder due (1 of them finished: lib.nvim/old-done; `:Tasks open <id>`)",
     "only finished ones: `list --reminders` would show nothing, so it is not pointed at"
   )
+  local hostile = hint.message(0, 1, { ids = { "lib.nvim/x\27]0;title\7y\n" }, command = true })
+  lacks(hostile, "\27", "a file name with an escape sequence does not reach the line as one")
+  lacks(hostile, "\7")
+  lacks(hostile, "\n")
+  has(hostile, "lib.nvim/x ]0;title y")
   has(
     hint.message(0, 5, { ids = { "a/1", "a/2", "a/3", "a/4", "a/5" }, command = true }),
     "5 reminders due (5 of them finished: a/1, a/2, a/3 +2 more;"
@@ -161,18 +166,25 @@ return function(H)
   vim.defer_fn = function(fn, ms)
     timers[#timers + 1] = { fn = fn, ms = ms }
   end
+  local uis = {}
   vim.api.nvim_list_uis = function()
-    return {}
+    return uis
   end
+  vault.set_root(root)
+  lines = {}
   hint.schedule()
-  eq(#timers, 0, "no UI: no timer")
-  vim.api.nvim_list_uis = function()
-    return { {} }
-  end
+  eq(#timers, 1, "the timer is set before any UI is there (an embedded UI attaches later)")
+  eq(timers[1].ms, 3000)
+  timers[1].fn()
+  vim.wait(100, function()
+    return false
+  end)
+  eq(#lines, 0, "no UI when the timer fires (headless): no line")
+  uis = { {} }
+  timers = {}
   hint.schedule()
   eq(#timers, 1, "a UI: one timer")
   eq(timers[1].ms, 3000)
-  vault.set_root(root)
   lines = {}
   config.merge({ reminders = { on_start = false } })
   timers[1].fn()

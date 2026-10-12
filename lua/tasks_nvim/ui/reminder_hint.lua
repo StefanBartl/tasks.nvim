@@ -151,7 +151,9 @@ function M.message(open, done, extra)
   local text = ("%d reminder%s due"):format(total, total == 1 and "" or "s")
   if done > 0 then
     local ids = extra.ids or {}
-    local named = vim.list_slice(ids, 1, NAMED_MAX)
+    local fsio = require("tasks_nvim.fsio")
+    -- an id is a file name of the vault: nothing in it reaches the message line as a control character
+    local named = vim.tbl_map(fsio.clean, vim.list_slice(ids, 1, NAMED_MAX))
     local who = ""
     if #named > 0 then
       who = ": " .. table.concat(named, ", ")
@@ -228,10 +230,15 @@ end
 ---@param delay_ms? integer  # Default 3000.
 ---@return nil
 function M.schedule(delay_ms)
-  if announced or #vim.api.nvim_list_uis() == 0 then
+  if announced then
     return
   end
   vim.defer_fn(function()
+    -- The UI is asked when the timer fires, not when it is set: a GUI that starts Neovim with `--embed` attaches after
+    -- `init.lua` has run, and would never get the hint otherwise. Without one (headless) nothing is said.
+    if #vim.api.nvim_list_uis() == 0 then
+      return
+    end
     -- Read again: a later `setup()` may have turned the hint off since this timer was set.
     if require("tasks_nvim.config").get().reminders.on_start then
       M.announce_in_steps()

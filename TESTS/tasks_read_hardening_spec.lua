@@ -272,6 +272,28 @@ return function(H)
     eq(H.read(elsewhere .. "/2026-01-02_stolen.md") ~= nil, true, "the target is still there")
   end
 
+  -- ── a finished folder task whose file is a link is not searched for reminders ───────
+  do
+    local root = F.vault(H)
+    local due = { { "title", "Stolen" }, { "status", "done" }, { "remind", "2020-01-01" } }
+    local secret = H.tmpdir() .. "/secret-finished.md"
+    H.write(secret, F.text(due))
+    local folder = root .. "/lib.nvim/Backlog/TASKS/2026-01-02_linked"
+    vim.fn.mkdir(folder, "p")
+    if link(secret, folder .. "/2026-01-02_linked.md", false) then
+      local found = assert(scan.backlog_reminders({ root = root }))
+      eq(#found, 0, "the file behind the link is not read, so its reminder is not found")
+      local snap = assert(contract.snapshot({ root = root }))
+      eq(#snap.reminders, 0, "and the snapshot lists nothing of it")
+      unlink(folder .. "/2026-01-02_linked.md")
+      eq(H.read(secret) ~= nil, true, "the target is still there")
+    else
+      print(
+        "tasks_read_hardening_spec: file symlinks are not allowed here; the linked finished-task case is skipped"
+      )
+    end
+  end
+
   -- ── a linked plans folder that leaves the vault is not read ─────────────────
   do
     local root = F.vault(H)
