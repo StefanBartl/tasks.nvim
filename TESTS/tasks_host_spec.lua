@@ -9,6 +9,24 @@ return function(H)
   local fixture = dofile(here .. "/contract_fixture.lua")
   local api = require("tasks_nvim.api")
   local host = require("tasks_nvim.host")
+  local contract = require("tasks_nvim.contract")
+
+  -- Every document is stamped with `generated_at`, to the second: two calls that straddle a second boundary differ in
+  -- that one field only. The clock is the engine's own seam; pin it, so "byte for byte" is a stable claim.
+  local real_clock = contract.clock
+  contract.clock = function()
+    return "2026-01-01T00:00:00Z"
+  end
+
+  ---A line of the child's output with the stamp blanked: the child has its own clock, which the seam cannot reach.
+  ---@param line any
+  ---@return any
+  local function unstamp(line)
+    if type(line) ~= "string" then
+      return line
+    end
+    return (line:gsub('"generated_at":"[^"]*"', '"generated_at":"-"'))
+  end
 
   local root = fixture.build(H)
   local real_vault = vim.env.TASKS_VAULT
@@ -85,9 +103,13 @@ return function(H)
     lines[#lines + 1] = l
   end
   eq(lines[1], "ready\t1")
-  eq(lines[2], "1\t" .. api.call("hello", nil, {}), "hello through the child")
-  eq(lines[3], host.handle("2\ttask\t" .. '{"id":"lib.nvim/second-one"}'), "task through the child")
-  eq(lines[4], host.handle("3\tnext\t" .. '{"n":1}'), "next through the child")
+  eq(unstamp(lines[2]), unstamp("1\t" .. api.call("hello", nil, {})), "hello through the child")
+  eq(
+    unstamp(lines[3]),
+    unstamp(host.handle("2\ttask\t" .. '{"id":"lib.nvim/second-one"}')),
+    "task through the child"
+  )
+  eq(unstamp(lines[4]), unstamp(host.handle("3\tnext\t" .. '{"n":1}')), "next through the child")
   eq(#lines, 4, "nothing else on stdout")
   has(child.stderr, "not a request")
 
@@ -111,4 +133,5 @@ return function(H)
   has(out, "2\t{")
 
   vim.env.TASKS_VAULT = real_vault
+  contract.clock = real_clock
 end
