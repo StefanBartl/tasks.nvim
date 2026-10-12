@@ -46,7 +46,7 @@
     "listed": 14,
     "unlisted": 2
   },
-  "digest": "sha256:746b785f4d8ea572",
+  "digest": "sha256:f78ebd66c9d4e746",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -150,6 +150,16 @@
     }
   ],
   "plugin": "tasks.nvim",
+  "reminders": [
+    {
+      "area": "lib.nvim",
+      "done_in": "lib.nvim@abc1234",
+      "etag": "sha256:d0f6107e1c7c4329",
+      "id": "lib.nvim/old-done",
+      "remind": "2026-02-01",
+      "title": "Old and done"
+    }
+  ],
   "rev": "rev:6a1aa5",
   "schema": 1,
   "tasks": [

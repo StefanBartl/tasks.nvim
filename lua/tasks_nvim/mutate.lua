@@ -923,7 +923,14 @@ function M.set(id, patch, opts)
   end
   local task, ferr = scan.find(id, { root = root })
   if not task then
-    return nil, ferr
+    -- A reminder is bookkeeping, not a change of what was finished: it may be set and taken away on a finished task,
+    -- and nothing else may.
+    local only_remind = next(patch) == "remind" and next(patch, "remind") == nil
+    local finished = only_remind and scan.find_done(id, { root = root }) or nil
+    if not finished then
+      return nil, ferr
+    end
+    task = finished
   end
   local today = opts.today or model.today()
   if not model.is_date(today) then
@@ -977,7 +984,10 @@ function M.set(id, patch, opts)
   for _, kv in ipairs(pairs_) do
     keys[#keys + 1] = kv[1]
   end
-  pairs_[#pairs_ + 1] = { "updated", today }
+  -- the day a finished task was finished is not the day its reminder was set
+  if task.location ~= "backlog" then
+    pairs_[#pairs_ + 1] = { "updated", today }
+  end
   -- Under the lock: the text is read again (nobody else can change it now) and the preconditions are checked against
   -- THAT text; `fm.update` then patches only these keys, so a second process changing OTHER keys of the same task at
   -- the same moment is not undone.
@@ -1035,7 +1045,7 @@ function M.set(id, patch, opts)
       end)
     end
   end
-  if opts.index ~= false then
+  if opts.index ~= false and task.location ~= "backlog" then
     result.index, result.index_err = index.write_area(task.area, { root = root })
   end
   return result, nil

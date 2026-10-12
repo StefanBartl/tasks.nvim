@@ -640,6 +640,23 @@
             "$ref": "#/$defs/Area"
           }
         },
+        "reminders": {
+          "description": "Finished tasks that carry a reminder (`remind`), the oldest date first, at most 100. An open task's reminder is on its entry; a finished task is not in `tasks`, and a reminder is most often set when a task is finished.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "area", "title", "remind"],
+            "properties": {
+              "id": { "type": "string" },
+              "area": { "type": "string" },
+              "title": { "type": "string" },
+              "remind": { "$ref": "#/$defs/Date" },
+              "etag": { "$ref": "#/$defs/Etag" },
+              "done_in": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
         "unlisted": {
           "description": "Task files in `ROADMAP/tasks` that are not open work: a finished task left there, a status nobody knows.",
           "type": "array",

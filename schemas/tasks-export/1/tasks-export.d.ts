@@ -60,6 +60,17 @@ export type Snapshot = Head & {
   };
   areas: Area[];
   /**
+   * Finished tasks that carry a reminder (`remind`), the oldest date first, at most 100. An open task's reminder is on its entry; a finished task is not in `tasks`, and a reminder is most often set when a task is finished.
+   */
+  reminders?: {
+    id: string;
+    area: string;
+    title: string;
+    remind: Date;
+    etag?: Etag;
+    done_in?: string;
+  }[];
+  /**
    * Task files in `ROADMAP/tasks` that are not open work: a finished task left there, a status nobody knows.
    */
   unlisted: {
@@ -132,6 +143,14 @@ export type Snapshot = Head & {
   };
 };
 /**
+ * A calendar day, YYYY-MM-DD.
+ */
+export type Date = string;
+/**
+ * The version of a file: `sha256:` and 16 hex digits of the hash of its bytes.
+ */
+export type Etag = string;
+/**
  * The statuses of a task in `ROADMAP/tasks`. `done` is only seen on a task that was left there after it was finished (listed under `unlisted`).
  */
 export type Status = "doing" | "decision" | "blocked" | "open" | "parked" | "done";
@@ -142,15 +161,7 @@ export type Kind = "feature" | "task" | "bug" | "idea" | "research";
 export type Effort = string;
 export type Actor = "cdx" | "me" | "pair";
 export type Severity = "low" | "medium" | "high" | "critical";
-/**
- * A calendar day, YYYY-MM-DD.
- */
-export type Date = string;
 export type Category = "bug" | "security" | "performance" | "docs" | "ruleset";
-/**
- * The version of a file: `sha256:` and 16 hex digits of the hash of its bytes.
- */
-export type Etag = string;
 /**
  * tasks.list: one page of tasks in plan order.
  */

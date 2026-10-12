@@ -114,6 +114,48 @@ return function(H)
     eq(due_on("2026-02-01"), { "lib.nvim/beta" })
   end
 
+  -- ── a finished task: the reminder is seen and can be taken away, nothing else of it can change ──
+  local reminders = snap.reminders
+  eq(#reminders, 1, "the finished task with a reminder is in the snapshot")
+  eq(reminders[1].id, "lib.nvim/old-done")
+  eq(reminders[1].remind, "2026-02-01")
+  ok(reminders[1].etag ~= nil, "with the version of its file")
+  local done_path = root .. "/lib.nvim/Backlog/TASKS/2026-01-02_old-done.md"
+  local before = H.read(done_path)
+  local _, refused_err = mutate.set(
+    "lib.nvim/old-done",
+    { prio = 1 },
+    { root = root, index = false }
+  )
+  has(refused_err, "no such open task")
+  eq(H.read(done_path), before, "a finished task is not changed by anything but its reminder")
+  local moved = mutate.set(
+    "lib.nvim/old-done",
+    { remind = "+10d" },
+    { root = root, today = "2026-03-01", index = false }
+  )
+  ok(moved ~= nil and moved.changed, "a reminder is set on a finished task")
+  local after = H.read(done_path)
+  has(after, "remind: 2026-03-11")
+  ok(
+    after:find("updated: " .. (before:match("updated: (%d%d%d%d%-%d%d%-%d%d)") or "?"), 1, true),
+    "`updated` stays"
+  )
+  local via_ops = vim.json.decode(
+    (
+      api.call(
+        "ops",
+        vim.json.encode({
+          ops = { { op = "set", id = "lib.nvim/old-done", patch = { remind = vim.NIL } } },
+        }),
+        { root = root }
+      )
+    )
+  )
+  eq(via_ops.ok, true, vim.inspect(via_ops))
+  ok(not H.read(done_path):find("remind:", 1, true), "taken away through ops")
+  eq(#vim.json.decode((api.call("snapshot", nil, { root = root }))).reminders, 0)
+
   -- ── finishing with a reminder ─────────────────────────────────────────
   local pv = vim.json.decode(
     (api.call("done_preview", '{"params":{"id":"lib.nvim/gamma"}}', { root = root }))

@@ -172,7 +172,7 @@ function M.build(H)
   )
   H.write(
     root .. "/lib.nvim/Backlog/TASKS/2026-01-02_old-done.md",
-    "---\ntitle: Old and done\nstatus: done\ndone_in: lib.nvim@abc1234\ncreated: "
+    "---\ntitle: Old and done\nstatus: done\ndone_in: lib.nvim@abc1234\nremind: 2026-02-01\ncreated: "
       .. DATE
       .. "\nupdated: "
       .. DATE
