@@ -383,7 +383,12 @@ local function do_set(op, ctx)
   end
   local task, ferr = scan.find(id, { root = ctx.root })
   if not task then
-    return failure(ctx, ferr)
+    -- A reminder may be set and taken away on a finished task (it is bookkeeping); nothing else of it may change.
+    local only_remind = next(op.patch) == "remind" and next(op.patch, "remind") == nil
+    task = only_remind and scan.find_done(id, { root = ctx.root }) or nil
+    if not task then
+      return failure(ctx, ferr)
+    end
   end
   for _, kv in ipairs(pairs_) do
     -- first the characters, then the length: `strchars` cannot take a NUL byte
@@ -446,7 +451,10 @@ local function do_set(op, ctx)
     changed_ids = (r.changed and not ctx.dry) and { r.id } or {},
   }
   if r.changed and not ctx.dry then
-    ctx.touched[task.area] = true
+    -- the overview of an area lists the open tasks: a finished one is not in it
+    if task.location ~= "backlog" then
+      ctx.touched[task.area] = true
+    end
     entry.inverse = json.object({
       op = "set",
       id = r.id,

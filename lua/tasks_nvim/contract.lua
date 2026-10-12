@@ -223,6 +223,37 @@ local function etag_of(path)
   return fsio.etag(text)
 end
 
+---The most reminders of finished tasks a snapshot carries (the oldest dates first).
+M.REMINDERS_MAX = 100
+
+---The finished tasks that carry a reminder. A task that is done leaves the open list, and a reminder is most often set
+---exactly then ("look at the result in a week"): without this the date would be written and never seen again.
+---@param root string
+---@return table[] reminders  `{ id, area, title, remind, etag, done_in? }`, the oldest date first
+local function done_reminders(root)
+  local out = {}
+  for _, task in ipairs(scan.backlog_reminders({ root = root }) or {}) do
+    out[#out + 1] = json.object({
+      id = task.id,
+      area = task.area,
+      title = task.title,
+      remind = task.remind,
+      etag = etag_of(task.path),
+      done_in = task.done_in,
+    })
+  end
+  table.sort(out, function(a, b)
+    if a.remind ~= b.remind then
+      return a.remind < b.remind
+    end
+    return a.id < b.id
+  end)
+  while #out > M.REMINDERS_MAX do
+    out[#out] = nil
+  end
+  return out
+end
+
 -- ── entries ──────────────────────────────────────────────────────────────────
 
 ---@param root string
@@ -553,6 +584,7 @@ function M.snapshot(opts)
   })
   doc.areas = areas_of(view)
   doc.unlisted = view.unlisted
+  doc.reminders = done_reminders(view.root)
   doc.plan = json.object(plan_head(view))
   doc.plans = vim.tbl_map(function(f)
     return {

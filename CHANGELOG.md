@@ -11,6 +11,9 @@ the version is not tagged yet (the repository is not published).
   most a year; the file always holds the date), `remind=` takes it away, `done --remind=7d` and the `done` operation's
   `remind` set it on the finished task, `list --reminders` lists those that are due. The entry of the contract carries
   the date (`remind`), not whether it is due, so that a digest does not change with the day. Capability `reminders`.
+  A reminder is most often set when a task is finished, and a finished task is not in `tasks`: the snapshot carries
+  `reminders` (the finished tasks with a reminder, oldest date first, at most 100), and `set` / the `set` operation may
+  set and take away `remind` on a finished task (nothing else of it).
 - The persistent engine `scripts/tasks-host.lua` (`tasks_nvim.host`): `nvim -l scripts/tasks-host.lua` answers the
   machine contract over stdin and stdout, one line per question, until its input ends; the documents are those of
   `api.call`, byte for byte, and a question costs milliseconds instead of a process start. Line protocol in

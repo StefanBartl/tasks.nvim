@@ -352,6 +352,95 @@ function M.find(id, opts)
     nil
 end
 
+-- What the last look at a finished file found: `path -> { sec, nsec, size, marked }`. A finished file hardly ever
+-- changes, so a second look is a stat.
+local reminder_stamp = {}
+
+---A file this young may still change within the resolution of its timestamp without its stat moving (the racy-file
+---rule `model` keeps for the parse cache): it is not trusted from the stamp.
+local STAMP_RACY_SECONDS = 2
+
+---The paths of the finished tasks of one `Backlog/<bucket>` folder: `<file>.md` and `<dir>/<dir>.md` (a folder task).
+---Cheaper than a recursive walk: nothing is read here.
+---@param dir string
+---@return { path: string, folder: boolean }[]
+local function bucket_files(dir)
+  local out = {}
+  local uv = vim.uv or vim.loop
+  local handle = uv.fs_scandir(dir)
+  if not handle then
+    return out
+  end
+  while true do
+    local name, kind = uv.fs_scandir_next(handle)
+    if not name then
+      break
+    end
+    if kind == "file" and name:match("%.md$") and name ~= "README.md" then
+      out[#out + 1] = { path = dir .. "/" .. name, folder = false }
+    elseif kind == "directory" and not name:match("^%.") then
+      out[#out + 1] = { path = dir .. "/" .. name .. "/" .. name .. ".md", folder = true }
+    end
+  end
+  return out
+end
+
+---The finished tasks that carry a `remind:` line, of every area. The files are not parsed to find them: one that has
+---not changed since the last look costs a stat, a new or changed one is searched for the line first, and only a file
+---that has it is parsed.
+---@param opts? Tasks.ScanOpts
+---@return Tasks.Task[]|nil tasks
+---@return string|nil err
+function M.backlog_reminders(opts)
+  local root, err = resolve_root(opts)
+  if not root then
+    return nil, err or "vault not found"
+  end
+  local uv = vim.uv or vim.loop
+  local now = os.time()
+  local out = {}
+  for _, area in ipairs(vault.areas(root)) do
+    for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
+      local dir = vault.backlog_dir(root, area.name, bucket)
+      for _, entry in ipairs(bucket_files(dir)) do
+        local st = uv.fs_stat(entry.path)
+        if st and st.type == "file" then
+          local stamp = reminder_stamp[entry.path]
+          local marked
+          if
+            stamp
+            and stamp.sec == st.mtime.sec
+            and stamp.nsec == st.mtime.nsec
+            and stamp.size == st.size
+          then
+            marked = stamp.marked
+          else
+            local text = fsio.is_link(entry.path) and nil or fsio.read(entry.path)
+            -- the frontmatter's own line: never the first line of the file (that is the fence)
+            marked = text ~= nil and text:find("\nremind:", 1, true) ~= nil
+            if now - st.mtime.sec >= STAMP_RACY_SECONDS then
+              reminder_stamp[entry.path] =
+                { sec = st.mtime.sec, nsec = st.mtime.nsec, size = st.size, marked = marked }
+            else
+              reminder_stamp[entry.path] = nil
+            end
+          end
+          if marked then
+            local task = model.from_file(
+              entry.path,
+              { area = area.name, location = "backlog", folder = entry.folder }
+            )
+            if task.meta.status ~= nil and model.is_date(task.remind) then
+              out[#out + 1] = task
+            end
+          end
+        end
+      end
+    end
+  end
+  return out, nil
+end
+
 ---The finished task `<area>/<slug>` from `Backlog/`, whatever its date prefix.
 ---@param id string
 ---@param opts? Tasks.ScanOpts
