@@ -32,6 +32,7 @@ G.cases = {
   { name = "snapshot", method = "snapshot" },
   { name = "list-page", method = "list", request = '{"params":{"limit":5,"offset":0}}' },
   { name = "task-alpha", method = "task", request = '{"params":{"id":"lib.nvim/alpha"}}' },
+  { name = "bodies-page", method = "bodies", request = '{"params":{"limit":3,"offset":1}}' },
   { name = "next", method = "next", request = '{"params":{"n":3}}' },
   { name = "areas", method = "areas" },
   { name = "error-unsupported-schema", method = "list", request = '{"schema":2}' },

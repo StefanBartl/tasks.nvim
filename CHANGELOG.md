@@ -7,6 +7,9 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- `bodies` (`tasks.bodies`), additive to `tasks-export/1`: the text of the open tasks, a page at a time or by `ids`, with
+  the `etag` of each and the `rev` of the snapshot of the same state, for a reader that builds a full-text index.
+  Capability `bodies`.
 - The machine contract `tasks-export/1` ([docs/CONTRACT.md](docs/CONTRACT.md)), read only: the documents `hello`,
   `snapshot`, `list`, `task`, `next`, `areas` and `error`, each with `rev` / `digest` and a version tag (`etag`) per
   task; one door `tasks_nvim.api.call` that never throws; `tasks call <method> --params=<json>`, `--capabilities`,

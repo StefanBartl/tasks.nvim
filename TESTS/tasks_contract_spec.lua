@@ -291,6 +291,29 @@ return function(H)
   eq({ #cut.body, cut.body_truncated }, { 10, true }, "a long body is cut and says so")
   golden("task-alpha")
 
+  -- ── bodies ──
+  local bodies = call("bodies", { limit = 3, offset = 1 })
+  eq(bodies.kind, "tasks.bodies")
+  eq({ #bodies.items, bodies.next_offset, bodies.total }, { 3, 4, snap.counts.listed })
+  eq(bodies.rev, snap.rev, "the rev of the snapshot: both documents are one state")
+  local all_ids = {}
+  for _, item in ipairs(call("bodies", { limit = 100 }).items) do
+    all_ids[item.id] = item
+  end
+  has(all_ids["lib.nvim/alpha"].body, "The body of alpha.")
+  eq(all_ids["lib.nvim/alpha"].etag, one.task.etag, "the etag is the one of the task")
+  local named = call("bodies", { ids = { "lib.nvim/alpha", "nope.nvim/missing" } })
+  eq({ #named.items, named.items[1].id, named.next_offset }, { 1, "lib.nvim/alpha", nil })
+  local page_bytes = contract.BODIES_PAGE_BYTES
+  contract.BODIES_PAGE_BYTES = 30
+  local early = call("bodies", { limit = 100 })
+  contract.BODIES_PAGE_BYTES = page_bytes
+  eq(early.next_offset, #early.items, "a page that holds as many bytes as it may ends early and says where to go on")
+  eq(#early.items < early.total, true)
+  local bad_limit = contract.bodies({ limit = 0 }, { root = root })
+  eq(bad_limit, nil)
+  golden("bodies-page")
+
   -- ── next ──
   local nxt = call("next", { n = 3 })
   eq(nxt.kind, "tasks.next")

@@ -60,6 +60,12 @@ M.METHODS = {
       return contract.task(params.id, opts)
     end,
   },
+  bodies = {
+    params = { ids = "string_list", limit = "integer", offset = "integer" },
+    run = function(params, opts)
+      return contract.bodies(params, opts)
+    end,
+  },
   next = {
     params = { n = "integer", actor = "string", area = "string" },
     run = function(params, opts)

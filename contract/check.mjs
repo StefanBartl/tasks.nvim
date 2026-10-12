@@ -129,6 +129,8 @@ mutate(
   (d) => (d.code = "oops"),
 );
 mutate("a list page without its total", "list-page", (d) => delete d.total);
+mutate("a body without its etag", "bodies-page", (d) => delete d.items[0].etag);
+mutate("a body page with a field nobody defined", "bodies-page", (d) => (d.items[0].path = "x"));
 mutate(
   "an operation outcome nobody defined",
   "result-run",

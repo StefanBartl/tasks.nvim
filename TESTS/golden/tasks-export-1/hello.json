@@ -1,6 +1,7 @@
 {
   "capabilities": [
     "areas",
+    "bodies",
     "done_preview",
     "etag",
     "hello",

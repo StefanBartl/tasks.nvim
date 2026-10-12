@@ -1,0 +1,41 @@
+{
+  "digest": "sha256:7f0fb97f7f19036d",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "incomplete": [],
+  "items": [
+    {
+      "body": "\nThe body of alpha.\n\n## Plan\n\n- [x] 1. first\n- [ ] 2. second\n- [ ] 3. third (dropped)\n",
+      "body_truncated": false,
+      "etag": "sha256:e1e83d9a74e1f427",
+      "id": "lib.nvim/alpha"
+    },
+    {
+      "body": "\nA summary line for alpha-twin.\n",
+      "body_truncated": false,
+      "etag": "sha256:c337ac829c9ce237",
+      "id": "lib.nvim/alpha-twin"
+    },
+    {
+      "body": "\nA summary line for order-a.\n",
+      "body_truncated": false,
+      "etag": "sha256:fa1178ce10a3ef46",
+      "id": "lib.nvim/order-a"
+    }
+  ],
+  "kind": "tasks.bodies",
+  "limit": 3,
+  "next_offset": 4,
+  "offset": 1,
+  "plugin": "tasks.nvim",
+  "rev": "rev:b010ad",
+  "schema": 1,
+  "total": 14,
+  "vault": {
+    "id": "vault"
+  }
+}

@@ -51,6 +51,7 @@ M.ENGINE_VERSION = "0.1.0-dev"
 ---@type string[]
 M.CAPABILITIES = {
   "areas",
+  "bodies",
   "done_preview",
   "etag",
   "hello",
@@ -716,6 +717,119 @@ function M.task(id, opts)
     return { n = s.n, text = s.text, ticked = s.done == true, dropped = s.dropped == true }
   end, found.plan_steps and found.plan_steps.items or {})
   return seal(doc, rev_of(view, { doc.task })), nil
+end
+
+---The most body bytes one page of `bodies` carries (a document stays far below `MAX_DOC_BYTES`, also once escaped).
+M.BODIES_PAGE_BYTES = 2 * 1024 * 1024
+
+---The text of many tasks, for a reader that searches it: `{ id, etag, body, body_truncated }` for the open tasks in plan
+---order, a page at a time (`offset`, `limit`; the page ends early when it holds `BODIES_PAGE_BYTES`, `next_offset` says
+---where to go on), or for the tasks named in `ids` (an id that is not there is left out). The `rev` is that of the
+---snapshot of the same vault, so that a reader can tell the two documents come from one state. A body is cut to
+---`LIMITS.body_bytes` and says so, as in `tasks.task`; it is untrusted text.
+---@param params? { ids?: string[], offset?: integer, limit?: integer }
+---@param opts? { root?: string, view?: Tasks.ContractView }
+---@return table|nil doc
+---@return Tasks.ContractError|string|nil err
+function M.bodies(params, opts)
+  params = params or {}
+  local limit = params.limit or M.LIMITS.list_items
+  local offset = params.offset or 0
+  if
+    type(limit) ~= "number"
+    or limit < 1
+    or limit > M.LIMITS.list_items
+    or limit ~= math.floor(limit)
+  then
+    return nil,
+      {
+        code = "invalid_argument",
+        message = ("limit must be 1..%d"):format(M.LIMITS.list_items),
+        retryable = false,
+      }
+  end
+  if type(offset) ~= "number" or offset < 0 or offset ~= math.floor(offset) then
+    return nil,
+      {
+        code = "invalid_argument",
+        message = "offset must be a whole number of 0 or more",
+        retryable = false,
+      }
+  end
+  if params.ids ~= nil and #params.ids > M.LIMITS.list_items then
+    return nil,
+      {
+        code = "invalid_argument",
+        message = ("ids holds at most %d ids"):format(M.LIMITS.list_items),
+        retryable = false,
+      }
+  end
+  local view, err = opts and opts.view or nil, nil
+  if not view then
+    view, err = M.view(opts)
+  end
+  if not view then
+    return nil, err
+  end
+
+  local ordered = vim.list_slice(view.open, 1)
+  table.sort(ordered, function(a, b)
+    return (view.rank[a.id] or math.huge) < (view.rank[b.id] or math.huge)
+  end)
+  local chosen = ordered
+  if params.ids ~= nil then
+    local want = {}
+    for _, id in ipairs(params.ids) do
+      want[id] = true
+    end
+    chosen = {}
+    for _, t in ipairs(ordered) do
+      if want[t.id] then
+        chosen[#chosen + 1] = t
+      end
+    end
+  end
+
+  local items, bytes, last = {}, 0, offset
+  for i = offset + 1, math.min(offset + limit, #chosen) do
+    local t = chosen[i]
+    local text = not fsio.is_link(t.path) and fsio.read(t.path) or nil
+    local body = ""
+    if text then
+      local parsed = require("lib.nvim.markdown.frontmatter").parse(text)
+      body = parsed and parsed.body or text
+    end
+    local truncated = #body > M.LIMITS.body_bytes
+    if truncated then
+      body = body:sub(1, M.LIMITS.body_bytes)
+    end
+    if #items > 0 and bytes + #body > M.BODIES_PAGE_BYTES then
+      break
+    end
+    bytes = bytes + #body
+    last = i
+    items[#items + 1] = json.object({
+      id = t.id,
+      etag = t.etag or etag_of(t.path),
+      body = body,
+      body_truncated = truncated,
+    })
+  end
+
+  local entries = {}
+  for _, t in ipairs(view.open) do
+    entries[#entries + 1] = { id = t.id, etag = t.etag or etag_of(t.path) }
+  end
+  local doc = M.head("tasks.bodies", view.root)
+  doc.total = #chosen
+  doc.offset = offset
+  doc.limit = limit
+  doc.items = json.memo(items)
+  if last < #chosen then
+    doc.next_offset = last
+  end
+  doc.incomplete = view.errors
+  return seal(doc, rev_of(view, entries)), nil
 end
 
 ---What to start next.

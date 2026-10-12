@@ -14,6 +14,9 @@
       "$ref": "#/$defs/List"
     },
     {
+      "$ref": "#/$defs/Bodies"
+    },
+    {
       "$ref": "#/$defs/TaskDocument"
     },
     {
@@ -954,6 +957,83 @@
           "type": "integer",
           "minimum": 1,
           "description": "Absent on the last page."
+        },
+        "incomplete": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "Bodies": {
+      "description": "tasks.bodies: the text of many tasks, a page at a time, for a reader that searches it. Its `rev` is that of the snapshot of the same vault.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": [
+        "kind",
+        "rev",
+        "digest",
+        "total",
+        "offset",
+        "limit",
+        "items",
+        "incomplete"
+      ],
+      "properties": {
+        "kind": {
+          "const": "tasks.bodies"
+        },
+        "rev": {
+          "$ref": "#/$defs/Rev"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "etag", "body", "body_truncated"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "etag": {
+                "$ref": "#/$defs/Etag"
+              },
+              "body": {
+                "type": "string",
+                "description": "The file after the frontmatter, untrusted text."
+              },
+              "body_truncated": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "next_offset": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Absent on the last page; where to go on when a page ended early (it holds as many bytes as a page may)."
         },
         "incomplete": {
           "type": "array",

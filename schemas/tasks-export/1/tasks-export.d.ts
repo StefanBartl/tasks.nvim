@@ -3,7 +3,7 @@
 /**
  * tasks-export/1: every document tasks.nvim hands to a machine. One of the kinds below, told apart by `kind`. The engine writes exactly these fields (a field that is not listed fails the contract tests); a reader ignores fields it does not know, because inside one version the contract only grows.
  */
-export type TasksExport = Hello | Snapshot | List | TaskDocument | Next | Areas | DonePreview | Result | Error;
+export type TasksExport = Hello | Snapshot | List | Bodies | TaskDocument | Next | Areas | DonePreview | Result | Error;
 /**
  * tasks.hello: what this engine is and can do. Reads no task.
  */
@@ -164,6 +164,31 @@ export type List = Head & {
   items: TaskEntry[];
   /**
    * Absent on the last page.
+   */
+  next_offset?: number;
+  incomplete: string[];
+};
+/**
+ * tasks.bodies: the text of many tasks, a page at a time, for a reader that searches it. Its `rev` is that of the snapshot of the same vault.
+ */
+export type Bodies = Head & {
+  kind: "tasks.bodies";
+  rev: Rev;
+  digest: Digest;
+  total: number;
+  offset: number;
+  limit: number;
+  items: {
+    id: string;
+    etag: Etag;
+    /**
+     * The file after the frontmatter, untrusted text.
+     */
+    body: string;
+    body_truncated: boolean;
+  }[];
+  /**
+   * Absent on the last page; where to go on when a page ended early (it holds as many bytes as a page may).
    */
   next_offset?: number;
   incomplete: string[];
