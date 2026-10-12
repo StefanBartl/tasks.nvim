@@ -154,7 +154,9 @@ local function apply_list(ctx, unsupported)
       return false
     end
     if not vault.has_area(root, area) then
-      notify.error(("list '%s': '%s' is not an area of the vault"):format(name, area))
+      notify.error(
+        ("list '%s': %s"):format(name, vault.not_an_area_message(area, vault.area_names(root)))
+      )
       return false
     end
   end

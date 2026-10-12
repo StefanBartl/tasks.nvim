@@ -344,6 +344,15 @@ function M.areas(root)
   return out
 end
 
+---The names of `M.areas(root)`.
+---@param root string
+---@return string[]
+function M.area_names(root)
+  return vim.tbl_map(function(a)
+    return a.name
+  end, M.areas(root))
+end
+
 ---Whether `root` holds an entry named exactly `name`. A path lookup is not
 ---that strict: on Windows (and macOS) `stat` finds `LIB.NVIM` and `lib.nvim.`
 ---for the folder `lib.nvim`, so an id typed in the wrong case would write into
@@ -375,6 +384,35 @@ end
 ---@return boolean
 function M.has_area(root, area)
   return type(area) == "string" and is_area_dir(root, area) and M.dir_listed(root, area)
+end
+
+---The areas of `names` that come close to a name that is none: those that start with it first, then those that
+---only contain it (any case), three at most. The name has to be the folder's (`hover.nvim`, not `hover`).
+---@param area string
+---@param names string[]
+---@return string[]
+function M.close_areas(area, names)
+  local starts, within = {}, {}
+  local needle = area:lower()
+  for _, name in ipairs(names) do
+    local at = name:lower():find(needle, 1, true)
+    if at == 1 then
+      starts[#starts + 1] = name
+    elseif at then
+      within[#within + 1] = name
+    end
+  end
+  return vim.list_slice(vim.list_extend(starts, within), 1, 3)
+end
+
+---The report for a name that is no area of the vault, with the areas that come close.
+---@param area string
+---@param names string[] the areas of the vault
+---@return string
+function M.not_an_area_message(area, names)
+  local close = M.close_areas(area, names)
+  local hint = #close > 0 and (" (did you mean: %s?)"):format(table.concat(close, ", ")) or ""
+  return ("'%s' is not an area of the vault%s"):format(area, hint)
 end
 
 return M

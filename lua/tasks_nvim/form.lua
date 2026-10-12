@@ -223,22 +223,7 @@ function M.validate(parsed, areas, root)
   elseif area == "" then
     errors[#errors + 1] = "Area is required"
   elseif areas and not vim.tbl_contains(areas, area) then
-    -- The name has to be the folder's (`hover.nvim`, not `hover`): say which ones come close.
-    -- The ones that start with it come first, then the ones that only contain it.
-    local starts, within = {}, {}
-    local needle = area:lower()
-    for _, name in ipairs(areas) do
-      local at = name:lower():find(needle, 1, true)
-      if at == 1 then
-        starts[#starts + 1] = name
-      elseif at then
-        within[#within + 1] = name
-      end
-    end
-    local close = vim.list_extend(starts, within)
-    close = vim.list_slice(close, 1, 3)
-    local hint = #close > 0 and (" (did you mean: %s?)"):format(table.concat(close, ", ")) or ""
-    errors[#errors + 1] = ("Area '%s' is not an area of the vault%s"):format(area, hint)
+    errors[#errors + 1] = "Area " .. require("tasks_nvim.vault").not_an_area_message(area, areas)
   end
   local title = trim(parsed.title)
   if title == "" then

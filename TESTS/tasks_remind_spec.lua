@@ -61,7 +61,7 @@ return function(H)
   )
   ok(r, tostring(serr))
   has(H.read(root .. "/lib.nvim/ROADMAP/tasks/alpha.md"), "remind: 2026-03-08")
-  r = mutate.set(
+  mutate.set(
     "lib.nvim/alpha",
     { remind = "2026-04-01" },
     { root = root, today = "2026-03-01", index = false }
@@ -73,7 +73,7 @@ return function(H)
     { root = root, index = false }
   )
   has(bad_err, "remind")
-  r = mutate.set(
+  mutate.set(
     "lib.nvim/alpha",
     { remind = mutate.REMOVE },
     { root = root, today = "2026-03-01", index = false }
@@ -141,17 +141,13 @@ return function(H)
     after:find("updated: " .. (before:match("updated: (%d%d%d%d%-%d%d%-%d%d)") or "?"), 1, true),
     "`updated` stays"
   )
-  local via_ops = vim.json.decode(
-    (
-      api.call(
-        "ops",
-        vim.json.encode({
-          ops = { { op = "set", id = "lib.nvim/old-done", patch = { remind = vim.NIL } } },
-        }),
-        { root = root }
-      )
-    )
-  )
+  local via_ops = vim.json.decode((api.call(
+    "ops",
+    vim.json.encode({
+      ops = { { op = "set", id = "lib.nvim/old-done", patch = { remind = vim.NIL } } },
+    }),
+    { root = root }
+  )))
   eq(via_ops.ok, true, vim.inspect(via_ops))
   ok(not H.read(done_path):find("remind:", 1, true), "taken away through ops")
   eq(#vim.json.decode((api.call("snapshot", nil, { root = root }))).reminders, 0)
@@ -181,7 +177,7 @@ return function(H)
     { root = root, today = "2026-03-01" }
   )))
   eq(done.ok, true, vim.inspect(done))
-  local moved = H.read(root .. "/" .. done.results[1].to)
-  has(moved, "remind: 2026-03-15")
-  has(moved, "status: done")
+  local moved_text = H.read(root .. "/" .. done.results[1].to)
+  has(moved_text, "remind: 2026-03-15")
+  has(moved_text, "status: done")
 end
