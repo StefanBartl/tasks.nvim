@@ -27,6 +27,7 @@ local SCHEMA = {
   quick_wins = { min_value = "value", max_effort = "effort" },
   lists = "lists",
   steps = { ask_finish = "boolean" },
+  reminders = { on_start = "boolean" },
   keys = { dashboard = "keymap", dashboard_input = "keymap", form = "keymap" },
 }
 

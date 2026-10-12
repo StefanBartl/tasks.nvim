@@ -7,6 +7,11 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Reminders in Neovim: one line at startup says how many are due (`reminders = { on_start = true }`, deferred, once per
+  session, only with a UI; `false` turns it off), the dashboard's `f` menu has the filter `reminders` ("reminder due"),
+  `:Tasks list --reminders` and `:Tasks tasks --reminders` filter the same way, and the headless `next` lists the due
+  ones (`remind: <id> <title> <date>`, and a line with the number of finished tasks that carry one).
+
 - A reminder, `remind: YYYY-MM-DD`: when to look at a task again. `set <id> remind=+7d` (a date, `+<n>d` or `+<n>w`, at
   most a year; the file always holds the date), `remind=` takes it away, `done --remind=7d` and the `done` operation's
   `remind` set it on the finished task, `list --reminders` lists those that are due. The entry of the contract carries

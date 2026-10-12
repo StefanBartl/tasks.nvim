@@ -21,6 +21,9 @@
 ---@class Tasks.StepsConfig
 ---@field ask_finish boolean  In a task buffer: when the LAST open step of `## Plan` is ticked, ask whether to finish the task (off by default: it adds an autocommand on task buffers).
 
+---@class Tasks.RemindersConfig
+---@field on_start boolean  One line at startup when reminders (`remind:`) are due (a moment later, once per session, only with a UI; `false` turns it off).
+
 ---@class Tasks.QuickWinsConfig
 ---@field min_value integer   A task is a quick win with at least this value (1-5) ...
 ---@field max_effort string   ... and at most this effort (`XS`..`XL` or days like `0.5d`); both must be written on the task.
@@ -52,6 +55,7 @@
 ---@field quick_wins Tasks.QuickWinsConfig
 ---@field lists table<string, Tasks.ListDef>  Named lists (a filter combination plus a sort order): `{ ["my-list"] = { effort = "<=S", value = ">=4", sort = "roi" } }`. See `tasks_nvim.lists`.
 ---@field steps Tasks.StepsConfig
+---@field reminders Tasks.RemindersConfig
 ---@field keys Tasks.KeysConfig
 
 ---@type Tasks.Opts
@@ -66,6 +70,7 @@ return {
   quick_wins = { min_value = 4, max_effort = "S" },
   lists = {},
   steps = { ask_finish = false },
+  reminders = { on_start = true },
   keys = {
     dashboard = {
       status = "s",

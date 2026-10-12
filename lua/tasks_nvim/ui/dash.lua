@@ -493,6 +493,12 @@ local function set_filter(state, after)
       after()
       return
     end
+    if dim == "reminders" then
+      state.filter = core.set_dim(state.filter, "reminders", not state.filter.reminders or nil)
+      persist(state)
+      after()
+      return
+    end
     if dim == "unestimated" then
       state.filter = core.set_dim(state.filter, "unestimated", not state.filter.unestimated or nil)
       persist(state)

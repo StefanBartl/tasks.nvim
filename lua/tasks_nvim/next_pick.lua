@@ -52,6 +52,7 @@ local M = {}
 ---@field open { area: integer, vault: integer }
 ---@field empty? Tasks.NextEmpty
 ---@field incomplete? string[]                  # Folders that could not be read: the answer may be incomplete.
+---@field reminders? { open: Tasks.Task[], done: integer }  # Reminders that are due: the open tasks (oldest date first) and how many finished tasks carry one (`pick_from_vault` only).
 
 ---@class Tasks.NextEmpty
 ---@field kind "all_done"|"nothing_startable"|"only_cdx"
@@ -235,8 +236,38 @@ function M.pick(opts)
   return result
 end
 
+---The reminders that are due on `today`: the open tasks, the oldest date first, and the number of finished ones.
+---@param open Tasks.Task[]
+---@param finished Tasks.Task[]|nil  # The finished tasks that carry a reminder.
+---@param today? string  # `YYYY-MM-DD` (default: today).
+---@return { open: Tasks.Task[], done: integer }
+function M.due_reminders(open, finished, today)
+  today = today or model.today()
+  local function is_due(t)
+    return model.is_date(t.remind) and t.remind <= today
+  end
+  local out = { open = {}, done = 0 }
+  for _, t in ipairs(open) do
+    if is_due(t) then
+      out.open[#out.open + 1] = t
+    end
+  end
+  table.sort(out.open, function(a, b)
+    if a.remind ~= b.remind then
+      return a.remind < b.remind
+    end
+    return a.id < b.id
+  end)
+  for _, t in ipairs(finished or {}) do
+    if is_due(t) then
+      out.done = out.done + 1
+    end
+  end
+  return out
+end
+
 ---The same over the vault on disk: every open task, the finished ids looked up in the Backlogs when needed.
----@param opts { root?: string, done?: { id: string, area: string }, area?: string, actor?: string, n?: integer, cdx?: integer }
+---@param opts { root?: string, done?: { id: string, area: string }, area?: string, actor?: string, n?: integer, cdx?: integer, today?: string }
 ---@return Tasks.NextPick|nil result
 ---@return string|nil err
 function M.pick_from_vault(opts)
@@ -271,6 +302,7 @@ function M.pick_from_vault(opts)
   if type(errors) == "table" and #errors > 0 then
     result.incomplete = errors
   end
+  result.reminders = M.due_reminders(open, scan.backlog_reminders({ root = opts.root }), opts.today)
   return result, nil
 end
 

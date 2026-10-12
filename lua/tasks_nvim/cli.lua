@@ -1026,6 +1026,7 @@ commands["next"] = function(ctx)
   end
   local pick, err = next_pick.pick_from_vault({
     root = ctx.eo.root,
+    today = ctx.eo.today,
     area = area,
     actor = actor,
     n = count - 1,

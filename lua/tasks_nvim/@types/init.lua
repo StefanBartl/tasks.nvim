@@ -66,6 +66,7 @@
 ---@field plan? string|string[]      # Matches `plan:` (the plan file id; a task without a plan never matches).
 ---@field phase? string|string[]     # Matches `phase:` (a task without a phase never matches).
 ---@field blocked? boolean            # status `blocked` or a non-empty `blocked_by`.
+---@field reminders? boolean         # A reminder (`remind:`) that is due: its date is today or earlier.
 ---@field unestimated? boolean        # Missing the effort or the value (the tasks `estimate` walks).
 ---@field stale? integer              # Not updated for at least this many days (undated counts as stale).
 ---@field stale_refs? boolean         # A file named in `refs` changed after `updated` (`tasks.staleness`; reads files and git).

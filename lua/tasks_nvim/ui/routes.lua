@@ -442,6 +442,7 @@ local LIST_FLAGS = {
   },
   { name = "ready", bool = true, desc = "Only tasks that can start now (no open blocker)" },
   { name = "waiting", bool = true, desc = "Only tasks that wait on an open blocker" },
+  { name = "reminders", bool = true, desc = "Only tasks whose reminder (remind:) is due" },
   { name = "unestimated", bool = true, desc = "Only tasks missing an effort or a value" },
   {
     name = "quick-win",
