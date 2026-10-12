@@ -111,6 +111,9 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- `:Tasks new`: a vault without areas (the wrong folder, or one that moved while Neovim still held the old path) was
+  reported as "'<name>' is not an area of the vault" for every name. The form now says "The vault has no areas: <folder>"
+  and why that happens (a `setup()` vault is read at startup).
 - `:Tasks new`: dismissing the "Attach assets?" question (`<Esc>`, `q`) created the task anyway, as if "No" had been
   answered. Now it creates nothing and the form stays open with what was typed; only "No" makes the plain task.
 - CLI: a global option typed before the command (`--vault=x new area -- "--title"`) was moved behind a bare `--`, where it became part of the text; it now goes right behind the command name, so a title that starts with `--` can be given.

@@ -1475,6 +1475,24 @@ return function(H)
       vim.api.nvim_set_current_win(form_win)
       fkeys("q")
 
+      -- a vault without areas (the wrong folder, or one that moved while Neovim kept the old path): the form
+      -- says so and names the folder, whichever area is typed, instead of "'x' is not an area"
+      local lost_root = H.tmpdir()
+      vault.set_root(lost_root)
+      run("task new")
+      form_buf = vim.api.nvim_get_current_buf()
+      set_line("Area: ", "lib.nvim")
+      set_line("Title: ", "Nowhere to go")
+      fkeys("<C-s>")
+      has(buf_text(), "! - The vault has no areas: ")
+      has(buf_text(), vim.fs.basename(lost_root), "the folder it looked in")
+      lacks(buf_text(), "is not an area")
+      eq(vim.api.nvim_get_current_buf(), form_buf, "the form stays open")
+      vault.set_root(root)
+      answer = true -- `q` asks "discard what you typed?"
+      fkeys("q")
+      answer = false
+
       -- help
       run("task new")
       fkeys("g?")

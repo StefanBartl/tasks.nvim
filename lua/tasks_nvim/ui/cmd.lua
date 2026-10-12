@@ -1116,6 +1116,7 @@ function M.task_new_form(given)
   -- on an answer), whereas a flag that waited for a callback stayed set when the dialog was closed from outside.
   open({
     areas = areas,
+    root = root,
     title = given.title,
     tags = given.tags,
     refs = given.refs,

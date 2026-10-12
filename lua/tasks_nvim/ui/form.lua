@@ -145,11 +145,12 @@ end
 ---Parse and check the form of `buf`; errors are written into the buffer.
 ---@param buf integer
 ---@param areas string[]|nil
+---@param root? string  the vault folder, named when the vault has no areas
 ---@return Tasks.FormValues|nil
-function M.read(buf, areas)
+function M.read(buf, areas, root)
   local lines = form.strip_errors(buf_lines(buf))
   set_lines(buf, lines)
-  local values, errors = form.validate(form.parse(lines), areas)
+  local values, errors = form.validate(form.parse(lines), areas, root)
   if not values then
     M.show_errors(buf, errors)
     return nil
@@ -173,6 +174,7 @@ end
 
 ---@class Tasks.FormOpenOpts
 ---@field areas? string[]
+---@field root? string  # The vault folder: named in the message that says the vault has no areas.
 ---@field area? string
 ---@field title? string
 ---@field tags? string
@@ -241,7 +243,7 @@ function M.open(opts)
   end
   local function submit()
     vim.cmd("stopinsert")
-    local values = M.read(buf, opts.areas)
+    local values = M.read(buf, opts.areas, opts.root)
     if values then
       opts.on_submit(values, buf)
     end
