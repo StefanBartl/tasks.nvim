@@ -412,6 +412,44 @@ return function(H)
   )
   lists.delete("new-name")
 
+  -- a list that names an area the vault lacks: nothing is applied, and the report names the close areas
+  lists.save("near-miss", { area = "lib" })
+  lists.save("gone", { area = "no-such-area" })
+  local notify_orig, said = vim.notify, {}
+  vim.notify = function(msg)
+    said[#said + 1] = msg
+  end
+  local held = {
+    root = root,
+    filter = { value_min = 3 },
+    sort = "prio-effort",
+    area = "cascade.nvim",
+    persist = false,
+  }
+  ok(menu(held, pick("near-miss")), "the menu hands control back")
+  vim.wait(30, function()
+    return false
+  end)
+  has(
+    table.concat(said, "\n"),
+    "list 'near-miss': 'lib' is not an area of the vault (did you mean: lib.nvim?)"
+  )
+  said = {}
+  ok(menu(held, pick("gone")), "... also for an area without a close one")
+  vim.wait(30, function()
+    return false
+  end)
+  has(table.concat(said, "\n"), "list 'gone': 'no-such-area' is not an area of the vault")
+  lacks(table.concat(said, "\n"), "did you mean")
+  vim.notify = notify_orig
+  eq(
+    { held.area, held.filter, held.sort },
+    { "cascade.nvim", { value_min = 3 }, "prio-effort" },
+    "the view is as it was"
+  )
+  lists.delete("near-miss")
+  lists.delete("gone")
+
   local function choose_delete(items, opts)
     if opts.prompt == "Delete which list?" then
       return items[1]
