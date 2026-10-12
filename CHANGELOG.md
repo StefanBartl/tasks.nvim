@@ -8,9 +8,12 @@ the version is not tagged yet (the repository is not published).
 ### Added
 
 - Reminders in Neovim: one line at startup says how many are due (`reminders = { on_start = true }`, deferred, once per
-  session, only with a UI; `false` turns it off), the dashboard's `f` menu has the filter `reminders` ("reminder due"),
-  `:Tasks list --reminders` and `:Tasks tasks --reminders` filter the same way, and the headless `next` lists the due
-  ones (`remind: <id> <title> <date>`, and a line with the number of finished tasks that carry one).
+  session, only with a UI; `false` turns it off, also after the timer was set; the scan runs in steps, one area per turn
+  of the loop, so the editor is not held; it names up to three finished tasks that carry one and how to open them), the
+  dashboard's `f` menu has the filter `reminders` ("reminder due"), `:Tasks list --reminders` and `:Tasks tasks --reminders`
+  filter the same way, a named list can hold it (`reminders = true`, `lists save <name> --reminders`), and the headless
+  `next` lists the due ones (`remind: <id> <title> <date>`, and a line with the number of finished tasks that carry one,
+  which `list --done --reminders` lists).
 
 - A reminder, `remind: YYYY-MM-DD`: when to look at a task again. `set <id> remind=+7d` (a date, `+<n>d` or `+<n>w`, at
   most a year; the file always holds the date), `remind=` takes it away, `done --remind=7d` and the `done` operation's
@@ -123,6 +126,17 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- Reminders: the finished tasks with a due reminder are named in the startup line, and `:Tasks set <id> remind=` works on a
+  finished task (nothing else of it), so a reminder that is only on a finished task can be found and cleared in the
+  editor; the headless `next` points at `list --done --reminders` (it pointed at a command that lists the open tasks
+  only). `next` rejects a `--today` that is no date (it silently counted every reminder as due), and only the text of
+  `next` computes the reminders at all (`done`, `next --format=json` and the dialog after `done` no longer sweep every
+  finished file for a result they do not use). `plan`, `estimate` and `quickwins` do not take `--reminders` in the editor
+  either (the filter was lost when a plan block was refreshed); a named list that sets it is refused by `plan` and
+  `estimate`. A `Backlog/<bucket>` folder that leads out of the vault is not read for reminders (the snapshot names it
+  in `incomplete`).
+- `engine.git`: a retry after a lookup that timed out waits 0.5 s, not 2 s (a loaded machine held a request for 6 s in
+  all, now 3 s); the code 124 of the wait alone counts as "no answer".
 - `engine.git` (the commit in `hello` and every document): a lookup of git that did not finish in 2 s (a loaded
   machine) was kept as "unknown" for the life of the process, so a long-lived host stayed "unknown". An answer that
   did not come in time is asked again later (three tries); a definite answer is still kept.

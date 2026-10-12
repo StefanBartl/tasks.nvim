@@ -86,7 +86,7 @@ only what is listed), `limits` (`title`, `summary`, `body_bytes`, `list_items`, 
 | `plans` | the plan files: `id`, `title`, `status`, `areas`, `target`, `phase_order`, `gate`, `valid` |
 | `estimate` | the sums of `estimate.rollup`: `tasks`, `days`, `n_with_effort`, `n_without_effort`, `value`, `n_with_value`, `roi`, `quick_wins`, `unestimated` |
 | `tasks` | every open task, in the order a person would work in (below) |
-| `reminders` | the **finished** tasks that carry a reminder (`remind`): `{ id, area, title, remind, etag, done_in? }`, the oldest date first, at most 100 (a light scan of the Backlog). The open ones are in `tasks` |
+| `reminders` | the **finished** tasks that carry a reminder (`remind`): `{ id, area, title, remind, etag, done_in? }`, the oldest date first, at most 100 (a light scan of the Backlog; a `Backlog/<bucket>` folder that leads out of the vault is not read and is named in `incomplete`). The open ones are in `tasks` |
 | `incomplete` | folders that could not be read (relative paths): the document is what could be read, and says so |
 
 A **task entry** (`tasks[]`, `items[]`, `task`) has: `id`, `area`, `slug`, `title`, `status`, `kind`, `prio`, `order`,

@@ -48,6 +48,7 @@ blockers, plan or estimate is valid and stays visible everywhere.
     next = { popup = true, cdx_hint = true },
     chain = { marker_docs = {} },
     steps = { ask_finish = false },
+    reminders = { on_start = true },
     quick_wins = { min_value = 4, max_effort = "S" },
     lists = {},
   })
@@ -80,6 +81,8 @@ blockers, plan or estimate is valid and stays visible everywhere.
                            A later `setup()` replaces the set; see :Tasks lists.
   steps.ask_finish         In a task buffer, ticking the last `## Plan` step asks to finish
                            the task (off by default: it adds an autocommand).
+  reminders.on_start       One line shortly after startup when reminders (`remind:`) are due
+                           (once per session, only with a UI; `false` turns it off).
   keys.dashboard           Dashboard list keys: action = key, or false.
   keys.dashboard_input     Dashboard input-window keys (normal and insert).
   keys.form                Keys of the `:Tasks new` form.
@@ -99,14 +102,15 @@ A wrong key or value is ignored with a message and listed in
       overwritten with `--force`.
       Filters: --status= --prio= --effort= --kind= --category= --severity=
                --value=4,5|>=4 --actor=cdx|me|pair|none
-               --tag= --stale=<days>|refs --blocked
+               --tag= --stale=<days>|refs --blocked --reminders
 
   :Tasks new [{area} [{title}...]] [kind= prio= effort= value= actor=
               tags= category= severity= status=] [--folder]
       Without arguments a Markdown form (`<C-s>` submits).
 
   :Tasks set {id} {key}={value} ...      Change frontmatter; an empty value
-                                         removes the key.
+                                         removes the key. A finished task takes
+                                         `remind=` only.
   :Tasks done {id} [done_in= date=] [--yes]
                                          Finish and move to `Backlog/`; names
                                          what it freed and offers the next task.
