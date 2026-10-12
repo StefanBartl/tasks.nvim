@@ -117,6 +117,7 @@ the version is not tagged yet (the repository is not published).
   ~45 ms instead of ~165 ms.
 
 ### Fixed
+- `engine.git` (the commit in `hello` and every document): a lookup of git that did not finish in 2 s (a loaded  machine) was kept as "unknown" for the life of the process, so a long-lived host stayed "unknown". An answer that  did not come in time is asked again later (three tries); a definite answer is still kept.
 
 - `:Tasks new`: a vault without areas (the wrong folder, or one that moved while Neovim still held the old path) was
   reported as "'<name>' is not an area of the vault" for every name. The form now says "The vault has no areas: <folder>"
