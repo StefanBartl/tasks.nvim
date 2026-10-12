@@ -23,33 +23,9 @@
 local script = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p")
 local plugin_root = vim.fs.dirname(vim.fs.dirname(vim.fs.normalize(script)))
 
----@param dir string|nil
----@return boolean
-local function has_lib(dir)
-  return dir ~= nil and dir ~= "" and vim.fn.isdirectory(dir .. "/lua/lib/nvim") == 1
-end
+vim.opt.rtp:prepend(plugin_root)
 
----@return string|nil
-local function find_lib()
-  local repos = vim.env.REPOS_DIR
-  -- Not a list literal: `ipairs` would stop at the first unset variable.
-  local candidates = {
-    LIB_NVIM_DIR = vim.env.LIB_NVIM_DIR,
-    LIB_NVIM_PATH = vim.env.LIB_NVIM_PATH,
-    REPOS_DIR = (repos and repos ~= "") and (repos .. "/lib.nvim") or nil,
-    deps = plugin_root .. "/.deps/lib.nvim",
-    sibling = vim.fs.dirname(plugin_root) .. "/lib.nvim",
-    lazy = vim.fn.stdpath("data") .. "/lazy/lib.nvim",
-  }
-  for _, key in ipairs({ "LIB_NVIM_DIR", "LIB_NVIM_PATH", "REPOS_DIR", "deps", "sibling", "lazy" }) do
-    if has_lib(candidates[key]) then
-      return candidates[key]
-    end
-  end
-  return nil
-end
-
-local lib = find_lib()
+local lib = require("tasks_nvim.boot").find_lib(plugin_root)
 if not lib then
   io.stderr:write(
     "error: lib.nvim not found (set LIB_NVIM_DIR, or REPOS_DIR with a lib.nvim checkout)\n"
@@ -57,7 +33,6 @@ if not lib then
   os.exit(2)
 end
 
-vim.opt.rtp:prepend(plugin_root)
 vim.opt.rtp:append(lib)
 
 local argv = {}

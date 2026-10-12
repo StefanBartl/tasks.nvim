@@ -184,6 +184,26 @@ operation fails with `invalid_argument`.
 The exit code of `tasks call ops` is `0` when every operation worked, `1` when any failed (the document says which), `2`
 for a bad request.
 
+## The persistent host
+
+`nvim --headless -u NONE -i NONE -n -l scripts/tasks-host.lua` is the same door as `tasks call`, kept open: one
+process answers many questions, so the modules are loaded once and an unchanged vault is read from the parse cache.
+The vault and the switches come from the environment, as for `scripts/tasks.lua`. The documents are those of
+`tasks_nvim.api.call`, byte for byte (a spec holds that).
+
+One line each way, UTF-8, fields separated by a tab, lines ended by `
+`:
+
+| Direction | Line | |
+|---|---|---|
+| host to client | `ready	1` | once, when the modules are loaded; the number is the version of this protocol |
+| client to host | `<id>	<method>	<params>` | `<id>` is digits (at most 15); `<params>` is the JSON of the request (`ops`: the whole request; the read methods: the `params` object), empty for none; no line break in it |
+| host to client | `<id>	<document>` | the document on one line, or a `tasks.error` |
+
+One question is in flight at a time and each is answered completely before the next is read. A line that is not a
+request is told on stderr and skipped. The host ends when its stdin ends (a client that dies leaves no process
+behind); a request is at most 256 KiB plus its head.
+
 ## The rules every document keeps
 
 - **No path of this machine.** A file is `<area>/ROADMAP/tasks/<slug>.md`, relative to the vault; an absolute `refs:`
