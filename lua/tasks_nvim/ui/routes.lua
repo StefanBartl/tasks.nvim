@@ -536,6 +536,7 @@ local function set_kv()
     rules = "Rule ids a ruleset task brings code in line with",
     done_in = "Commit(s) that delivered the task",
     created = "Creation date, YYYY-MM-DD",
+    remind = "Look at the task again on this date (YYYY-MM-DD, or +7d / +2w from today)",
   })
   local out = {}
   for _, key in ipairs(mutate.SETTABLE) do
@@ -698,6 +699,11 @@ local function nested_routes()
           key = "date",
           type = "STRING",
           desc = "Date prefix of the Backlog file (YYYY-MM-DD, default today)",
+        },
+        {
+          key = "remind",
+          type = "STRING",
+          desc = "Look at the finished task again on this date (YYYY-MM-DD, or +7d / +2w)",
         },
       },
       flags = { { name = "yes", bool = true, desc = "Finish without asking for confirmation" } },

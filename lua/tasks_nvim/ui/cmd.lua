@@ -1556,7 +1556,7 @@ function M.task_done(ctx)
     return
   end
   local id = ctx.args.id
-  local opts = { done_in = ctx.kv.done_in, date = ctx.kv.date }
+  local opts = { done_in = ctx.kv.done_in, date = ctx.kv.date, remind = ctx.kv.remind }
   local task = scan.find(id)
   if not task or ctx.flags.yes then
     -- A finished task answers "already" without asking anything.

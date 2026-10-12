@@ -7,6 +7,10 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- A reminder, `remind: YYYY-MM-DD`: when to look at a task again. `set <id> remind=+7d` (a date, `+<n>d` or `+<n>w`, at
+  most a year; the file always holds the date), `remind=` takes it away, `done --remind=7d` and the `done` operation's
+  `remind` set it on the finished task, `list --reminders` lists those that are due. The entry of the contract carries
+  the date (`remind`), not whether it is due, so that a digest does not change with the day. Capability `reminders`.
 - The persistent engine `scripts/tasks-host.lua` (`tasks_nvim.host`): `nvim -l scripts/tasks-host.lua` answers the
   machine contract over stdin and stdout, one line per question, until its input ends; the documents are those of
   `api.call`, byte for byte, and a question costs milliseconds instead of a process start. Line protocol in

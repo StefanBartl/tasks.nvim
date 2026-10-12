@@ -415,6 +415,7 @@ local SETTABLE = {
   "rules",
   "done_in",
   "created",
+  "remind",
 }
 
 ---@type string[]
@@ -522,6 +523,13 @@ local function normalize_patch(patch, opts)
         return nil, ("created '%s' is not a date (YYYY-MM-DD)"):format(tostring(value))
       end
       result[#result + 1] = { key, value }
+    elseif key == "remind" then
+      -- a date, or days / weeks from today: the file always holds the date
+      local date, rerr = model.resolve_remind(value, (opts and opts.today) or model.today())
+      if not date then
+        return nil, rerr
+      end
+      result[#result + 1] = { key, date }
     elseif key == "severity" then
       if not model.is_severity(value) then
         return nil,
@@ -1219,6 +1227,7 @@ end
 ---@class Tasks.DoneOpts
 ---@field root? string
 ---@field done_in? string|string[]   # Commit(s) that delivered the task.
+---@field remind? string             # A date or `+<n>d` / `+<n>w`: when to look at the finished task again.
 ---@field date? string               # `YYYY-MM-DD` filename prefix (default: today).
 ---@field today? string              # Sets `updated` (default: today).
 ---@field index? boolean             # Regenerate the area index (default true).
@@ -1304,6 +1313,13 @@ local function plan_done(id, opts)
     if #list > 0 then
       patch[#patch + 1] = { "done_in", table.concat(list, ", ") }
     end
+  end
+  if opts.remind ~= nil then
+    local date, rerr = model.resolve_remind(opts.remind, today)
+    if not date then
+      return nil, rerr
+    end
+    patch[#patch + 1] = { "remind", date }
   end
   patch[#patch + 1] = { "updated", today }
 

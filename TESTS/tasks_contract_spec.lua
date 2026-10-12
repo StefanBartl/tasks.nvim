@@ -64,7 +64,7 @@ return function(H)
   eq(hello.engine, { version = "0.1.0-test", git = "0000000", nvim = "0.0.0" })
   -- every method is a capability, plus the features that are no method of their own
   local expected_caps = api.methods()
-  for _, feature in ipairs({ "etag", "if_match", "move_area_preview", "reorder" }) do
+  for _, feature in ipairs({ "etag", "if_match", "move_area_preview", "reminders", "reorder" }) do
     table.insert(expected_caps, feature)
   end
   table.sort(expected_caps)
@@ -308,11 +308,19 @@ return function(H)
   contract.BODIES_PAGE_BYTES = 30
   local early = call("bodies", { limit = 100 })
   contract.BODIES_PAGE_BYTES = page_bytes
-  eq(early.next_offset, #early.items, "a page that holds as many bytes as it may ends early and says where to go on")
+  eq(
+    early.next_offset,
+    #early.items,
+    "a page that holds as many bytes as it may ends early and says where to go on"
+  )
   eq(#early.items < early.total, true)
   eq(contract.bodies({ limit = 0 }, { root = root }), nil)
   eq(contract.bodies({ limit = contract.BODIES_MAX_ITEMS + 1 }, { root = root }), nil)
-  eq(#call("bodies", { limit = contract.BODIES_MAX_ITEMS }).items, snap.counts.listed, "one page holds the fixture")
+  eq(
+    #call("bodies", { limit = contract.BODIES_MAX_ITEMS }).items,
+    snap.counts.listed,
+    "one page holds the fixture"
+  )
   golden("bodies-page")
 
   -- ── next ──

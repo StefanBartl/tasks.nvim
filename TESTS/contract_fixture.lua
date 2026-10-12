@@ -72,6 +72,7 @@ function M.build(H)
     { "prio", "2" },
     { "effort", "2d" },
     { "blocked_by", "[lib.nvim/alpha]" },
+    { "remind", "2026-01-20" },
   }, "doing", "Beta waits for alpha")
   task(
     H,

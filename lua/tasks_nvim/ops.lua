@@ -16,7 +16,7 @@
 ---  - `new` { area, title, fields? }: create a task; `fields` are the plain keys (kind, prio, effort, tags, category,
 ---    severity, value, actor, summary, refs, status, slug). Relations are set afterwards
 ---  - `reorder` { id, after?, before?, group?, if_match? }: move a task inside its group (`batch.reorder`)
----  - `done` { id, confirm, done_in? }: finish a task. `confirm` is the token of `done_preview` for the version of the
+---  - `done` { id, confirm, done_in?, remind? }: finish a task. `confirm` is the token of `done_preview` for the version of the
 ---    file that was shown; a task that changed since is a `conflict`
 ---  - `move_area` { id, to_area }: only as a dry run in this version (the report of `moves.preview`)
 ---
@@ -70,7 +70,7 @@ local FIELDS = {
     group = "string",
     if_match = "string",
   },
-  done = { id = "string", confirm = "string", done_in = "strings" },
+  done = { id = "string", confirm = "string", done_in = "strings", remind = "string" },
   move_area = { id = "string", to_area = "string" },
 }
 
@@ -603,12 +603,19 @@ local function do_done(op, ctx)
   if has_control(op.done_in) then
     return refuse("invalid_argument", "done_in contains a control character")
   end
+  if op.remind ~= nil then
+    local _, rerr = model.resolve_remind(op.remind, ctx.today)
+    if rerr then
+      return refuse("invalid_argument", rerr)
+    end
+  end
   local flow, err, info = done_flow.run(op.id, {
     root = ctx.root,
     today = ctx.today,
     index = false,
     if_match = etag,
     done_in = op.done_in,
+    remind = op.remind,
     pick_next = false,
   })
   if not flow then
