@@ -216,7 +216,7 @@ local SPECS = {
       "desc",
       "area",
     },
-    flag = { "blocked", "stale-refs", "unestimated", "quick-win", "ready", "waiting" },
+    flag = { "blocked", "reminders", "stale-refs", "unestimated", "quick-win", "ready", "waiting" },
   },
   quickwins = {
     value = {
@@ -813,6 +813,7 @@ local function def_from_options(opt)
     end
   end
   def.blocked = opt.blocked == true or nil
+  def.reminders = opt.reminders == true or nil
   def.unestimated = opt.unestimated == true or nil
   def.stale_refs = opt["stale-refs"] == true or nil
   def.quick_win = opt["quick-win"] == true or nil

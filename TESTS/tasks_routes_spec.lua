@@ -728,6 +728,31 @@ return function(H)
       run("task set not-an-id status=doing")
       has(said(), "expected <area>/<slug>")
 
+      -- `--reminders` filters a list; a plan, an estimate or the quick wins are not about what is due
+      ---@param path string
+      ---@param name string
+      ---@return boolean
+      local function takes_flag(path, name)
+        for _, route in ipairs(routes.routes()) do
+          if table.concat(route.path, " ") == path then
+            for _, flag in ipairs(route.flags or {}) do
+              if flag.name == name then
+                return true
+              end
+            end
+            return false
+          end
+        end
+        error("no route " .. path)
+      end
+      ok(takes_flag("tasks", "reminders"), "`list --reminders`")
+      for _, path in ipairs({ "task plan", "task estimate", "task quickwins" }) do
+        ok(takes_flag(path, "blocked"), path .. " takes the other filters")
+        ok(not takes_flag(path, "reminders"), path .. " does not take --reminders")
+      end
+      run("task plan --reminders")
+      ok(said_level(ERROR), "`plan --reminders` is refused, as it is on the command line")
+
       -- ── task done ───────────────────────────────────────────────────────
       local msgs = {}
       confirm.yesno = function(msg, label, cb)
@@ -774,6 +799,18 @@ return function(H)
       run("task done lib.nvim/gamma-decision")
       has(said(), "already finished")
       ok(not said_level(ERROR))
+
+      -- a finished task takes a reminder (set, taken away) and nothing else
+      run("task set lib.nvim/gamma-decision remind=2030-01-01")
+      has(said(), "set lib.nvim/gamma-decision: changed")
+      has(assert(H.read(gamma_done)), "remind: 2030-01-01")
+      run("task set lib.nvim/gamma-decision status=open")
+      ok(said_level(ERROR), "any other key of a finished task is refused")
+      has(said(), "no such open task")
+      lacks(assert(H.read(gamma_done)), "status: open")
+      run("task set lib.nvim/gamma-decision remind=")
+      has(said(), "set lib.nvim/gamma-decision: changed")
+      lacks(assert(H.read(gamma_done)), "remind:")
 
       confirm.yesno = function()
         error("--yes must not ask")

@@ -7,8 +7,8 @@
 ---     { status = "open,doing", effort = "<=S", value = ">=4", sort = "roi", desc = "small and worth it" }
 ---
 --- Fields: `status prio effort kind category severity value actor tag stale plan phase` (strings, `prio` / `value` /
---- `stale` may be numbers), `blocked unestimated stale_refs quick_win` (booleans), `readiness` (`ready` | `waiting`),
---- `sort` (`model.SORTS`), `area` (one area, default all) and `desc` (one line of text).
+--- `stale` may be numbers), `blocked reminders unestimated stale_refs quick_win` (booleans), `readiness`
+--- (`ready` | `waiting`), `sort` (`model.SORTS`), `area` (one area, default all) and `desc` (one line of text).
 ---
 --- Three sources, the later one wins by name:
 ---  1. built-in examples (`BUILTIN`);
@@ -74,6 +74,7 @@ end
 ---@field plan? string
 ---@field phase? string
 ---@field blocked? boolean
+---@field reminders? boolean
 ---@field unestimated? boolean
 ---@field stale_refs? boolean
 ---@field quick_win? boolean
@@ -104,6 +105,7 @@ local FIELDS = {
   plan = "string",
   phase = "string",
   blocked = "boolean",
+  reminders = "boolean",
   unestimated = "boolean",
   stale_refs = "boolean",
   quick_win = "boolean",
@@ -128,6 +130,7 @@ M.FIELD_ORDER = {
   "plan",
   "phase",
   "blocked",
+  "reminders",
   "unestimated",
   "stale_refs",
   "quick_win",
@@ -194,6 +197,7 @@ local function option_map(def)
     phase = def.phase,
     stale_refs = def.stale_refs == true,
     blocked = def.blocked == true,
+    reminders = def.reminders == true,
     unestimated = def.unestimated == true,
     quick_win = def.quick_win == true,
   }
@@ -335,6 +339,7 @@ function M.from_filter(filter, sort, area, desc)
     stale = f.stale and tostring(f.stale) or nil,
     stale_refs = f.stale_refs or nil,
     blocked = f.blocked or nil,
+    reminders = f.reminders or nil,
     unestimated = f.unestimated or nil,
     readiness = f.readiness,
     sort = (sort and sort ~= "default") and sort or nil,

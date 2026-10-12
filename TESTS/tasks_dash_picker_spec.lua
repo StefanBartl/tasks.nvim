@@ -536,6 +536,22 @@ return function(H)
     keys("f")
     p = opened(4)
 
+    -- reminders toggles (no task of this vault has one: nothing is listed while it is on)
+    reset()
+    select_queue = { pick("reminders") }
+    p:focus("list")
+    flush()
+    keys("f")
+    opened(0)
+    has(assert(current_picker()).title, "[reminder due]")
+    reset()
+    select_queue = { pick("reminders") }
+    assert(current_picker()):focus("list")
+    flush()
+    keys("f")
+    p = opened(4)
+    lacks(p.title, "[reminder due]")
+
     -- ── e: export the marked (or all shown) tasks ─────────────────────────
     reset()
     select_queue = { pick("Scratch buffer (Markdown)") }
