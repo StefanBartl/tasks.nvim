@@ -29,6 +29,7 @@ return function(H)
   local orig_notify = vim.notify
   local orig_input = vim.ui.input
   local orig_yesno = confirm.yesno
+  local orig_choose = confirm.choose
   local orig_loaded = {}
   local STUBBED = {
     "pickers.command",
@@ -51,6 +52,7 @@ return function(H)
     vim.notify = orig_notify
     vim.ui.input = orig_input
     confirm.yesno = orig_yesno
+    confirm.choose = orig_choose
     cmd.dashboard = nil
     cmd.form_open = nil
     cmd.explorer_open = nil
@@ -1292,11 +1294,23 @@ return function(H)
         return #vim.fn.readdir(root .. "/" .. area .. "/ROADMAP/tasks")
       end
 
+      -- `answer`: false = "No", true = "Yes, attach assets", nil = the dialog was dismissed (Esc).
+      -- The "discard what you typed?" question of `q` is a yes/no and takes `answer` as it is.
       local form_asked, answer = {}, false
       local explored
       confirm.yesno = function(msg, _, cb)
         form_asked[#form_asked + 1] = msg
         cb(answer)
+      end
+      local asked_choices
+      confirm.choose = function(msg, choices, cb)
+        form_asked[#form_asked + 1] = msg
+        asked_choices = choices
+        if answer == nil then
+          cb(nil)
+        else
+          cb(answer and 2 or 1)
+        end
       end
       cmd.explorer_open = function(dir)
         explored = dir
@@ -1354,6 +1368,7 @@ return function(H)
       flush()
       eq(#form_asked, 1)
       has(form_asked[1], "Attach assets")
+      eq(asked_choices[1], "No", "the harmless answer comes first: the dialog starts on it")
       local made = task_path("lib.nvim", "form-made-task")
       ok(H.exists(made), "the task file exists")
       local made_text = assert(H.read(made))
@@ -1370,6 +1385,28 @@ return function(H)
       ok(not vim.api.nvim_buf_is_valid(form_buf), "the form is closed")
       has(said(), "created lib.nvim/form-made-task")
       has(assert(H.read(lib_index)), "Form made task", "the index is regenerated")
+
+      -- Esc on the question is not "no assets": nothing is created and the form stays open with what was typed
+      run("task new")
+      form_buf = vim.api.nvim_get_current_buf()
+      set_line("Area: ", "lib.nvim")
+      set_line("Title: ", "Dismissed question")
+      answer, explored = nil, nil
+      local asked_before, tasks_before = #form_asked, tasks_dir_count("lib.nvim")
+      fkeys("<C-s>")
+      flush()
+      eq(#form_asked, asked_before + 1, "the question was asked")
+      eq(tasks_dir_count("lib.nvim"), tasks_before, "Esc created no file")
+      ok(not H.exists(task_path("lib.nvim", "dismissed-question")), "and no task")
+      eq(explored, nil, "no explorer")
+      eq(vim.api.nvim_get_current_buf(), form_buf, "the form stays open")
+      has(buf_text(), "Title: Dismissed question", "the typed text survives")
+      has(said(), "task not created")
+      -- the same form still submits: "No" now makes the plain task
+      answer = false
+      fkeys("<C-s>")
+      flush()
+      ok(H.exists(task_path("lib.nvim", "dismissed-question")), "the form was still usable")
 
       -- answer "yes": a folder task, assets/ exists, the explorer is pointed at it
       run("task new")
