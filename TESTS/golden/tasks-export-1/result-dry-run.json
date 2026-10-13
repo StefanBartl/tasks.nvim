@@ -1,6 +1,6 @@
 {
   "client_op_id": "golden-dry",
-  "digest": "sha256:a2021d12ec7bf5b2",
+  "digest": "sha256:685564e9438b7a35",
   "dry_run": true,
   "engine": {
     "git": "0000000",
@@ -78,6 +78,17 @@
       "ok": true,
       "op": "move_area",
       "outcome": "would_move"
+    },
+    {
+      "changed_ids": [],
+      "file": "lib.nvim/ROADMAP/plans/golden-plan.md",
+      "id": "lib.nvim/golden-plan",
+      "n": 6,
+      "ok": true,
+      "op": "plan_new",
+      "outcome": "would_create",
+      "renamed": false,
+      "slug": "golden-plan"
     }
   ],
   "schema": 1,

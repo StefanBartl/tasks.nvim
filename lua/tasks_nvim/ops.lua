@@ -498,6 +498,9 @@ local function do_new(op, ctx)
     end
   end
   -- first the characters, then the length: `strchars` cannot take a NUL byte
+  if has_control(op.area) then
+    return refuse("invalid_argument", "area contains a control character")
+  end
   if has_control(op.title) then
     return refuse("invalid_argument", "title contains a control character")
   end
@@ -722,12 +725,25 @@ local function do_plan_new(op, ctx)
   if op.area == nil or op.title == nil then
     return refuse("invalid_argument", "plan_new needs area and title")
   end
-  for _, key in ipairs({ "title", "summary", "slug", "target", "gate", "status", "areas", "phases" }) do
+  for _, key in ipairs({
+    "area",
+    "title",
+    "summary",
+    "slug",
+    "target",
+    "gate",
+    "status",
+    "areas",
+    "phases",
+  }) do
     if has_control(op[key]) then
       return refuse("invalid_argument", key .. " contains a control character")
     end
   end
   local over = over_limit("title", op.title)
+    or over_limit("area", op.area)
+    or (op.slug and over_limit("slug", op.slug))
+    or (op.target and over_limit("target", op.target))
     or (op.summary and over_limit("summary", op.summary))
     or (op.areas and over_limit("areas", op.areas))
     or (op.phases and over_limit("phases", op.phases))

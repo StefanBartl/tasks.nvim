@@ -57,6 +57,12 @@ G.cases = {
           { op = "reorder", id = "lib.nvim/alpha-twin", before = "lib.nvim/alpha" },
           { op = "done", id = "lib.nvim/delta" },
           { op = "move_area", id = "lib.nvim/alpha", to_area = "cascade.nvim" },
+          {
+            op = "plan_new",
+            area = "lib.nvim",
+            title = "Golden plan",
+            phases = { "design", "build" },
+          },
         },
       })
     end,
