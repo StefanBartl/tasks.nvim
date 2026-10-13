@@ -1496,7 +1496,7 @@
           "$ref": "#/$defs/Inverse"
         },
         "restore": {
-          "description": "A reorder that numbered its neighbours wrote several files: these `set` operations give every one of them its old `order` back (send them all instead of `inverse`, which only restores the place).",
+          "description": "What a reorder wrote: these `set` operations give every file it wrote its old `order` back (send them all instead of `inverse`, which only restores the place: a task that had no `order` would keep one, and the neighbours the move numbered stay numbered).",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Inverse"
