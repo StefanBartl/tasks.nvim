@@ -1542,12 +1542,20 @@ function M.reopen(id, opts)
   end
   local called, removed, xerr = pcall(fsio.remove, finished.path)
   if not called or not removed then
+    local why = tostring(called and (xerr or "unknown reason") or removed)
     -- two files for one task is the one state that must not stay: the open one is taken away again
-    pcall(fsio.remove, target)
+    local rolled, back_ok = pcall(fsio.remove, target)
+    if rolled and back_ok or not fsio.is_file(target) then
+      return nil,
+        ("cannot remove the finished file of %s (nothing was changed): %s"):format(id, why)
+    end
+    -- the open copy could not be taken away either: say so, the task is on disk twice
     return nil,
-      ("cannot remove the finished file of %s (nothing was changed): %s"):format(
+      ("cannot remove the finished file of %s, and the open copy could not be taken away again: both stay (%s and %s): %s"):format(
         id,
-        tostring(called and xerr or removed)
+        finished.path,
+        target,
+        why
       )
   end
 

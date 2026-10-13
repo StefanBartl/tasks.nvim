@@ -143,4 +143,51 @@ return function(H)
   local folder_file = backlog_file(f.id)
   refused({ op = "reopen", id = f.id }, "invalid_argument", "folder task")
   eq(fsio.is_file(folder_file), true)
+
+  -- the finished file cannot be removed (a lock of an editor or a scanner): the open copy is taken away again
+  -- and the answer says nothing changed; when that fails too, the answer says that both files stay
+  local real_remove = fsio.remove
+  ---@param fails fun(path: string): boolean  # which paths refuse to be removed
+  local function reopen_with_stuck(id, fails)
+    fsio.remove = function(path)
+      if fails(path) then
+        return false, "locked by another process"
+      end
+      return real_remove(path)
+    end
+    local ok, res, err = pcall(mutate.reopen, id, o)
+    fsio.remove = real_remove
+    assert(ok, res)
+    return res, err
+  end
+  local h = finished("Locked finished file")
+  local h_done = backlog_file(h)
+  local h_open = require("tasks_nvim.vault").task_path(root, "lib.nvim", "locked-finished-file")
+  local res, err = reopen_with_stuck(h, function(path)
+    return path == h_done
+  end)
+  eq(res, nil)
+  has(err, "nothing was changed")
+  has(err, "locked by another process")
+  eq(
+    { fsio.is_file(h_done), fsio.is_file(h_open) },
+    { true, false },
+    "the open copy was taken away"
+  )
+
+  local res2, err2 = reopen_with_stuck(h, function()
+    return true
+  end)
+  eq(res2, nil)
+  lacks(err2, "nothing was changed")
+  has(err2, "both stay")
+  has(err2, h_open)
+  eq({ fsio.is_file(h_done), fsio.is_file(h_open) }, { true, true }, "the state the answer names")
+  -- (the vault is put right by hand: the real remove works again)
+  assert(real_remove(h_open))
+  eq(
+    one({ { op = "reopen", id = h } }).outcome,
+    "changed",
+    "a later reopen works once the lock is gone"
+  )
 end
