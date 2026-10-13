@@ -68,4 +68,41 @@ return function(H)
     eq(H.read(private), "new")
     eq(uv.fs_stat(private).mode % 4096, tonumber("600", 8), "a 0600 file stays 0600")
   end
+
+  -- A read scope remembers what the disk said, ends with the function (also on an error) and nests.
+  local probe = dir .. "/scope/probe.txt"
+  eq(fsio.is_file(probe), false, "no scope: the disk answers")
+  fsio.read_scope(function()
+    eq(fsio.is_file(probe), false, "asked inside the scope")
+    H.write(probe, "x")
+    eq(fsio.is_file(probe), false, "the scope keeps its first answer")
+    fsio.read_scope(function()
+      eq(fsio.is_file(probe), false, "a nested scope shares the outer one")
+    end)
+    eq(
+      fsio.scope_memo("k", function()
+        return 1
+      end),
+      1
+    )
+    eq(
+      fsio.scope_memo("k", function()
+        return 2
+      end),
+      1,
+      "computed once per scope"
+    )
+  end)
+  eq(fsio.is_file(probe), true, "after the scope the disk answers again")
+  local raised = pcall(fsio.read_scope, function()
+    error("boom")
+  end)
+  eq(raised, false, "an error passes through")
+  eq(
+    fsio.scope_memo("k", function()
+      return 3
+    end),
+    3,
+    "and the scope is closed after it"
+  )
 end

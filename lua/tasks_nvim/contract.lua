@@ -394,6 +394,16 @@ end
 ---@return Tasks.ContractView|nil view
 ---@return string|nil err
 function M.view(opts)
+  return fsio.read_scope(function()
+    return M.build_view(opts)
+  end)
+end
+
+---`M.view` without the read scope.
+---@param opts? { root?: string }
+---@return Tasks.ContractView|nil view
+---@return string|nil err
+function M.build_view(opts)
   local root, rerr = vault.root(opts)
   if not root then
     return nil, tostring(rerr)
@@ -578,6 +588,16 @@ end
 ---@return table|nil doc
 ---@return string|nil err
 function M.snapshot(opts)
+  return fsio.read_scope(function()
+    return M.build_snapshot(opts)
+  end)
+end
+
+---`M.snapshot` without the read scope.
+---@param opts? { root?: string, view?: Tasks.ContractView }
+---@return table|nil doc
+---@return string|nil err
+function M.build_snapshot(opts)
   local view, err = opts and opts.view or nil, nil
   if not view then
     view, err = M.view(opts)

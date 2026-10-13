@@ -28,6 +28,99 @@ local uv = vim.uv or vim.loop
 
 local M = {}
 
+---The answers of the disk while a read scope is open (see `M.read_scope`); nil outside one.
+---@type { stat: table, lstat: table, real: table, depth: integer, memo: table }|nil
+local scope = nil
+
+---Run `fn` with the answers of `stat`, `lstat` and `realpath` remembered: one build of the read view asks the same
+---folder (an area, `ROADMAP`, the base of a ref) many times, and the vault does not change while it is read. The scope
+---ends with `fn` (also when it raises), so the next request sees the disk again. Nested scopes share the outer one.
+---Never wrap a write: the questions after it would be answered from before it.
+---@param fn fun(): any, any?
+---@return any
+---@return any?
+function M.read_scope(fn)
+  if scope then
+    scope.depth = scope.depth + 1
+    local ok, a, b = pcall(fn)
+    scope.depth = scope.depth - 1
+    if not ok then
+      error(a, 0)
+    end
+    return a, b
+  end
+  scope = { stat = {}, lstat = {}, real = {}, depth = 1, memo = {} }
+  local ok, a, b = pcall(fn)
+  scope = nil
+  if not ok then
+    error(a, 0)
+  end
+  return a, b
+end
+
+---A named value that lives as long as the open read scope (`compute` runs once per scope); without a scope it just
+---runs `compute`.
+---@generic T
+---@param key string
+---@param compute fun(): T
+---@return T
+function M.scope_memo(key, compute)
+  if not scope then
+    return compute()
+  end
+  local hit = scope.memo[key]
+  if hit == nil then
+    hit = compute()
+    scope.memo[key] = hit
+  end
+  return hit
+end
+
+---`uv.fs_stat`, answered once per read scope.
+---@param path string
+---@return table|nil
+function M.stat(path)
+  if not scope then
+    return uv.fs_stat(path)
+  end
+  local hit = scope.stat[path]
+  if hit == nil then
+    hit = uv.fs_stat(path) or false
+    scope.stat[path] = hit
+  end
+  return hit or nil
+end
+
+---`uv.fs_lstat`, answered once per read scope.
+---@param path string
+---@return table|nil
+function M.lstat(path)
+  if not scope then
+    return uv.fs_lstat(path)
+  end
+  local hit = scope.lstat[path]
+  if hit == nil then
+    hit = uv.fs_lstat(path) or false
+    scope.lstat[path] = hit
+  end
+  return hit or nil
+end
+
+---`uv.fs_realpath`, answered once per read scope.
+---@param path string
+---@return string|nil
+function M.realpath(path)
+  if not scope then
+    return uv.fs_realpath(path)
+  end
+  local hit = scope.real[path]
+  if hit == nil then
+    hit = uv.fs_realpath(path) or false
+    scope.real[path] = hit
+  end
+  return hit or nil
+end
+
 ---Forward slashes, no trailing slash (a bare drive root `C:/` or `/` is kept).
 ---@param path string
 ---@return string
@@ -48,7 +141,7 @@ end
 ---@param path string
 ---@return boolean
 function M.is_dir(path)
-  local st = uv.fs_stat(path)
+  local st = M.stat(path)
   return st ~= nil and st.type == "directory"
 end
 
@@ -68,7 +161,7 @@ end
 ---@param path string
 ---@return boolean
 function M.is_link(path)
-  local st = uv.fs_lstat(path)
+  local st = M.lstat(path)
   return st ~= nil and st.type == "link"
 end
 
@@ -92,7 +185,7 @@ end
 ---@param path string
 ---@return boolean
 function M.is_file(path)
-  local st = uv.fs_stat(path)
+  local st = M.stat(path)
   return st ~= nil and st.type == "file"
 end
 
