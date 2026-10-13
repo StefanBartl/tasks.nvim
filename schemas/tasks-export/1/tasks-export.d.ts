@@ -475,7 +475,7 @@ export interface TaskBrief {
  */
 export interface ResultEntry {
   n: number;
-  op: "set" | "new" | "reorder" | "done" | "move_area" | "plan_new" | "tick_step" | "append_note";
+  op: "set" | "new" | "reorder" | "done" | "move_area" | "plan_new" | "tick_step" | "append_note" | "reopen";
   id?: string;
   ok: boolean;
   /**

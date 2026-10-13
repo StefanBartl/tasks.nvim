@@ -1472,7 +1472,7 @@
           "minimum": 1
         },
         "op": {
-          "enum": ["set", "new", "reorder", "done", "move_area", "plan_new", "tick_step", "append_note"]
+          "enum": ["set", "new", "reorder", "done", "move_area", "plan_new", "tick_step", "append_note", "reopen"]
         },
         "id": {
           "type": "string"
