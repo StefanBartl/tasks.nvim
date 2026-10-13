@@ -149,6 +149,7 @@ The answer, `tasks.result`, has one entry per operation:
 | `ok`, `outcome` | `changed`, `unchanged`, `created`, `done`; a dry run says `would_change`, `would_create`, `would_done`, `would_move` (or `blocked`: the move cannot be made); `failed` |
 | `etag_before`, `etag_after` | the version of the file before and after (a dry run: only before) |
 | `inverse` | the operation that undoes it: send it as a new operation, its `if_match` is the version the change left. A key a `set` added is `null` in the inverse patch. `done` and `new` have none in this version |
+| `restore` | a `reorder` only: one `set` for every file it wrote that gives the file its old `order` back (a key the move added is `null`), each with the version the move left in `if_match`. Send them all to take a move back **exactly**: `inverse` only puts the task back in its place, a task that had no `order` would keep one and the neighbours the move numbered stay numbered |
 | `changed_ids` | the ids whose files this wrote |
 | `index` | what happened to the generated overview of the area: `written`, `unchanged`, `removed` or `error`. It is written **once** for the whole request, however many tasks of the area changed |
 | `error` | for a failed operation: `code`, `message`, `retryable`, `details` (see below) |

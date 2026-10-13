@@ -496,7 +496,7 @@ export interface ResultEntry {
   etag_after?: Etag;
   inverse?: Inverse;
   /**
-   * A reorder that numbered its neighbours wrote several files: these `set` operations give every one of them its old `order` back (send them all instead of `inverse`, which only restores the place).
+   * What a reorder wrote: these `set` operations give every file it wrote its old `order` back (send them all instead of `inverse`, which only restores the place: a task that had no `order` would keep one, and the neighbours the move numbered stay numbered).
    */
   restore?: Inverse[];
   /**

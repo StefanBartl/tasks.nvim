@@ -589,9 +589,10 @@ local function do_reorder(op, ctx)
       before = r.inverse and r.inverse.before,
       if_match = r.etag_after,
     })
-    -- A move that numbered neighbours wrote more than one file: the way back that puts the moved task behind its
-    -- old neighbour keeps the order but not the numbers. `restore` gives every file its old `order` back.
-    if #r.restore > 1 then
+    -- The way back that puts the moved task behind its old neighbour restores the place, not the numbers: a task
+    -- that had no `order` keeps one, and the neighbours the move numbered stay numbered. `restore` gives every file
+    -- the move wrote its old `order` back (also a single one).
+    if #r.restore > 0 then
       local restore = {}
       for _, w in ipairs(r.restore) do
         restore[#restore + 1] = json.object({

@@ -516,7 +516,10 @@ return function(H)
     { 1, 2, 3 }
   )
   -- a move that numbered neighbours: `restore` gives every file its old order back, not only its place
-  eq(ro.restore, nil, "a move that wrote one file has nothing to restore beyond its inverse")
+  eq(#ro.restore, 1, "a move that wrote one file has its restore too: r3 had no number")
+  eq(ro.restore[1].id, "lib.nvim/r3")
+  ok(ro.restore[1].patch.order == vim.NIL, "the key the move added is taken away")
+  eq(ro.restore[1].if_match, ro.etag_after)
   eq(#back.restore, 3, "one entry for each file the move wrote")
   for _, step in ipairs(back.restore) do
     eq(step.op, "set")
@@ -527,6 +530,10 @@ return function(H)
     { nil, nil, 1 },
     "the neighbours have no number again, the moved task its old one"
   )
+  local single = one({ { op = "reorder", id = "lib.nvim/r2", before = "lib.nvim/r3" } })
+  eq(single.changed_ids, { "lib.nvim/r2" })
+  eq(one({ single.restore[1] }).outcome, "changed")
+  eq(find("lib.nvim/r2").order, nil, "one file written, one file restored: r2 has no number again")
   eq(one({ { op = "reorder", id = "lib.nvim/gamma", group = "nothing|9" } }).error.code, "conflict")
   eq(
     one({ { op = "reorder", id = "lib.nvim/gamma", after = "cascade.nvim/delta" } }).error.code,
