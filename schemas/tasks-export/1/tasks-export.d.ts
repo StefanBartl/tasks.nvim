@@ -475,7 +475,7 @@ export interface TaskBrief {
  */
 export interface ResultEntry {
   n: number;
-  op: "set" | "new" | "reorder" | "done" | "move_area";
+  op: "set" | "new" | "reorder" | "done" | "move_area" | "plan_new";
   id?: string;
   ok: boolean;
   /**
@@ -510,6 +510,14 @@ export interface ResultEntry {
   file?: string;
   group?: string;
   renumbered?: boolean;
+  /**
+   * `plan_new`: the file name (without `.md`) the plan got or would get.
+   */
+  slug?: string;
+  /**
+   * `plan_new`: the slug asked for was taken, so another one was chosen.
+   */
+  renamed?: boolean;
   writes?: number;
   to?: string;
   steps_ticked?: number;

@@ -1463,7 +1463,7 @@
           "minimum": 1
         },
         "op": {
-          "enum": ["set", "new", "reorder", "done", "move_area"]
+          "enum": ["set", "new", "reorder", "done", "move_area", "plan_new"]
         },
         "id": {
           "type": "string"
@@ -1526,6 +1526,14 @@
           "type": "string"
         },
         "renumbered": {
+          "type": "boolean"
+        },
+        "slug": {
+          "description": "`plan_new`: the file name (without `.md`) the plan got or would get.",
+          "type": "string"
+        },
+        "renamed": {
+          "description": "`plan_new`: the slug asked for was taken, so another one was chosen.",
           "type": "boolean"
         },
         "writes": {

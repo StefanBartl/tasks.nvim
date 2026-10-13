@@ -319,13 +319,14 @@ end
 ---@field summary? string
 ---@field slug? string
 ---@field today? string
+---@field dry_run? boolean  # Name the plan the call would make and write nothing.
 
 ---Create `<area>/ROADMAP/plans/<slug>.md` (never overwrites; a taken slug gets `-2`, `-3`, ...). Plans, open tasks and
 ---Backlog files share ONE id namespace per area: a finished plan lands in `Backlog/FEATURES` and would read as a
 ---finished task of that id, so a slug held by a task (file or folder), a finished item or another plan is taken.
 ---@param area string
 ---@param opts Tasks.NewPlanOpts
----@return { id: string, path: string }|nil result
+---@return { id: string, path: string, slug: string, renamed: boolean }|nil result  # `renamed`: the slug asked for (or made of the title) was taken
 ---@return string|nil err
 function M.new(area, opts)
   local root, rerr = vault.root(opts)
@@ -437,9 +438,11 @@ function M.new(area, opts)
     return nil, "cannot build the plan file: " .. tostring(ferr)
   end
 
-  local mkdir_ok, mkerr = fsio.mkdirp(vault.plans_dir(root, area))
-  if not mkdir_ok then
-    return nil, "cannot create " .. vault.plans_dir(root, area) .. ": " .. tostring(mkerr)
+  if not opts.dry_run then
+    local mkdir_ok, mkerr = fsio.mkdirp(vault.plans_dir(root, area))
+    if not mkdir_ok then
+      return nil, "cannot create " .. vault.plans_dir(root, area) .. ": " .. tostring(mkerr)
+    end
   end
   local backlog_taken, berr = scan.backlog_slugs(area, { root = root })
   if not backlog_taken then
@@ -452,10 +455,14 @@ function M.new(area, opts)
     local held = backlog_taken[slug] ~= nil
       or fsio.is_file(vault.task_path(root, area, slug))
       or fsio.is_dir(vault.task_dir(root, area, slug))
+      or (opts.dry_run and fsio.is_file(path))
+    if not held and opts.dry_run then
+      return { id = area .. "/" .. slug, path = path, slug = slug, renamed = n > 1 }, nil
+    end
     if not held then
       local ok, err = fsio.create_exclusive(path, text)
       if ok then
-        return { id = area .. "/" .. slug, path = path }, nil
+        return { id = area .. "/" .. slug, path = path, slug = slug, renamed = n > 1 }, nil
       end
       if not fsio.is_exists(err) then
         return nil, "cannot create " .. path .. ": " .. tostring(err)

@@ -7,6 +7,9 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- `plan_new` in `tasks-ops/1` (capability `plan_new`): makes a plan file like `plan-new`. The entry carries `file`, `slug` and
+  `renamed` (the slug was taken, `-2`, `-3` ... was chosen); a dry run names the id and writes nothing, not even the folder,
+  so a form can show the name and the collision while the person types.
 - Reminders in Neovim: one line at startup says how many are due (`reminders = { on_start = true }`, deferred, once per
   session, only with a UI; `false` turns it off, also after the timer was set; the scan runs in steps, one area per turn
   of the loop, so the editor is not held; it names up to three finished tasks that carry one and how to open them), the

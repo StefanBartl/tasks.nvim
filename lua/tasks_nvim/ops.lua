@@ -19,6 +19,8 @@
 ---  - `done` { id, confirm, done_in?, remind? }: finish a task. `confirm` is the token of `done_preview` for the version of the
 ---    file that was shown; a task that changed since is a `conflict`
 ---  - `move_area` { id, to_area }: only as a dry run in this version (the report of `moves.preview`)
+---  - `plan_new` { area, title, areas?, target?, phases?, gate?, status?, summary?, slug? }: make a plan file; a dry run names
+---    the id it would get and whether the slug had to be changed (`plans.new`)
 ---
 --- Rules the door keeps:
 ---  - **the shape is checked first**, for the whole request: an unknown operation or field, a wrong type, too many
@@ -50,7 +52,7 @@ local vault = require("tasks_nvim.vault")
 local M = {}
 
 ---The operations, in the order the documentation names them.
-M.OPS = { "set", "new", "reorder", "done", "move_area" }
+M.OPS = { "set", "new", "reorder", "done", "move_area", "plan_new" }
 
 ---Longest `client_op_id`.
 M.MAX_CLIENT_OP_ID = 64
@@ -72,6 +74,17 @@ local FIELDS = {
   },
   done = { id = "string", confirm = "string", done_in = "strings", remind = "string" },
   move_area = { id = "string", to_area = "string" },
+  plan_new = {
+    area = "string",
+    title = "string",
+    areas = "strings",
+    target = "string",
+    phases = "strings",
+    gate = "string",
+    status = "string",
+    summary = "string",
+    slug = "string",
+  },
 }
 
 ---The plain keys `new` takes in `fields`.
@@ -702,6 +715,55 @@ local function do_move_area(op, ctx)
   }
 end
 
+---@param op table
+---@param ctx Tasks.OpsCtx
+---@return table entry
+local function do_plan_new(op, ctx)
+  if op.area == nil or op.title == nil then
+    return refuse("invalid_argument", "plan_new needs area and title")
+  end
+  for _, key in ipairs({ "title", "summary", "slug", "target", "gate", "status", "areas", "phases" }) do
+    if has_control(op[key]) then
+      return refuse("invalid_argument", key .. " contains a control character")
+    end
+  end
+  local over = over_limit("title", op.title)
+    or (op.summary and over_limit("summary", op.summary))
+    or (op.areas and over_limit("areas", op.areas))
+    or (op.phases and over_limit("phases", op.phases))
+  if over then
+    return refuse("payload_too_large", over)
+  end
+  if type(op.summary) == "string" and op.summary:find("[\r\n]") then
+    return refuse("invalid_argument", "summary must be one line")
+  end
+  local r, err, info = require("tasks_nvim.plans").new(op.area, {
+    root = ctx.root,
+    today = ctx.today,
+    title = op.title,
+    areas = op.areas,
+    target = op.target,
+    phases = op.phases,
+    gate = op.gate,
+    status = op.status,
+    summary = op.summary,
+    slug = op.slug,
+    dry_run = ctx.dry,
+  })
+  if not r then
+    return mutate_failure(ctx, err, info)
+  end
+  return {
+    ok = true,
+    id = r.id,
+    outcome = ctx.dry and "would_create" or "created",
+    file = rel(ctx, r.path),
+    slug = r.slug,
+    renamed = r.renamed,
+    changed_ids = ctx.dry and {} or { r.id },
+  }
+end
+
 ---@type table<string, fun(op: table, ctx: Tasks.OpsCtx): table>
 local HANDLERS = {
   set = do_set,
@@ -709,6 +771,7 @@ local HANDLERS = {
   reorder = do_reorder,
   done = do_done,
   move_area = do_move_area,
+  plan_new = do_plan_new,
 }
 
 -- ── the request ──────────────────────────────────────────────────────────────
