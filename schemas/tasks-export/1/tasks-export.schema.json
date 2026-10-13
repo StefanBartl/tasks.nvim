@@ -1353,10 +1353,19 @@
       "required": ["op", "id"],
       "properties": {
         "op": {
-          "enum": ["set", "reorder"]
+          "enum": ["set", "reorder", "tick_step"]
         },
         "id": {
           "type": "string"
+        },
+        "n": {
+          "description": "`tick_step`: the number of the step.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "done": {
+          "description": "`tick_step`: whether the step is to be ticked (true) or open (false).",
+          "type": "boolean"
         },
         "patch": {
           "type": "object"
@@ -1463,7 +1472,7 @@
           "minimum": 1
         },
         "op": {
-          "enum": ["set", "new", "reorder", "done", "move_area", "plan_new"]
+          "enum": ["set", "new", "reorder", "done", "move_area", "plan_new", "tick_step", "append_note"]
         },
         "id": {
           "type": "string"

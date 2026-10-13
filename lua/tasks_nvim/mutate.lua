@@ -1051,6 +1051,131 @@ function M.set(id, patch, opts)
   return result, nil
 end
 
+---Change the TEXT of an open task (steps, notes: what is below the frontmatter), as a compare-and-set like `set`.
+---
+---`transform(text)` gets the whole file and answers the new whole file, or `nil, message` when the change cannot be made
+---(a message without a code is a fault of the request), and may add a third value (`extra`) that is handed back. It runs
+---twice, once on the text just read and once on the text read under the lock, so what it works from is what is on disk
+---when it writes. `updated` is set to `today` in the same write. Nothing is written when the text does not change
+---(`changed = false`, `updated` stays) or for `opts.dry_run`.
+---@generic E
+---@param id string
+---@param transform fun(text: string): string|nil, string|nil, E|nil
+---@param opts? { root?: string, today?: string, index?: boolean, if_match?: string, dry_run?: boolean }
+---@return { id: string, area: string, path: string, changed: boolean, etag_before: string, etag_after: string, extra?: any }|nil result
+---@return string|nil err
+---@return table|nil info  # `{ code = "conflict"|"locked"|"lock_stuck"|"forbidden"|"io", ... }` when there is a reason to name
+function M.edit_text(id, transform, opts)
+  opts = opts or {}
+  local root, rerr = vault.root(opts)
+  if not root then
+    return nil, rerr
+  end
+  local task, ferr = scan.find(id, { root = root })
+  if not task then
+    return nil, ferr
+  end
+  local today = opts.today or model.today()
+  if not model.is_date(today) then
+    return nil, "today is not a date (YYYY-MM-DD): " .. tostring(today)
+  end
+  -- A link in the vault is a way out of it: the write would replace it, but the read follows it.
+  if fsio.is_link(task.path) then
+    return nil,
+      ("%s is a symbolic link or junction: it is not written through (the vault must not point outside itself)"):format(
+        task.id
+      ),
+      { code = "forbidden" }
+  end
+  local text, rd_err = fsio.read(task.path)
+  if not text then
+    return nil, "cannot read " .. task.path .. ": " .. tostring(rd_err)
+  end
+  local cerr, cinfo = precondition(task, text, opts)
+  if cerr then
+    return nil, cerr, cinfo
+  end
+
+  ---The new file for `cur`: the transformed text with `updated` set.
+  ---@param cur string
+  ---@return string|nil new_text
+  ---@return string|nil err
+  ---@return any extra
+  local function build(cur)
+    local new_text, err, extra = transform(cur)
+    if not new_text then
+      return nil, err or "the change cannot be made", extra
+    end
+    if new_text == cur then
+      return cur, nil, extra
+    end
+    local stamped, uerr = fm.update_text(new_text, { { "updated", today } })
+    if not stamped then
+      return nil, "cannot update " .. task.path .. ": " .. tostring(uerr)
+    end
+    return stamped, nil, extra
+  end
+
+  local new_text, berr, extra = build(text)
+  if not new_text then
+    return nil, berr
+  end
+  local etag_before = fsio.etag(text)
+  local result = {
+    id = task.id,
+    area = task.area,
+    path = task.path,
+    changed = new_text ~= text,
+    etag_before = etag_before,
+    etag_after = etag_before,
+    extra = extra,
+  }
+  if not result.changed or opts.dry_run then
+    return result, nil
+  end
+  local ok, werr, winfo = fsio.with_lock(task.path, function()
+    local cur, curerr = fsio.read(task.path)
+    if not cur then
+      return nil, "cannot read " .. task.path .. ": " .. tostring(curerr)
+    end
+    local e, info = precondition(task, cur, opts)
+    if e then
+      return nil, e, info
+    end
+    local fresh, ferr2, fresh_extra = build(cur)
+    if not fresh then
+      -- the text moved on and the change no longer fits: a fault of the request, not of the disk
+      return nil, ferr2, { code = "request" }
+    end
+    result.etag_before = fsio.etag(cur)
+    result.extra = fresh_extra
+    result.changed = fresh ~= cur
+    if not result.changed then
+      result.etag_after = result.etag_before
+      return true
+    end
+    local wrote, wr_err = fsio.write_atomic(task.path, fresh)
+    if not wrote then
+      return nil, wr_err
+    end
+    result.etag_after = fsio.etag(fresh)
+    return true
+  end)
+  if not ok then
+    if winfo and winfo.code == "conflict" then
+      return nil, werr, winfo
+    end
+    if winfo and winfo.code == "request" then
+      return nil, werr
+    end
+    return nil, "cannot write " .. task.path .. ": " .. tostring(werr), winfo
+  end
+  if opts.index ~= false and task.location ~= "backlog" then
+    result.index, result.index_err = index.write_area(task.area, { root = root })
+  end
+  return result, nil
+end
+
 -- ── Backlog README ───────────────────────────────────────────────────────────
 
 ---@param s string

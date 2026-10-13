@@ -166,6 +166,111 @@ function M.tick_all(text)
   return table.concat(lines, "\n"), ticked
 end
 
+---Tick or untick ONE step of the section. A step that is already in the wanted state is no change (`new_text` is
+---`text`); a dropped step is refused (it is struck from the count: nobody ticks it, finishing does not either).
+---@param text string
+---@param n integer
+---@param done boolean
+---@return string|nil new_text
+---@return Tasks.Step|nil step   # The step as it was.
+---@return string|nil err
+function M.set_step(text, n, done)
+  local summary = M.parse(text)
+  if not summary then
+    return nil, nil, "the task has no steps (no `## Plan` section with checkboxes)"
+  end
+  local step = summary.items[n]
+  if not step then
+    return nil,
+      nil,
+      ("the task has %d steps, there is no step %s"):format(#summary.items, tostring(n))
+  end
+  if step.dropped then
+    return nil, step, ("step %d is dropped: it does not count and is not ticked"):format(n)
+  end
+  if step.done == done then
+    return text, step, nil
+  end
+  local lines = vim.split(text, "\n", { plain = true })
+  local line = lines[step.line]
+  -- the first box of the line is the checkbox (a step starts with `- [ ]`)
+  lines[step.line] = done and line:gsub("%[ %]", "[x]", 1) or line:gsub("%[[xX]%]", "[ ]", 1)
+  return table.concat(lines, "\n"), step, nil
+end
+
+---Longest note `add_note` takes.
+M.MAX_NOTE = 1000
+
+---Append a dated line to the notes of the task (`## Notizen`, or `## Notes` in a task written in English): below the
+---last line of the section, so the notes stay in the order they were written. A task without the section gets one at
+---the end. Everything else of the text stays as it was (line endings included).
+---@param text string
+---@param note string   # One line of text.
+---@param today string  # `YYYY-MM-DD`.
+---@return string|nil new_text
+---@return string|nil err
+function M.add_note(text, note, today)
+  local trimmed = fsio.trim(note)
+  if trimmed == "" then
+    return nil, "the note is empty"
+  end
+  if trimmed:find("[%c\127]") then
+    return nil, "the note must be one line without control characters"
+  end
+  if vim.fn.strchars(trimmed) > M.MAX_NOTE then
+    return nil, ("the note is longer than %d characters"):format(M.MAX_NOTE)
+  end
+  local cr = text:find("\r\n", 1, true) and "\r" or ""
+  local entry = "- " .. today .. ": " .. trimmed .. cr
+  local lines = vim.split(text, "\n", { plain = true })
+  local heading
+  local fenced = false
+  for i, line in ipairs(lines) do
+    local bare = bare_of(line)
+    if bare:match("^```") or bare:match("^~~~") then
+      fenced = not fenced
+    elseif not fenced then
+      if heading then
+        if bare:match("^##?%s") then
+          -- the section ends before this heading; the entry goes below its last line of text
+          local at = i - 1
+          while at > heading and bare_of(lines[at]) == "" do
+            at = at - 1
+          end
+          if at == heading then
+            table.insert(lines, at + 1, cr)
+            at = at + 1
+          end
+          table.insert(lines, at + 1, entry)
+          return table.concat(lines, "\n"), nil
+        end
+      elseif bare:match("^##%s+Notizen%s*$") or bare:match("^##%s+Notes%s*$") then
+        heading = i
+      end
+    end
+  end
+  if heading then
+    -- the section runs to the end of the text
+    local at = #lines
+    while at > heading and bare_of(lines[at]) == "" do
+      at = at - 1
+    end
+    if at == heading then
+      table.insert(lines, at + 1, cr)
+      at = at + 1
+    end
+    table.insert(lines, at + 1, entry)
+    return table.concat(lines, "\n"), nil
+  end
+  local english = text:find("\n## Context", 1, true) or text:find("\n## Acceptance", 1, true)
+  local eol = cr == "\r" and "\r\n" or "\n"
+  local body = text:gsub("[\r\n]+$", "")
+  return body .. eol .. eol .. (english and "## Notes" or "## Notizen") .. eol .. eol .. fsio.trim(
+    entry
+  ) .. eol,
+    nil
+end
+
 ---The checklist items of the acceptance section (`## Akzeptanz` / `## Acceptance`), in order.
 ---@param lines string[]
 ---@return integer count

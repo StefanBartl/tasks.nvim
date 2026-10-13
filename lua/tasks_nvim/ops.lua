@@ -18,6 +18,10 @@
 ---  - `reorder` { id, after?, before?, group?, if_match? }: move a task inside its group (`batch.reorder`)
 ---  - `done` { id, confirm, done_in?, remind? }: finish a task. `confirm` is the token of `done_preview` for the version of the
 ---    file that was shown; a task that changed since is a `conflict`
+---  - `tick_step` { id, n, done?, if_match? }: tick (`done` true, the default) or untick step `n` of the `## Plan` section of an
+---    open task; a dropped step is refused; the answer has an `inverse`
+---  - `append_note` { id, text, if_match? }: add one dated line to the notes of an open task (`## Notizen` / `## Notes`,
+---    made when missing); no `inverse`
 ---  - `move_area` { id, to_area }: only as a dry run in this version (the report of `moves.preview`)
 ---  - `plan_new` { area, title, areas?, target?, phases?, gate?, status?, summary?, slug? }: make a plan file; a dry run names
 ---    the id it would get and whether the slug had to be changed (`plans.new`)
@@ -47,12 +51,13 @@ local model = require("tasks_nvim.model")
 local moves = require("tasks_nvim.moves")
 local mutate = require("tasks_nvim.mutate")
 local scan = require("tasks_nvim.scan")
+local steps = require("tasks_nvim.steps")
 local vault = require("tasks_nvim.vault")
 
 local M = {}
 
 ---The operations, in the order the documentation names them.
-M.OPS = { "set", "new", "reorder", "done", "move_area", "plan_new" }
+M.OPS = { "set", "new", "reorder", "done", "move_area", "plan_new", "tick_step", "append_note" }
 
 ---Longest `client_op_id`.
 M.MAX_CLIENT_OP_ID = 64
@@ -74,6 +79,8 @@ local FIELDS = {
   },
   done = { id = "string", confirm = "string", done_in = "strings", remind = "string" },
   move_area = { id = "string", to_area = "string" },
+  tick_step = { id = "string", n = "integer", done = "boolean", if_match = "string" },
+  append_note = { id = "string", text = "string", if_match = "string" },
   plan_new = {
     area = "string",
     title = "string",
@@ -125,6 +132,10 @@ local function typed(value, kind)
       end
     end
     return true
+  elseif kind == "integer" then
+    return type(value) == "number" and value == math.floor(value) and value >= 1 and value < 1e6
+  elseif kind == "boolean" then
+    return type(value) == "boolean"
   elseif kind == "null" then
     return false -- only ever absent (a `body` is a later version)
   end
@@ -200,7 +211,13 @@ local function check_shape(params)
               name,
               key,
               kind == "object" and "an object"
-                or (kind == "strings" and "text or a list of text" or "text")
+                or (
+                  kind == "strings" and "text or a list of text"
+                  or (
+                    kind == "integer" and "a whole number from 1"
+                    or (kind == "boolean" and "true or false" or "text")
+                  )
+                )
             )
           )
         end
@@ -476,6 +493,84 @@ local function do_set(op, ctx)
     })
   end
   return entry
+end
+
+---The answer of an operation that changed the text of one task (`tick_step`, `append_note`).
+---@param ctx Tasks.OpsCtx
+---@param r table  # What `mutate.edit_text` gave.
+---@return table entry
+local function text_entry(ctx, r)
+  local entry = {
+    ok = true,
+    id = r.id,
+    outcome = r.changed and (ctx.dry and "would_change" or "changed") or "unchanged",
+    etag_before = r.etag_before,
+    etag_after = (not ctx.dry) and r.etag_after or nil,
+    changed_ids = (r.changed and not ctx.dry) and { r.id } or {},
+  }
+  if r.changed and not ctx.dry then
+    ctx.touched[r.area] = true
+  end
+  return entry
+end
+
+---@param op table
+---@param ctx Tasks.OpsCtx
+---@return table entry
+local function do_tick_step(op, ctx)
+  if op.id == nil or op.n == nil then
+    return refuse("invalid_argument", "tick_step needs id and n")
+  end
+  local done = op.done ~= false
+  local r, err, info = mutate.edit_text(op.id, function(text)
+    local new_text, step, serr = steps.set_step(text, op.n, done)
+    if not new_text then
+      return nil, serr
+    end
+    return new_text, nil, { was = step and step.done or false }
+  end, {
+    root = ctx.root,
+    today = ctx.today,
+    index = false,
+    if_match = op.if_match,
+    dry_run = ctx.dry,
+  })
+  if not r then
+    return mutate_failure(ctx, err, info)
+  end
+  local entry = text_entry(ctx, r)
+  if r.changed and not ctx.dry then
+    entry.inverse = json.object({
+      op = "tick_step",
+      id = r.id,
+      n = op.n,
+      done = r.extra and r.extra.was or false,
+      if_match = r.etag_after,
+    })
+  end
+  return entry
+end
+
+---@param op table
+---@param ctx Tasks.OpsCtx
+---@return table entry
+local function do_append_note(op, ctx)
+  if op.id == nil or op.text == nil then
+    return refuse("invalid_argument", "append_note needs id and text")
+  end
+  local r, err, info = mutate.edit_text(op.id, function(text)
+    return steps.add_note(text, op.text, ctx.today)
+  end, {
+    root = ctx.root,
+    today = ctx.today,
+    index = false,
+    if_match = op.if_match,
+    dry_run = ctx.dry,
+  })
+  if not r then
+    return mutate_failure(ctx, err, info)
+  end
+  return text_entry(ctx, r)
 end
 
 ---@param op table
@@ -803,6 +898,8 @@ local HANDLERS = {
   done = do_done,
   move_area = do_move_area,
   plan_new = do_plan_new,
+  tick_step = do_tick_step,
+  append_note = do_append_note,
 }
 
 -- ── the request ──────────────────────────────────────────────────────────────
