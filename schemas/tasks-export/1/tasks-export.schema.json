@@ -1495,6 +1495,13 @@
         "inverse": {
           "$ref": "#/$defs/Inverse"
         },
+        "restore": {
+          "description": "A reorder that numbered its neighbours wrote several files: these `set` operations give every one of them its old `order` back (send them all instead of `inverse`, which only restores the place).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Inverse"
+          }
+        },
         "changed_ids": {
           "description": "Ids whose files this operation wrote (a dry run: none).",
           "type": "array",

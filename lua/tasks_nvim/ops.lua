@@ -589,6 +589,20 @@ local function do_reorder(op, ctx)
       before = r.inverse and r.inverse.before,
       if_match = r.etag_after,
     })
+    -- A move that numbered neighbours wrote more than one file: the way back that puts the moved task behind its
+    -- old neighbour keeps the order but not the numbers. `restore` gives every file its old `order` back.
+    if #r.restore > 1 then
+      local restore = {}
+      for _, w in ipairs(r.restore) do
+        restore[#restore + 1] = json.object({
+          op = "set",
+          id = w.id,
+          patch = json.object({ order = w.was ~= nil and batch.order_text(w.was) or vim.NIL }),
+          if_match = w.etag_after,
+        })
+      end
+      entry.restore = json.array(restore)
+    end
   end
   return entry
 end
