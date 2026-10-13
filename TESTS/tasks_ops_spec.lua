@@ -786,7 +786,7 @@ return function(H)
   -- ── plan_new: a plan file, with a dry run that names it ─────────────────────────
   do
     local files_before = everything()
-    local dry = one({
+    local wizard_dry = one({
       {
         op = "plan_new",
         area = "lib.nvim",
@@ -798,13 +798,13 @@ return function(H)
         summary = "Made by the wizard.",
       },
     }, { dry_run = true })
-    eq(dry.ok, true, vim.inspect(dry))
-    eq(dry.outcome, "would_create")
-    eq(dry.id, "lib.nvim/wizard-plan")
-    eq(dry.slug, "wizard-plan")
-    eq(dry.renamed, false)
-    eq(dry.file, "lib.nvim/ROADMAP/plans/wizard-plan.md")
-    eq(dry.changed_ids, {})
+    eq(wizard_dry.ok, true, vim.inspect(wizard_dry))
+    eq(wizard_dry.outcome, "would_create")
+    eq(wizard_dry.id, "lib.nvim/wizard-plan")
+    eq(wizard_dry.slug, "wizard-plan")
+    eq(wizard_dry.renamed, false)
+    eq(wizard_dry.file, "lib.nvim/ROADMAP/plans/wizard-plan.md")
+    eq(wizard_dry.changed_ids, {})
     eq(everything(), files_before, "a dry run writes nothing, not even the folder")
 
     local made = one({
@@ -823,10 +823,10 @@ return function(H)
     eq(made.outcome, "created")
     eq(made.id, "lib.nvim/wizard-plan")
     eq(made.changed_ids, { "lib.nvim/wizard-plan" })
-    local text = H.read(root .. "/lib.nvim/ROADMAP/plans/wizard-plan.md")
-    has(text, "title: Wizard plan")
-    has(text, "gate: hard")
-    has(text, "Made by the wizard.")
+    local plan_text = H.read(root .. "/lib.nvim/ROADMAP/plans/wizard-plan.md")
+    has(plan_text, "title: Wizard plan")
+    has(plan_text, "gate: hard")
+    has(plan_text, "Made by the wizard.")
     local file =
       plans.from_file(root .. "/lib.nvim/ROADMAP/plans/wizard-plan.md", { area = "lib.nvim" })
     eq(file.phase_order, { "design", "build" })
@@ -838,8 +838,8 @@ return function(H)
       { dry_run = true }
     )
     eq({ again_dry.slug, again_dry.renamed }, { "wizard-plan-2", true })
-    local again = one({ { op = "plan_new", area = "lib.nvim", title = "Wizard plan" } })
-    eq({ again.id, again.renamed }, { "lib.nvim/wizard-plan-2", true })
+    local again_real = one({ { op = "plan_new", area = "lib.nvim", title = "Wizard plan" } })
+    eq({ again_real.id, again_real.renamed }, { "lib.nvim/wizard-plan-2", true })
 
     -- A task holds its name too (plans, tasks and finished items share one namespace per area).
     local held = one(
@@ -863,7 +863,7 @@ return function(H)
     eq(own.id, "lib.nvim/my-own")
 
     -- What is refused is told with a reason and nothing is written.
-    local snapshot = everything()
+    local vault_before = everything()
     local function refused(op, needle, code)
       local entry = one({ op })
       eq(entry.ok, false, vim.inspect(entry))
@@ -911,9 +911,10 @@ return function(H)
       "longer",
       "payload_too_large"
     )
-    eq(everything(), snapshot, "refused plans leave the vault as it was")
-    local doc = ops({ { op = "plan_new", area = "lib.nvim", title = "X", surprise = true } })
-    eq(doc.kind, "tasks.error", "an unknown field is refused for the whole request")
+    eq(everything(), vault_before, "refused plans leave the vault as it was")
+    local unknown_field =
+      ops({ { op = "plan_new", area = "lib.nvim", title = "X", surprise = true } })
+    eq(unknown_field.kind, "tasks.error", "an unknown field is refused for the whole request")
   end
 
   -- ── the index is current after all this ────────────────────────────────────
