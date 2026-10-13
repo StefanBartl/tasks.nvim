@@ -65,12 +65,14 @@ return function(H)
   -- every method is a capability, plus the features that are no method of their own
   local expected_caps = api.methods()
   for _, feature in ipairs({
+    "append_note",
     "etag",
     "if_match",
     "move_area_preview",
     "plan_new",
     "reminders",
     "reorder",
+    "tick_step",
   }) do
     table.insert(expected_caps, feature)
   end

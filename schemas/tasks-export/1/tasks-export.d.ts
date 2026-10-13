@@ -475,7 +475,7 @@ export interface TaskBrief {
  */
 export interface ResultEntry {
   n: number;
-  op: "set" | "new" | "reorder" | "done" | "move_area" | "plan_new";
+  op: "set" | "new" | "reorder" | "done" | "move_area" | "plan_new" | "tick_step" | "append_note";
   id?: string;
   ok: boolean;
   /**
@@ -533,8 +533,16 @@ export interface ResultEntry {
  * The operation that undoes a change: send it as a new operation (its `if_match` is the version the change left). A key the change added is `null` in the patch of a `set`.
  */
 export interface Inverse {
-  op: "set" | "reorder";
+  op: "set" | "reorder" | "tick_step";
   id: string;
+  /**
+   * `tick_step`: the number of the step.
+   */
+  n?: number;
+  /**
+   * `tick_step`: whether the step is to be ticked (true) or open (false).
+   */
+  done?: boolean;
   patch?: {};
   after?: string;
   before?: string;

@@ -1,5 +1,6 @@
 {
   "capabilities": [
+    "append_note",
     "areas",
     "bodies",
     "done_preview",
@@ -14,7 +15,8 @@
     "reminders",
     "reorder",
     "snapshot",
-    "task"
+    "task",
+    "tick_step"
   ],
   "engine": {
     "git": "0000000",

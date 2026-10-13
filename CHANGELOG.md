@@ -7,6 +7,12 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- `tick_step` and `append_note` in `tasks-ops/1` (capabilities of the same names): tick or untick one step of the `## Plan`
+  section of an open task (`n` is the number the `steps` of the `task` document carry; a dropped step is refused; the entry
+  has an `inverse`), and add one dated line below the notes (`## Notizen` / `## Notes`, made when missing; no `inverse`).
+  Both are a compare-and-set on `if_match`, set `updated`, keep the line endings and every other byte, and answer a dry run
+  without writing. The core is `mutate.edit_text` (the text of a task changed under the lock like `set` does for the keys)
+  and `steps.set_step` / `steps.add_note`. The `Inverse` of the schema may now be a `tick_step` (`n`, `done`).
 - `plan_new` in `tasks-ops/1` (capability `plan_new`): makes a plan file like `plan-new`. The entry carries `file`, `slug` and
   `renamed` (the slug was taken, `-2`, `-3` ... was chosen); a dry run names the id and writes nothing, not even the folder,
   so a form can show the name and the collision while the person types.

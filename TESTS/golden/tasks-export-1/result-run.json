@@ -1,6 +1,6 @@
 {
   "client_op_id": "golden-run",
-  "digest": "sha256:0026f742d55533ce",
+  "digest": "sha256:50c5a5ee10a71028",
   "dry_run": false,
   "engine": {
     "git": "0000000",
@@ -90,6 +90,16 @@
       "op": "reorder",
       "outcome": "changed",
       "renumbered": false,
+      "restore": [
+        {
+          "id": "lib.nvim/alpha-twin",
+          "if_match": "sha256:067a5d686fff0e52",
+          "op": "set",
+          "patch": {
+            "order": null
+          }
+        }
+      ],
       "writes": 1
     },
     {
