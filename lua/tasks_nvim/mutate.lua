@@ -1541,7 +1541,8 @@ function M.reopen(id, opts)
     return nil, "cannot write " .. target .. ": " .. tostring(cerr)
   end
   local called, removed, xerr = pcall(fsio.remove, finished.path)
-  if not called or not removed then
+  -- a finished file that is gone anyway (another process took it away between the read and here) is what was wanted
+  if (not called or not removed) and fsio.is_file(finished.path) then
     local why = tostring(called and (xerr or "unknown reason") or removed)
     -- two files for one task is the one state that must not stay: the open one is taken away again
     local rolled, back_ok = pcall(fsio.remove, target)

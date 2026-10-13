@@ -147,18 +147,22 @@ return function(H)
   -- the finished file cannot be removed (a lock of an editor or a scanner): the open copy is taken away again
   -- and the answer says nothing changed; when that fails too, the answer says that both files stay
   local real_remove = fsio.remove
-  ---@param fails fun(path: string): boolean  # which paths refuse to be removed
-  local function reopen_with_stuck(id, fails)
-    fsio.remove = function(path)
-      if fails(path) then
-        return false, "locked by another process"
-      end
-      return real_remove(path)
-    end
+  ---@param stub fun(path: string): boolean|nil, string|nil  # takes the place of fsio.remove
+  local function reopen_with_remove(id, stub)
+    fsio.remove = stub
     local ok, res, err = pcall(mutate.reopen, id, o)
     fsio.remove = real_remove
     assert(ok, res)
     return res, err
+  end
+  ---@param fails fun(path: string): boolean  # which paths refuse to be removed
+  local function reopen_with_stuck(id, fails)
+    return reopen_with_remove(id, function(path)
+      if fails(path) then
+        return false, "locked by another process"
+      end
+      return real_remove(path)
+    end)
   end
   local h = finished("Locked finished file")
   local h_done = backlog_file(h)
@@ -190,4 +194,44 @@ return function(H)
     "changed",
     "a later reopen works once the lock is gone"
   )
+
+  -- a removal that raises, and one that says no reason: the same rollback, the reason is told as it is
+  local vault_mod = require("tasks_nvim.vault")
+  local i = finished("Remove raises")
+  local i_done, i_open = backlog_file(i), vault_mod.task_path(root, "lib.nvim", "remove-raises")
+  local _, raised = reopen_with_remove(i, function(path)
+    if path == i_done then
+      error("boom")
+    end
+    return real_remove(path)
+  end)
+  has(raised, "nothing was changed")
+  has(raised, "boom")
+  eq({ fsio.is_file(i_done), fsio.is_file(i_open) }, { true, false })
+  has(H.read(readme), "Remove raises")
+
+  local _, silent = reopen_with_remove(i, function(path)
+    if path == i_done then
+      return false
+    end
+    return real_remove(path)
+  end)
+  has(silent, "unknown reason")
+  eq({ fsio.is_file(i_done), fsio.is_file(i_open) }, { true, false })
+
+  -- the finished file was taken away by someone else meanwhile: that is what was wanted, the open copy stays
+  local gone = finished("Gone meanwhile")
+  local gone_done = backlog_file(gone)
+  local gone_open = vault_mod.task_path(root, "lib.nvim", "gone-meanwhile")
+  local took, took_err = reopen_with_remove(gone, function(path)
+    if path == gone_done then
+      assert(real_remove(path))
+      return false, "ENOENT: no such file"
+    end
+    return real_remove(path)
+  end)
+  eq(took_err, nil)
+  eq(took.changed, true, vim.inspect(took))
+  eq({ fsio.is_file(gone_done), fsio.is_file(gone_open) }, { false, true })
+  lacks(H.read(readme), "Gone meanwhile")
 end
