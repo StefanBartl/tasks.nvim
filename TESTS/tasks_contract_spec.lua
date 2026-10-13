@@ -435,6 +435,37 @@ return function(H)
   has(nul.title, "\239\191\189", "a bad byte became U+FFFD")
   vim.fn.delete(root .. "/cascade.nvim/ROADMAP/tasks/nul-and-bad-utf8.md")
 
+  -- ── a read scope does not outlive a call: a new area shows up in the next document ──
+  local function area_names(doc)
+    local names = {}
+    for _, a in ipairs(doc.areas) do
+      names[a.name or a.id or ""] = true
+    end
+    return names
+  end
+  ok(area_names(call("areas"))["late.nvim"] == nil, "no such area yet")
+  call("snapshot")
+  vim.fn.mkdir(root .. "/late.nvim/ROADMAP/tasks", "p")
+  ok(area_names(call("areas"))["late.nvim"], "the area made after the last call is in the next one")
+  ok(area_names(call("snapshot"))["late.nvim"], "...also in the snapshot")
+  vim.fn.delete(root .. "/late.nvim", "rf")
+
+  -- A view that fails leaves no scope behind.
+  local scan = require("tasks_nvim.scan")
+  local fsio = require("tasks_nvim.fsio")
+  local real_all = scan.all
+  local flag = root .. "/flag-after-failed-view.txt"
+  scan.all = function()
+    ok(not fsio.is_file(flag))
+    H.write(flag, "x")
+    error("scan failed")
+  end
+  local failed = pcall(contract.view, { root = root })
+  scan.all = real_all
+  eq(failed, false, "the failure reaches the caller")
+  ok(fsio.is_file(flag), "the scope of the failed view is closed: the disk answers")
+  vim.fn.delete(flag)
+
   -- ── the clock and the engine info are real when nobody overrides them ──
   contract.clock, contract.engine_info = real_clock, real_engine
   local now = call("hello")

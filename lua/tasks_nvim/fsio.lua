@@ -28,28 +28,49 @@ local uv = vim.uv or vim.loop
 
 local M = {}
 
+---@class Tasks.FsioScope
+---@field owner thread|nil  # The coroutine that opened it (nil: the main one); anyone else gets the disk.
+---@field stat table<string, table|false>
+---@field lstat table<string, table|false>
+---@field real table<string, string>
+---@field memo table<string, any>
+
 ---The answers of the disk while a read scope is open (see `M.read_scope`); nil outside one.
----@type { stat: table, lstat: table, real: table, depth: integer, memo: table }|nil
+---@type Tasks.FsioScope|nil
 local scope = nil
+
+---The open scope, when the code that asks is the code that opened it. A scope left open over a yield never serves
+---another coroutine: it would answer from a state of the disk that is long gone.
+---@return Tasks.FsioScope|nil
+local function active()
+  if scope and scope.owner == coroutine.running() then
+    return scope
+  end
+  return nil
+end
+
+---Forget what the open scope knows: a write changes the disk under it.
+local function drop_cache()
+  local s = active()
+  if s then
+    s.stat, s.lstat, s.real, s.memo = {}, {}, {}, {}
+  end
+end
 
 ---Run `fn` with the answers of `stat`, `lstat` and `realpath` remembered: one build of the read view asks the same
 ---folder (an area, `ROADMAP`, the base of a ref) many times, and the vault does not change while it is read. The scope
----ends with `fn` (also when it raises), so the next request sees the disk again. Nested scopes share the outer one.
----Never wrap a write: the questions after it would be answered from before it.
+---ends with `fn` (also when it raises), so the next request sees the disk again. A scope inside a scope shares the
+---outer one. Meant for reads; a write of this module empties what the scope remembers, so a question after it is
+---answered from the disk again.
 ---@param fn fun(): any, any?
 ---@return any
 ---@return any?
 function M.read_scope(fn)
   if scope then
-    scope.depth = scope.depth + 1
-    local ok, a, b = pcall(fn)
-    scope.depth = scope.depth - 1
-    if not ok then
-      error(a, 0)
-    end
-    return a, b
+    -- inside (shared) or in a foreign coroutine (the disk answers there, see `active`)
+    return fn()
   end
-  scope = { stat = {}, lstat = {}, real = {}, depth = 1, memo = {} }
+  scope = { owner = coroutine.running(), stat = {}, lstat = {}, real = {}, memo = {} }
   local ok, a, b = pcall(fn)
   scope = nil
   if not ok then
@@ -65,60 +86,85 @@ end
 ---@param compute fun(): T
 ---@return T
 function M.scope_memo(key, compute)
-  if not scope then
+  local s = active()
+  if not s then
     return compute()
   end
-  local hit = scope.memo[key]
+  local hit = s.memo[key]
   if hit == nil then
     hit = compute()
-    scope.memo[key] = hit
+    s.memo[key] = hit
   end
   return hit
 end
 
----`uv.fs_stat`, answered once per read scope.
+---Whether the error code of a failed `stat` is a final answer ("it is not there"), and not a hiccup (a busy file, no
+---handles left, a denied folder) that the next question may not have.
+---@param code string|nil
+---@return boolean
+local function is_absent(code)
+  return code == "ENOENT" or code == "ENOTDIR"
+end
+
+---`uv.fs_stat`, answered once per read scope (a failure other than "not there" is not remembered).
 ---@param path string
 ---@return table|nil
 function M.stat(path)
-  if not scope then
+  local s = active()
+  if not s then
     return uv.fs_stat(path)
   end
-  local hit = scope.stat[path]
+  local hit = s.stat[path]
   if hit == nil then
-    hit = uv.fs_stat(path) or false
-    scope.stat[path] = hit
+    local st, _, code = uv.fs_stat(path)
+    if st then
+      hit = st
+    elseif is_absent(code) then
+      hit = false
+    else
+      return nil
+    end
+    s.stat[path] = hit
   end
   return hit or nil
 end
 
----`uv.fs_lstat`, answered once per read scope.
+---`uv.fs_lstat`, answered once per read scope. Only what is there is remembered: a link guard that asked "is this a
+---link?" must see a link that appears a moment later.
 ---@param path string
 ---@return table|nil
 function M.lstat(path)
-  if not scope then
+  local s = active()
+  if not s then
     return uv.fs_lstat(path)
   end
-  local hit = scope.lstat[path]
+  local hit = s.lstat[path]
   if hit == nil then
-    hit = uv.fs_lstat(path) or false
-    scope.lstat[path] = hit
+    hit = uv.fs_lstat(path)
+    if hit then
+      s.lstat[path] = hit
+    end
   end
-  return hit or nil
+  return hit
 end
 
----`uv.fs_realpath`, answered once per read scope.
+---`uv.fs_realpath`, answered once per read scope. Only an answer is remembered, not a miss (the same reason as
+---`lstat`; what repeats is the real path of the vault root).
 ---@param path string
 ---@return string|nil
 function M.realpath(path)
-  if not scope then
+  local s = active()
+  if not s then
     return uv.fs_realpath(path)
   end
-  local hit = scope.real[path]
+  local hit = s.real[path]
   if hit == nil then
-    hit = uv.fs_realpath(path) or false
-    scope.real[path] = hit
+    hit = uv.fs_realpath(path)
+    if hit then
+      s.real[path] = hit
+    end
   end
-  return hit or nil
+  return hit
 end
 
 ---Forward slashes, no trailing slash (a bare drive root `C:/` or `/` is kept).
@@ -311,6 +357,7 @@ end
 ---@return boolean ok
 ---@return string|nil err
 function M.write_atomic(path, content, opts)
+  drop_cache()
   local target = path
   if opts and opts.follow_symlinks then
     target = (vim.uv or vim.loop).fs_realpath(path) or path
@@ -345,6 +392,7 @@ end
 ---@return boolean ok
 ---@return string|nil err  `"exists"` when the file was already present
 function M.create_exclusive(path, content)
+  drop_cache()
   local ok, perr = ensure_parent(path)
   if not ok then
     return false, perr
@@ -473,6 +521,7 @@ end
 ---@return boolean ok
 ---@return string|nil err
 function M.rename(from, to)
+  drop_cache()
   if uv.fs_stat(to) then
     return false, "target exists: " .. to
   end
@@ -489,6 +538,7 @@ end
 ---@return boolean ok
 ---@return string|nil err  `"exists"` when the target was already there
 function M.copy(from, to)
+  drop_cache()
   local ok, perr = ensure_parent(to)
   if not ok then
     return false, perr
@@ -508,6 +558,7 @@ end
 ---@return boolean ok
 ---@return string|nil err
 function M.mkdirp(path)
+  drop_cache()
   local ok, err = mkdirp(path)
   if not ok then
     return false, tostring(err)
@@ -519,6 +570,7 @@ end
 ---@return boolean ok
 ---@return string|nil err
 function M.remove(path)
+  drop_cache()
   local ok, err = mutate.delete_file(path)
   if not ok then
     return false, tostring(err)

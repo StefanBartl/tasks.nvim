@@ -79,30 +79,96 @@ return function(H)
     fsio.read_scope(function()
       eq(fsio.is_file(probe), false, "a nested scope shares the outer one")
     end)
+    local function memo(v)
+      return fsio.scope_memo("k", function()
+        return v
+      end)
+    end
+    eq(memo(1), 1)
+    eq(memo(2), 1, "computed once per scope")
+  end)
+  eq(fsio.is_file(probe), true, "after the scope the disk answers again")
+  vim.fn.delete(probe)
+
+  -- The scope is closed after an error, too: the very same question gets a fresh answer.
+  local late = dir .. "/scope/late.txt"
+  local raised = pcall(fsio.read_scope, function()
+    eq(fsio.is_file(late), false)
+    H.write(late, "x")
+    error("boom")
+  end)
+  eq(raised, false, "an error passes through")
+  eq(fsio.is_file(late), true, "and the scope is closed after it")
+  vim.fn.delete(late)
+
+  -- ... also when the error comes from a nested scope that the outer one catches.
+  fsio.read_scope(function()
+    eq(fsio.is_file(late), false)
+    local inner = pcall(fsio.read_scope, function()
+      error("inner")
+    end)
+    eq(inner, false)
+    H.write(late, "x")
+    eq(fsio.is_file(late), false, "the outer scope is still open and keeps its answer")
+  end)
+  eq(fsio.is_file(late), true, "and it closes with its own function")
+  vim.fn.delete(late)
+
+  -- Two results pass through, a nil first one with its error as well.
+  local r1, r2 = fsio.read_scope(function()
+    return nil, "e"
+  end)
+  eq({ r1, r2 }, { nil, "e" }, "(nil, err) is handed on")
+
+  -- What is not there (and not a link, no real path) is not remembered for a link guard: it must see a late arrival.
+  local missing = dir .. "/scope/real-missing"
+  fsio.read_scope(function()
+    eq(fsio.realpath(missing), nil)
+    eq(fsio.lstat(missing), nil)
+    vim.fn.mkdir(missing, "p")
+    ok(fsio.realpath(missing), "a real path that was missing is asked again")
+    ok(fsio.lstat(missing), "so is the lstat")
+    ok(fsio.realpath(missing) == fsio.realpath(missing), "an answer is remembered")
+  end)
+  vim.fn.delete(missing, "d")
+
+  -- A write of the module empties what the scope knows.
+  local written = dir .. "/scope/written.txt"
+  fsio.read_scope(function()
+    eq(fsio.is_file(written), false)
+    ok(fsio.write_atomic(written, "x"))
+    eq(fsio.is_file(written), true, "the question after a write is answered from the disk")
     eq(
-      fsio.scope_memo("k", function()
+      fsio.scope_memo("w", function()
         return 1
       end),
       1
     )
+    ok(fsio.remove(written))
+    eq(fsio.is_file(written), false)
     eq(
-      fsio.scope_memo("k", function()
+      fsio.scope_memo("w", function()
         return 2
       end),
-      1,
-      "computed once per scope"
+      2,
+      "the remembered values went with the write"
     )
   end)
-  eq(fsio.is_file(probe), true, "after the scope the disk answers again")
-  local raised = pcall(fsio.read_scope, function()
-    error("boom")
+
+  -- Another coroutine never gets the answers of the scope that is open in this one.
+  local seen = {}
+  fsio.read_scope(function()
+    eq(fsio.is_file(late), false)
+    H.write(late, "x")
+    local co = coroutine.create(function()
+      seen.foreign = fsio.is_file(late)
+      seen.nested = fsio.read_scope(function()
+        return fsio.is_file(late)
+      end)
+    end)
+    ok(coroutine.resume(co))
+    eq(fsio.is_file(late), false, "the owner still has its answer")
   end)
-  eq(raised, false, "an error passes through")
-  eq(
-    fsio.scope_memo("k", function()
-      return 3
-    end),
-    3,
-    "and the scope is closed after it"
-  )
+  eq(seen, { foreign = true, nested = true }, "a foreign coroutine asked the disk")
+  vim.fn.delete(late)
 end
