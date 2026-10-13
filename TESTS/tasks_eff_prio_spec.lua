@@ -29,6 +29,15 @@ return function(H)
   assert(mutate.set(urgent, { blocked_by = { low } }, o))
   local plain = make("Plain", { prio = 2 })
   local none = make("No priority")
+  -- two tasks that wait on each other, each with its own priority, one that waits on them, and a parked one
+  local cyc_a = make("Cycle a", { prio = 2 })
+  local cyc_b = make("Cycle b", { prio = 3 })
+  assert(mutate.set(cyc_a, { blocked_by = { cyc_b } }, o))
+  assert(mutate.set(cyc_b, { blocked_by = { cyc_a } }, o))
+  local behind = make("Behind the cycle", { prio = 1 })
+  assert(mutate.set(behind, { blocked_by = { cyc_a } }, o))
+  local parked = make("Parked", { prio = 2 })
+  assert(mutate.set(parked, { status = "parked" }, o))
 
   local snap = assert(contract.snapshot({ root = root }))
   ---@type table<string, table>
@@ -44,6 +53,16 @@ return function(H)
   eq(by_id[plain].group, "open|2")
   eq(by_id[none].readiness.eff_prio, nil, "no priority is a missing number, not 0")
   eq(by_id[none].group, "open|-")
+
+  -- a task in a cycle keeps its own priority as the effective one (the group key says the same)
+  eq(by_id[cyc_a].readiness.in_cycle, true, "the fixture has a cycle")
+  eq(by_id[cyc_a].readiness.eff_prio, 2)
+  eq(by_id[cyc_a].group, "open|2")
+  eq(by_id[cyc_b].readiness.eff_prio, 3)
+  eq(by_id[cyc_b].group, "open|3")
+  eq(by_id[behind].readiness.eff_prio, 1)
+  eq(by_id[parked].readiness.eff_prio, 2)
+  eq(by_id[parked].group, "parked|2")
 
   -- the rule for every task of the vault
   for id, t in pairs(by_id) do

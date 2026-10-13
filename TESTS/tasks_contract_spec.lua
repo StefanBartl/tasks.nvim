@@ -117,19 +117,7 @@ return function(H)
     error("no task " .. id)
   end
 
-  -- the priority of a group is `readiness.eff_prio` (a client never takes the key apart); `-` is no priority
-  local with_prio, without_prio = 0, 0
-  for _, t in ipairs(snap.tasks) do
-    local label = t.group:match("|(.*)$")
-    local eff = t.readiness.eff_prio
-    eq(label, eff and tostring(eff) or "-", t.id .. ": group " .. t.group)
-    if eff then
-      with_prio = with_prio + 1
-    else
-      without_prio = without_prio + 1
-    end
-  end
-  ok(with_prio > 0 and without_prio > 0, "the fixture has tasks with and without a priority")
+  -- (the priority of a group is `readiness.eff_prio`: tasks_eff_prio_spec.lua holds the rule, cycles included)
 
   -- every readiness state of the fixture
   local states = {

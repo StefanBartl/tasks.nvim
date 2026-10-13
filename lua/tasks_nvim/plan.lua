@@ -635,6 +635,15 @@ function M.build(tasks, index)
     end
   end
 
+  -- A task the walk above did not reach (in a cycle) has its own priority as the effective one, so that
+  -- `readiness.eff_prio` and the priority part of `group_key` are always the same number.
+  for _, id in ipairs(ids) do
+    local node = plan.nodes[id]
+    if node and node.eff_prio == nil and by_id[id].prio then
+      node.eff_prio = by_id[id].prio
+    end
+  end
+
   -- The order: status, effective prio, leverage (high first), effort (small first), id.
   ---@param a string
   ---@param b string
