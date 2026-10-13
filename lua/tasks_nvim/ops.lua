@@ -613,6 +613,11 @@ local function do_append_note(op, ctx)
   if op.id == nil or op.text == nil then
     return refuse("invalid_argument", "append_note needs id and text")
   end
+  -- the steps module refuses what is not one line; the rest of what a front end may not write is judged here, as for
+  -- every other text (the 8-bit controls and the Unicode line separators end a line in other tools)
+  if has_control(op.text) then
+    return refuse("invalid_argument", "text contains a control character")
+  end
   local r, err, info = mutate.edit_text(op.id, function(text)
     return steps.add_note(text, op.text, ctx.today)
   end, {
