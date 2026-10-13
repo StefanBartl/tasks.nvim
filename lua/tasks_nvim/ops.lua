@@ -23,6 +23,8 @@
 ---    open task; a dropped step is refused; the answer has an `inverse`
 ---  - `append_note` { id, text, if_match? }: add one dated line to the notes of an open task (`## Notizen` / `## Notes`,
 ---    made when missing); no `inverse`
+---  - `reopen` { id, status?, if_match? }: bring a finished task back to `ROADMAP/tasks` (status `open`, or the one
+---    given), take its row out of the Backlog README; an open task is `unchanged`; a folder task is refused; no `inverse`
 ---  - `move_area` { id, to_area }: only as a dry run in this version (the report of `moves.preview`)
 ---  - `plan_new` { area, title, areas?, target?, phases?, gate?, status?, summary?, slug? }: make a plan file; a dry run names
 ---    the id it would get and whether the slug had to be changed (`plans.new`)
@@ -58,7 +60,17 @@ local vault = require("tasks_nvim.vault")
 local M = {}
 
 ---The operations, in the order the documentation names them.
-M.OPS = { "set", "new", "reorder", "done", "move_area", "plan_new", "tick_step", "append_note" }
+M.OPS = {
+  "set",
+  "new",
+  "reorder",
+  "done",
+  "move_area",
+  "plan_new",
+  "tick_step",
+  "append_note",
+  "reopen",
+}
 
 ---Longest `client_op_id`.
 M.MAX_CLIENT_OP_ID = 64
@@ -85,6 +97,7 @@ local FIELDS = {
   move_area = { id = "string", to_area = "string" },
   tick_step = { id = "string", n = "integer", done = "boolean", if_match = "string" },
   append_note = { id = "string", text = "string", if_match = "string" },
+  reopen = { id = "string", status = "string", if_match = "string" },
   plan_new = {
     area = "string",
     title = "string",
@@ -558,6 +571,44 @@ end
 ---@param op table
 ---@param ctx Tasks.OpsCtx
 ---@return table entry
+local function do_reopen(op, ctx)
+  if op.id == nil then
+    return refuse("invalid_argument", "reopen needs id")
+  end
+  local r, err, info = mutate.reopen(op.id, {
+    root = ctx.root,
+    today = ctx.today,
+    index = false,
+    status = op.status,
+    if_match = op.if_match,
+    dry_run = ctx.dry,
+  })
+  if not r then
+    return mutate_failure(ctx, err, info)
+  end
+  local entry = {
+    ok = true,
+    id = r.id,
+    outcome = r.changed and (ctx.dry and "would_change" or "changed") or "unchanged",
+    etag_before = r.etag_before,
+    etag_after = (not ctx.dry) and r.etag_after or nil,
+    changed_ids = (r.changed and not ctx.dry) and { r.id } or {},
+  }
+  if r.path and r.changed then
+    entry.file = rel(ctx, r.path)
+  end
+  if #r.notes > 0 then
+    entry.notes = r.notes
+  end
+  if r.changed and not ctx.dry then
+    ctx.touched[r.area] = true
+  end
+  return entry
+end
+
+---@param op table
+---@param ctx Tasks.OpsCtx
+---@return table entry
 local function do_append_note(op, ctx)
   if op.id == nil or op.text == nil then
     return refuse("invalid_argument", "append_note needs id and text")
@@ -911,6 +962,7 @@ local HANDLERS = {
   plan_new = do_plan_new,
   tick_step = do_tick_step,
   append_note = do_append_note,
+  reopen = do_reopen,
 }
 
 -- ── the request ──────────────────────────────────────────────────────────────

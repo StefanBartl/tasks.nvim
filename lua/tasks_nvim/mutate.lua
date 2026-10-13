@@ -1354,6 +1354,234 @@ function M.readme_add_row(text, bucket, filename, row)
   return out, true
 end
 
+-- ── reopen ───────────────────────────────────────────────────────────────────
+
+---Take the row of `filename` out of the `## <bucket> (N)` section of a `Backlog/README.md` text: the count is
+---recomputed, and a section that has no row left goes back to the placeholder `_noch leer_`. The file's line ending and
+---its trailing newline are kept; a README that has no such row changes nothing.
+---@param text string
+---@param bucket Tasks.Bucket
+---@param filename string
+---@return string text
+---@return boolean changed
+function M.readme_remove_row(text, bucket, filename)
+  local eol = fsio.eol_of(text)
+  local body = fsio.lf(text)
+  local trailing = body:sub(-1) == "\n"
+  if trailing then
+    body = body:sub(1, -2)
+  end
+  local lines = vim.split(body, "\n", { plain = true })
+  local marker = ("(./%s/%s)"):format(bucket, filename)
+  local heading
+  for i, line in ipairs(lines) do
+    if line:match("^##%s+" .. bucket .. "%f[%W]") then
+      heading = i
+      break
+    end
+  end
+  if not heading then
+    return text, false
+  end
+  local last = #lines
+  for i = heading + 1, #lines do
+    if lines[i]:match("^##%s") then
+      last = i - 1
+      break
+    end
+  end
+  local at
+  for i = heading + 1, last do
+    if lines[i]:find(marker, 1, true) and lines[i]:match("^|") then
+      at = i
+      break
+    end
+  end
+  if not at then
+    return text, false
+  end
+  table.remove(lines, at)
+  last = last - 1
+  -- the rows that are left
+  local rows, sep = 0, nil
+  for i = heading + 1, last do
+    if lines[i]:match("^|%s*%-%-%-") then
+      sep = i
+    elseif sep and lines[i]:match("^|") then
+      rows = rows + 1
+    end
+  end
+  if rows == 0 and sep then
+    -- the table head and its separator go, the placeholder comes back
+    local head = sep - 1
+    if head > heading and lines[head]:match("^|") then
+      table.remove(lines, sep)
+      lines[head] = "_noch leer_"
+    else
+      lines[sep] = "_noch leer_"
+    end
+  end
+  lines[heading] = ("## %s (%d)"):format(bucket, rows)
+  local out = table.concat(lines, "\n") .. (trailing and "\n" or "")
+  if eol == "\r\n" then
+    out = out:gsub("\n", "\r\n")
+  end
+  return out, true
+end
+
+---@class Tasks.ReopenOpts
+---@field root? string
+---@field today? string          # Sets `updated` (default: today).
+---@field status? string         # The status it comes back with (default `open`).
+---@field index? boolean         # Regenerate the area index (default true).
+---@field if_match? string       # The `etag` of the finished file the caller saw.
+---@field dry_run? boolean
+
+---Bring a finished task back: its file goes from `Backlog/<bucket>/` to `ROADMAP/tasks/`, `status` is `open` again,
+---`done_in` and `remind` are dropped, and its row leaves the README of the Backlog. A task that is open already is
+---`changed = false`. A task that is a folder is not moved (its pieces would need the same care as `done` takes).
+---
+---The order is the safe one: the open file is made first (and only when nothing is there under that name), the finished
+---file goes next (the open one is taken away again when that fails), the README last (a row that stays behind is
+---reported, the task is open).
+---@param id string
+---@param opts? Tasks.ReopenOpts
+---@return { id: string, area: string, path?: string, changed: boolean, etag_before?: string, etag_after?: string, notes: string[] }|nil result
+---@return string|nil err
+---@return table|nil info  # `{ code = "conflict"|"not_found"|"exists", ... }`
+function M.reopen(id, opts)
+  opts = opts or {}
+  local root, rerr = vault.root(opts)
+  if not root then
+    return nil, rerr
+  end
+  local area, slug, id_err = vault.parse_id(id)
+  if not area or not slug then
+    return nil, id_err or ("expected <area>/<slug>, got " .. tostring(id))
+  end
+  local open = scan.find(id, { root = root })
+  if open then
+    return { id = id, area = area, path = open.path, changed = false, notes = {} }, nil
+  end
+  local finished = scan.find_done(id, { root = root })
+  if not finished then
+    return nil, "no such finished task: " .. id, { code = "not_found" }
+  end
+  if finished.folder then
+    return nil, ("%s is a folder task: move it back by hand"):format(id)
+  end
+  if fsio.is_link(finished.path) then
+    return nil,
+      ("%s is a symbolic link or junction: it is not moved"):format(id),
+      { code = "forbidden" }
+  end
+  local status = opts.status or "open"
+  if not model.is_open_status(status) then
+    return nil,
+      ("unknown status '%s' (expected %s)"):format(
+        tostring(status),
+        table.concat(model.OPEN_STATUSES, ", ")
+      )
+  end
+  local today = opts.today or model.today()
+  if not model.is_date(today) then
+    return nil, "today is not a date (YYYY-MM-DD): " .. tostring(today)
+  end
+  local old_text, rd_err = fsio.read(finished.path)
+  if not old_text then
+    return nil, "cannot read " .. finished.path .. ": " .. tostring(rd_err)
+  end
+  local etag = fsio.etag(old_text)
+  if opts.if_match ~= nil and etag ~= opts.if_match then
+    return nil,
+      ("%s changed since it was read (its version is %s, not %s)"):format(
+        id,
+        etag,
+        tostring(opts.if_match)
+      ),
+      { code = "conflict", id = id, expected = opts.if_match, actual = etag }
+  end
+  local new_text, uerr = fm.update_text(old_text, {
+    { "status", status },
+    { "done_in", M.REMOVE },
+    { "remind", M.REMOVE },
+    { "updated", today },
+  })
+  if not new_text then
+    return nil, "cannot update " .. finished.path .. ": " .. tostring(uerr)
+  end
+  local target = vault.task_path(root, area, slug)
+  if
+    fsio.is_file(target)
+    or fsio.is_dir(vault.task_dir(root, area, slug))
+    or fsio.is_file(vault.plan_path(root, area, slug))
+  then
+    return nil,
+      ("there is an open task or plan of this name already: %s"):format(id),
+      { code = "exists" }
+  end
+  local result = {
+    id = id,
+    area = area,
+    path = target,
+    changed = true,
+    etag_before = etag,
+    etag_after = fsio.etag(new_text),
+    notes = {},
+  }
+  if opts.dry_run then
+    return result, nil
+  end
+
+  local created, cerr = fsio.create_exclusive(target, new_text)
+  if not created then
+    if fsio.is_exists(cerr) then
+      return nil, ("there is an open task of this name already: %s"):format(id), { code = "exists" }
+    end
+    return nil, "cannot write " .. target .. ": " .. tostring(cerr)
+  end
+  local removed, xerr = pcall(fsio.remove, finished.path)
+  if not removed or xerr == false then
+    -- two files for one task is the one state that must not stay: the open one is taken away again
+    pcall(fsio.remove, target)
+    return nil,
+      ("cannot remove the finished file of %s (nothing was changed): %s"):format(id, tostring(xerr))
+  end
+
+  -- the row of the README, under its lock; what goes wrong here leaves the task open and says so
+  local bucket = vault.BUCKET_OF_KIND[finished.kind or "task"]
+  local readme = vault.backlog_readme(root, area)
+  local filename = finished.path:match("([^/\\]+)$")
+  if bucket and filename and fsio.is_file(readme) then
+    local res, rd_err2 = fsio.with_lock(readme, function()
+      local text, e = fsio.read(readme)
+      if not text then
+        return nil, "cannot read " .. readme .. ": " .. tostring(e)
+      end
+      local fresh, changed = M.readme_remove_row(text, bucket, filename)
+      if not changed then
+        return { changed = false }, nil
+      end
+      local ok, werr = fsio.write_atomic(readme, fresh)
+      if not ok then
+        return nil, "cannot write " .. readme .. ": " .. tostring(werr)
+      end
+      return { changed = true }, nil
+    end)
+    if not res then
+      result.notes[#result.notes + 1] = "the row of the Backlog README stays: " .. tostring(rd_err2)
+    end
+  end
+  if opts.index ~= false then
+    local _, ierr = index.write_area(area, { root = root })
+    if ierr then
+      result.notes[#result.notes + 1] = "the overview of the area was not written: "
+        .. tostring(ierr)
+    end
+  end
+  return result, nil
+end
+
 -- ── done ─────────────────────────────────────────────────────────────────────
 
 ---Call an `fsio` function the way a rollback needs it: never raise, answer

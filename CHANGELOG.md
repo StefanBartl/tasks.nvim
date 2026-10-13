@@ -7,6 +7,7 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- `reopen` in `tasks-ops/1` (capability `reopen`): a finished task comes back to `ROADMAP/tasks` with status `open` (or the one given), `done_in` and `remind` dropped, and its row leaves the Backlog README (the count is recomputed, the placeholder comes back when it was the last). An open task is `unchanged`; a folder task, a bad status and a name that an open task or a plan has are refused; `if_match` is the version of the finished file; a README row that cannot be taken out is told in `notes`. New `mutate.reopen` and `mutate.readme_remove_row`.
 - `new` in `tasks-ops/1` takes a `body` (text, at most 20000 characters, no control character but the line break and the tab): the file gets that text below the frontmatter instead of the sections of the template, the first paragraph is the summary of the index. Empty, too long or with a control character it is refused; a dry run writes nothing.
 - `tick_step` and `append_note` in `tasks-ops/1` (capabilities of the same names): tick or untick one step of the `## Plan`
   section of an open task (`n` is the number the `steps` of the `task` document carry; a dropped step is refused; the entry

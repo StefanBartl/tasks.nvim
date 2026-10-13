@@ -71,6 +71,7 @@ return function(H)
     "move_area_preview",
     "plan_new",
     "reminders",
+    "reopen",
     "reorder",
     "tick_step",
   }) do

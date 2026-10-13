@@ -7,7 +7,7 @@ changes go through one door, `ops`, which asks the engine to write ([Writing](#w
 
 - [Asking](#asking) -- `tasks call`, the Lua door, the request
 - [The documents](#the-documents) -- `hello`, `snapshot`, `list`, `task`, `next`, `areas`, `donepreview`, `result`, `error`
-- [Writing](#writing-tasks-ops1) -- `ops`: `set`, `new`, `reorder`, `done`, `move_area`, `plan_new`, `tick_step`, `append_note`; conflicts, `done_preview`, dry runs
+- [Writing](#writing-tasks-ops1) -- `ops`: `set`, `new`, `reorder`, `done`, `move_area`, `plan_new`, `tick_step`, `append_note`, `reopen`; conflicts, `done_preview`, dry runs
 - [The rules every document keeps](#the-rules-every-document-keeps)
 - [`etag`, `rev`, `digest`](#etag-rev-digest) -- what changed
 - [Errors](#errors)
@@ -135,6 +135,7 @@ characters of letters, digits and `. _ : -`) is echoed in the answer, for a clie
 | `done` | `id`, `confirm`, `done_in`?, `remind`? | finish a task. `confirm` is the token of `done_preview` for the version of the file that was shown; `remind` (a date, `+<n>d` or `+<n>w`) sets a reminder on the finished task |
 | `tick_step` | `id`, `n`, `done`?, `if_match`? | tick (`done` true, the default) or untick step `n` of the `## Plan` section of an open task (the `steps` of the `task` document are numbered the same way). The step that is in the wanted state already is `unchanged`; a dropped step is `invalid_argument`. Sets `updated`. The entry has an `inverse` |
 | `append_note` | `id`, `text`, `if_match`? | add one line `- YYYY-MM-DD: <text>` below the last line of the notes of an open task (`## Notizen`, or `## Notes` in a task written in English; the section is made at the end when it is missing). `text` is one line of at most 1000 characters, no control character. Sets `updated`. No `inverse` |
+| `reopen` | `id`, `status`?, `if_match`? | bring a finished task back: the file goes from `Backlog/<bucket>/` to `ROADMAP/tasks/`, `status` is `open` (or the one given), `done_in` and `remind` are dropped, its row leaves the Backlog README. `if_match` is the version of the finished file. An open task is `unchanged`; a task that is a folder, or an open task or plan of that name, is refused. The entry has `file`, and `notes` when the README row could not be taken out. No `inverse` (finishing again needs `done_preview`) |
 | `move_area` | `id`, `to_area` | only as a dry run in this version: the report of what the move would break (below) |
 | `plan_new` | `area`, `title`, `areas`?, `target`?, `phases`?, `gate`?, `status`?, `summary`?, `slug`? | make a plan file under `ROADMAP/plans/` (what `plan-new` makes). The entry has `file`, `slug` and `renamed` (the slug was taken: plans, tasks, finished items share one namespace per area, so `-2`, `-3` ... is chosen). A **dry run** names the id the plan would get and writes nothing, so a form can show the name and the collision while the person types |
 
@@ -150,7 +151,7 @@ The answer, `tasks.result`, has one entry per operation:
 | `n`, `op`, `id` | the position, the operation and the task it is about (for `new`: the id it got) |
 | `ok`, `outcome` | `changed`, `unchanged`, `created`, `done`; a dry run says `would_change`, `would_create`, `would_done`, `would_move` (or `blocked`: the move cannot be made); `failed` |
 | `etag_before`, `etag_after` | the version of the file before and after (a dry run: only before) |
-| `inverse` | the operation that undoes it: send it as a new operation, its `if_match` is the version the change left. A key a `set` added is `null` in the inverse patch. `done`, `new` and `append_note` have none in this version |
+| `inverse` | the operation that undoes it: send it as a new operation, its `if_match` is the version the change left. A key a `set` added is `null` in the inverse patch. `done`, `new`, `append_note` and `reopen` have none in this version |
 | `restore` | a `reorder` only: one `set` for every file it wrote that gives the file its old `order` back (a key the move added is `null`), each with the version the move left in `if_match`. Send them all to take a move back **exactly**: `inverse` only puts the task back in its place, a task that had no `order` would keep one and the neighbours the move numbered stay numbered |
 | `changed_ids` | the ids whose files this wrote |
 | `index` | what happened to the generated overview of the area: `written`, `unchanged`, `removed` or `error`. It is written **once** for the whole request, however many tasks of the area changed |
