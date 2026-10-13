@@ -234,7 +234,7 @@ end
 ---`MIN_ORDER_GAP` apart stay apart, and so does their midpoint).
 ---@param n number
 ---@return string
-local function order_text(n)
+function M.order_text(n)
   if n == math.floor(n) and math.abs(n) < 1e15 then
     return ("%d"):format(n)
   end
@@ -257,6 +257,8 @@ end
 ---@field etag_before? string          # Of the moved task.
 ---@field etag_after? string
 ---@field inverse? Tasks.ReorderSpec   # Puts the moved task back where it was.
+---@field restore { id: string, was: number|nil, etag_after: string }[]  # What each file written held before and the version it has now (a real run).
+
 ---@field areas string[]
 ---@field index_errors string[]
 
@@ -367,6 +369,7 @@ function M.reorder(id, spec, opts)
     group = group,
     renumbered = false,
     writes = {},
+    restore = {},
     changed_ids = {},
     etag_before = moved.etag,
     etag_after = moved.etag,
@@ -402,7 +405,7 @@ function M.reorder(id, spec, opts)
   local touched = {}
   for i, w in ipairs(writes) do
     local is_moved = i == #writes
-    local r, err, info = mutate.set(w.id, { order = order_text(w.order) }, {
+    local r, err, info = mutate.set(w.id, { order = M.order_text(w.order) }, {
       root = opts.root,
       today = opts.today,
       index = false,
@@ -417,6 +420,7 @@ function M.reorder(id, spec, opts)
     end
     touched[#touched + 1] = w.id
     result.changed_ids[#result.changed_ids + 1] = w.id
+    result.restore[#result.restore + 1] = { id = w.id, was = w.was, etag_after = r.etag_after }
     if is_moved then
       result.etag_before = r.etag_before
       result.etag_after = r.etag_after

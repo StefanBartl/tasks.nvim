@@ -515,6 +515,18 @@ return function(H)
     { find("lib.nvim/r1").order, find("lib.nvim/r2").order, find("lib.nvim/r3").order },
     { 1, 2, 3 }
   )
+  -- a move that numbered neighbours: `restore` gives every file its old order back, not only its place
+  eq(ro.restore, nil, "a move that wrote one file has nothing to restore beyond its inverse")
+  eq(#back.restore, 3, "one entry for each file the move wrote")
+  for _, step in ipairs(back.restore) do
+    eq(step.op, "set")
+    eq(one({ step }).outcome, "changed", vim.inspect(step))
+  end
+  eq(
+    { find("lib.nvim/r1").order, find("lib.nvim/r2").order, find("lib.nvim/r3").order },
+    { nil, nil, 1 },
+    "the neighbours have no number again, the moved task its old one"
+  )
   eq(one({ { op = "reorder", id = "lib.nvim/gamma", group = "nothing|9" } }).error.code, "conflict")
   eq(
     one({ { op = "reorder", id = "lib.nvim/gamma", after = "cascade.nvim/delta" } }).error.code,
