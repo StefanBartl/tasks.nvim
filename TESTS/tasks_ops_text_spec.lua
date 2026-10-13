@@ -288,6 +288,45 @@ return function(H)
     "the second works on the version the first left"
   )
 
+  -- ── new with a body ────────────────────────────────────────────────────────
+  local text_in = "First line of the note.\n\n- one\n- two\n\n## Own section\n\nMore."
+  local made = one({ op = "new", area = "lib.nvim", title = "From a note", body = text_in })
+  eq({ made.ok, made.outcome }, { true, "created" }, vim.inspect(made))
+  local made_text = H.read(root .. "/" .. made.file)
+  has(made_text, "title: From a note")
+  has(made_text, "\n" .. text_in .. "\n", "the text is kept as it was written")
+  lacks(
+    made_text,
+    "## Kontext",
+    "the sections of the template are not added to a text that was given"
+  )
+  eq(
+    require("tasks_nvim.model").parse_text(
+      made_text,
+      { path = "x.md", area = "lib.nvim", slug = "x" }
+    ).summary,
+    "First line of the note.",
+    "the first paragraph is the summary"
+  )
+  -- no body: the template, as before
+  local plain = one({ op = "new", area = "lib.nvim", title = "No text given" })
+  has(H.read(root .. "/" .. plain.file), "## Kontext")
+  -- refused: empty, a control character, too long, and a dry run writes nothing
+  local function refused_new(body, needle, code)
+    local e = one({ op = "new", area = "lib.nvim", title = "Refused body", body = body })
+    eq({ e.ok, e.error.code }, { false, code or "invalid_argument" }, vim.inspect(e))
+    has(e.error.message, needle)
+  end
+  refused_new("   \n  ", "must not be empty")
+  refused_new("bell\7", "control character")
+  refused_new(string.rep("x", 20001), "longer than", "payload_too_large")
+  local dry_new = one(
+    { op = "new", area = "lib.nvim", title = "Dry body", body = "text" },
+    { dry_run = true }
+  )
+  eq({ dry_new.ok, dry_new.outcome }, { true, "would_create" })
+  eq(fsio.is_file(root .. "/lib.nvim/ROADMAP/tasks/dry-body.md"), false)
+
   -- the overview of the area is current
   local idx = require("tasks_nvim.index").write_area("lib.nvim", { root = root, check = true })
   eq(idx.action, "unchanged", "the overview of the area matches the files")

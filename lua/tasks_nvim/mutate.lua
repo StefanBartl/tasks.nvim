@@ -755,6 +755,17 @@ function M.new(area, opts)
 
   local lead = summary and (summary .. "\n\n") or ""
   local body = "\n" .. lead .. NEW_BODY_SECTIONS[lang]
+  if opts.body ~= nil then
+    -- the text the caller wrote replaces the sections of the template (it may carry its own)
+    if type(opts.body) ~= "string" then
+      return nil, "body must be text"
+    end
+    local text = vim.trim(fsio.lf(opts.body))
+    if text == "" then
+      return nil, "body must not be empty"
+    end
+    body = "\n" .. lead .. text .. "\n"
+  end
   local text, ferr = fm.update_text(
     body,
     meta_pairs({

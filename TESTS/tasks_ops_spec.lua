@@ -97,7 +97,7 @@ return function(H)
     "patch must be an object"
   )
   bad(
-    '{"ops":[{"op":"new","area":"lib.nvim","title":"x","body":"hi"}]}',
+    '{"ops":[{"op":"new","area":"lib.nvim","title":"x","body":5}]}',
     "invalid_argument",
     "body must be"
   )

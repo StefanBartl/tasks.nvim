@@ -7,6 +7,7 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- `new` in `tasks-ops/1` takes a `body` (text, at most 20000 characters, no control character but the line break and the tab): the file gets that text below the frontmatter instead of the sections of the template, the first paragraph is the summary of the index. Empty, too long or with a control character it is refused; a dry run writes nothing.
 - `tick_step` and `append_note` in `tasks-ops/1` (capabilities of the same names): tick or untick one step of the `## Plan`
   section of an open task (`n` is the number the `steps` of the `task` document carry; a dropped step is refused; the entry
   has an `inverse`), and add one dated line below the notes (`## Notizen` / `## Notes`, made when missing; no `inverse`).
