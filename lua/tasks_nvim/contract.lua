@@ -54,6 +54,7 @@ M.CAPABILITIES = {
   "areas",
   "bodies",
   "done_preview",
+  "eff_prio",
   "etag",
   "hello",
   "if_match",

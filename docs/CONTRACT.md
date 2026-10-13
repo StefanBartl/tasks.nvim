@@ -100,7 +100,10 @@ task has a `## Plan` section), `etag` and, for an open task, `readiness`:
 ```
 
 `state` is `ready`, `decision`, `waiting`, `stuck`, `freed` or `parked` (the one definition of "can be started",
-`tasks_nvim.plan`); `inversion`, `in_cycle` and `same_file` appear when they apply. `group` is `<status>|<eff_prio>`.
+`tasks_nvim.plan`); `inversion`, `in_cycle` and `same_file` appear when they apply. `group` is `<status>|<eff_prio>` (`-` without
+a priority): it is the guard of `reorder` and nothing a client takes apart -- the priority of a task is `readiness.eff_prio` (missing
+when there is none), which the capability `eff_prio` promises equals the part after the bar. An engine without the capability
+is not read as "no priority".
 
 **`tasks.donepreview`** and **`tasks.result`** belong to writing and are described there.
 
