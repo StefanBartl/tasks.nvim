@@ -7,7 +7,7 @@ changes go through one door, `ops`, which asks the engine to write ([Writing](#w
 
 - [Asking](#asking) -- `tasks call`, the Lua door, the request
 - [The documents](#the-documents) -- `hello`, `snapshot`, `list`, `task`, `next`, `areas`, `donepreview`, `result`, `error`
-- [Writing](#writing-tasks-ops1) -- `ops`: `set`, `new`, `reorder`, `done`, `move_area`; conflicts, `done_preview`, dry runs
+- [Writing](#writing-tasks-ops1) -- `ops`: `set`, `new`, `reorder`, `done`, `move_area`, `plan_new`; conflicts, `done_preview`, dry runs
 - [The rules every document keeps](#the-rules-every-document-keeps)
 - [`etag`, `rev`, `digest`](#etag-rev-digest) -- what changed
 - [Errors](#errors)
@@ -134,6 +134,7 @@ characters of letters, digits and `. _ : -`) is echoed in the answer, for a clie
 | `reorder` | `id`, `after`?, `before`?, `group`?, `if_match`? | move a task inside its group (same stage, same `status|eff_prio`, the `group` of the task entry): it gets an `order` between its neighbours'; tasks that have no `order` yet are numbered only where the spot needs it, and a crowd of halvings is renumbered. A move that would write more than 50 files is refused |
 | `done` | `id`, `confirm`, `done_in`?, `remind`? | finish a task. `confirm` is the token of `done_preview` for the version of the file that was shown; `remind` (a date, `+<n>d` or `+<n>w`) sets a reminder on the finished task |
 | `move_area` | `id`, `to_area` | only as a dry run in this version: the report of what the move would break (below) |
+| `plan_new` | `area`, `title`, `areas`?, `target`?, `phases`?, `gate`?, `status`?, `summary`?, `slug`? | make a plan file under `ROADMAP/plans/` (what `plan-new` makes). The entry has `file`, `slug` and `renamed` (the slug was taken: plans, tasks, finished items share one namespace per area, so `-2`, `-3` ... is chosen). A **dry run** names the id the plan would get and writes nothing, so a form can show the name and the collision while the person types |
 
 **The shape is checked first, for the whole request**: an unknown operation or field, a wrong type, an empty or too long
 list is `invalid_argument` (`payload_too_large` for more than 100 operations) and nothing runs. After that every

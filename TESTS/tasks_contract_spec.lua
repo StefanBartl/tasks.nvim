@@ -64,7 +64,14 @@ return function(H)
   eq(hello.engine, { version = "0.1.0-test", git = "0000000", nvim = "0.0.0" })
   -- every method is a capability, plus the features that are no method of their own
   local expected_caps = api.methods()
-  for _, feature in ipairs({ "etag", "if_match", "move_area_preview", "reminders", "reorder" }) do
+  for _, feature in ipairs({
+    "etag",
+    "if_match",
+    "move_area_preview",
+    "plan_new",
+    "reminders",
+    "reorder",
+  }) do
     table.insert(expected_caps, feature)
   end
   table.sort(expected_caps)

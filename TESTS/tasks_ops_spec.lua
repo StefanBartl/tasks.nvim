@@ -764,6 +764,106 @@ return function(H)
     )
   end
 
+  -- ── plan_new: a plan file, with a dry run that names it ─────────────────────────
+  do
+    local files_before = everything()
+    local dry = one({
+      {
+        op = "plan_new",
+        area = "lib.nvim",
+        title = "Wizard plan",
+        areas = { "lib.nvim", "cascade.nvim" },
+        target = "lib.nvim/alpha",
+        phases = { "design", "build" },
+        gate = "hard",
+        summary = "Made by the wizard.",
+      },
+    }, { dry_run = true })
+    eq(dry.ok, true, vim.inspect(dry))
+    eq(dry.outcome, "would_create")
+    eq(dry.id, "lib.nvim/wizard-plan")
+    eq(dry.slug, "wizard-plan")
+    eq(dry.renamed, false)
+    eq(dry.file, "lib.nvim/ROADMAP/plans/wizard-plan.md")
+    eq(dry.changed_ids, {})
+    eq(everything(), files_before, "a dry run writes nothing, not even the folder")
+
+    local made = one({
+      {
+        op = "plan_new",
+        area = "lib.nvim",
+        title = "Wizard plan",
+        areas = { "lib.nvim", "cascade.nvim" },
+        target = "lib.nvim/alpha",
+        phases = { "design", "build" },
+        gate = "hard",
+        summary = "Made by the wizard.",
+      },
+    })
+    eq(made.ok, true, vim.inspect(made))
+    eq(made.outcome, "created")
+    eq(made.id, "lib.nvim/wizard-plan")
+    eq(made.changed_ids, { "lib.nvim/wizard-plan" })
+    local text = H.read(root .. "/lib.nvim/ROADMAP/plans/wizard-plan.md")
+    has(text, "title: Wizard plan")
+    has(text, "gate: hard")
+    has(text, "Made by the wizard.")
+    local file =
+      plans.from_file(root .. "/lib.nvim/ROADMAP/plans/wizard-plan.md", { area = "lib.nvim" })
+    eq(file.phase_order, { "design", "build" })
+    eq(file.target, "lib.nvim/alpha")
+
+    -- The same title again: the name is taken, another one is chosen, and the dry run says so beforehand.
+    local again_dry = one(
+      { { op = "plan_new", area = "lib.nvim", title = "Wizard plan" } },
+      { dry_run = true }
+    )
+    eq({ again_dry.slug, again_dry.renamed }, { "wizard-plan-2", true })
+    local again = one({ { op = "plan_new", area = "lib.nvim", title = "Wizard plan" } })
+    eq({ again.id, again.renamed }, { "lib.nvim/wizard-plan-2", true })
+
+    -- A task holds its name too (plans, tasks and finished items share one namespace per area).
+    local held = one(
+      { { op = "plan_new", area = "lib.nvim", title = "Alpha" } },
+      { dry_run = true }
+    )
+    eq({ held.slug, held.renamed }, { "alpha-2", true })
+    -- A slug can be asked for.
+    local own = one(
+      { { op = "plan_new", area = "lib.nvim", title = "Whatever", slug = "my-own" } },
+      { dry_run = true }
+    )
+    eq(own.id, "lib.nvim/my-own")
+
+    -- What is refused is told with a reason and nothing is written.
+    local snapshot = everything()
+    local function refused(op, needle, code)
+      local entry = one({ op })
+      eq(entry.ok, false, vim.inspect(entry))
+      eq(entry.error.code, code or "invalid_argument", vim.inspect(entry))
+      has(entry.error.message, needle)
+    end
+    refused({ op = "plan_new", area = "nowhere.nvim", title = "X" }, "unknown area", "not_found")
+    refused({ op = "plan_new", area = "lib.nvim", title = "bad\27title" }, "control character")
+    refused({ op = "plan_new", area = "lib.nvim", title = "X", phases = { "Not Kebab" } }, "kebab")
+    refused(
+      { op = "plan_new", area = "lib.nvim", title = "X", phases = { "a,b" } },
+      "must not contain"
+    )
+    refused({ op = "plan_new", area = "lib.nvim", title = "X", gate = "soft" }, "gate")
+    refused({ op = "plan_new", area = "lib.nvim", title = "X", status = "done" }, "status")
+    refused({ op = "plan_new", area = "lib.nvim", title = "X", summary = "two\nlines" }, "one line")
+    refused({ op = "plan_new", area = "lib.nvim", title = "X", target = "nonsense" }, "target")
+    refused(
+      { op = "plan_new", area = "lib.nvim", title = string.rep("x", 301) },
+      "longer",
+      "payload_too_large"
+    )
+    eq(everything(), snapshot, "refused plans leave the vault as it was")
+    local doc = ops({ { op = "plan_new", area = "lib.nvim", title = "X", surprise = true } })
+    eq(doc.kind, "tasks.error", "an unknown field is refused for the whole request")
+  end
+
   -- ── the index is current after all this ────────────────────────────────────
   local idx = require("tasks_nvim.index").write_area("lib.nvim", { root = root, check = true })
   eq(idx.action, "unchanged", "the overview of the area matches the files")
