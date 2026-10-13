@@ -285,7 +285,7 @@ end
 ---@param dir string
 ---@return string|nil err
 function M.leaves(root, dir)
-  local real_dir, real_root = uv.fs_realpath(dir), uv.fs_realpath(root)
+  local real_dir, real_root = fsio.realpath(dir), fsio.realpath(root)
   if real_dir and real_root and not fsio.is_inside(real_root, real_dir) then
     local shown = fsio.norm(dir)
     local base = fsio.norm(root)
@@ -324,6 +324,21 @@ end
 ---@param root string
 ---@return Tasks.Area[]
 function M.areas(root)
+  -- The list is the same for every question of one read scope; a copy is handed out (callers may sort or edit it).
+  local shared = fsio.scope_memo("areas:" .. root, function()
+    return M.scan_areas(root)
+  end)
+  local out = {}
+  for i, a in ipairs(shared) do
+    out[i] = { name = a.name, path = a.path }
+  end
+  return out
+end
+
+---The areas as the disk has them now (`M.areas` without the read scope's memory).
+---@param root string
+---@return Tasks.Area[]
+function M.scan_areas(root)
   local out = {}
   local handle = uv.fs_scandir(root)
   if not handle then

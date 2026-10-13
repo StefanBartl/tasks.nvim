@@ -493,7 +493,7 @@ local function locate(rel, bases, allowed)
     local full = collapse_dots(rel)
     for _, dir in ipairs(allowed) do
       if fsio.is_inside(dir, full) then
-        if uv.fs_stat(full) then
+        if fsio.stat(full) then
           return fsio.dirname(full), full, full:match("([^/]+)$") or full
         end
         return nil, nil, nil
@@ -503,7 +503,7 @@ local function locate(rel, bases, allowed)
   end
   for _, base in ipairs(bases) do
     local full = base .. "/" .. rel
-    if uv.fs_stat(full) then
+    if fsio.stat(full) then
       if not has_dotdot(rel) then
         return base, full, rel
       end
