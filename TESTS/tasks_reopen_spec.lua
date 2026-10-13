@@ -126,6 +126,15 @@ return function(H)
   local right = one({ { op = "reopen", id = d, if_match = fsio.etag(H.read(backlog_file(d))) } })
   eq(right.outcome, "changed", vim.inspect(right))
 
+  -- the row leaves the bucket the file was in, whatever its kind says now
+  local g = finished("Kind edited later", { kind = "feature" })
+  local g_path = backlog_file(g)
+  has(g_path, "/Backlog/FEATURES/")
+  H.write(g_path, (H.read(g_path):gsub("kind: feature", "kind: bug")))
+  has(H.read(readme), "Kind edited later")
+  eq(one({ { op = "reopen", id = g } }).outcome, "changed")
+  lacks(H.read(readme), "Kind edited later")
+
   -- a task that is a folder is not moved
   local f = assert(
     mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = "A folder", folder = true }))

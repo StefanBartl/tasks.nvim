@@ -239,6 +239,12 @@ return function(H)
     { op = "append_note", id = "lib.nvim/noter", text = string.rep("x", 1001) },
     "longer than"
   )
+  -- the 8-bit controls and the Unicode line separators are refused like in every other text a front end sends
+  refused(
+    { op = "append_note", id = "lib.nvim/noter", text = "a\226\128\168b" },
+    "control character"
+  )
+  refused({ op = "append_note", id = "lib.nvim/noter", text = "c\194\133d" }, "control character")
   refused({ op = "append_note", id = "lib.nvim/noter" }, "needs id and text")
   refused({ op = "append_note", id = "lib.nvim/missing", text = "x" }, "", "not_found")
   eq(H.read(n1), bytes)

@@ -1540,16 +1540,21 @@ function M.reopen(id, opts)
     end
     return nil, "cannot write " .. target .. ": " .. tostring(cerr)
   end
-  local removed, xerr = pcall(fsio.remove, finished.path)
-  if not removed or xerr == false then
+  local called, removed, xerr = pcall(fsio.remove, finished.path)
+  if not called or not removed then
     -- two files for one task is the one state that must not stay: the open one is taken away again
     pcall(fsio.remove, target)
     return nil,
-      ("cannot remove the finished file of %s (nothing was changed): %s"):format(id, tostring(xerr))
+      ("cannot remove the finished file of %s (nothing was changed): %s"):format(
+        id,
+        tostring(called and xerr or removed)
+      )
   end
 
   -- the row of the README, under its lock; what goes wrong here leaves the task open and says so
-  local bucket = vault.BUCKET_OF_KIND[finished.kind or "task"]
+  -- the bucket is the folder the file was in, not what its kind says now (a kind edited by hand after the finish
+  -- would name the other one, and the row would stay)
+  local bucket = finished.path:gsub("\\", "/"):match("/Backlog/(%u+)/[^/]+$")
   local readme = vault.backlog_readme(root, area)
   local filename = finished.path:match("([^/\\]+)$")
   if bucket and filename and fsio.is_file(readme) then
