@@ -13,7 +13,8 @@
 ---    `if_match` (the task's `etag`) and `expect` ({ key, value }) are checked UNDER the file lock, so two writers
 ---    cannot both win; a change of the relations (`blocked_by`, `after`, `plan`, `phase`) is judged first
 ---    (`tasks_nvim.edges`)
----  - `new` { area, title, fields? }: create a task; `fields` are the plain keys (kind, prio, effort, tags, category,
+---  - `new` { area, title, fields?, body? }: create a task; `body` (text, at most 20000 characters) replaces the template
+---    sections of the file; `fields` are the plain keys (kind, prio, effort, tags, category,
 ---    severity, value, actor, summary, refs, status, slug). Relations are set afterwards
 ---  - `reorder` { id, after?, before?, group?, if_match? }: move a task inside its group (`batch.reorder`)
 ---  - `done` { id, confirm, done_in?, remind? }: finish a task. `confirm` is the token of `done_preview` for the version of the
@@ -62,6 +63,9 @@ M.OPS = { "set", "new", "reorder", "done", "move_area", "plan_new", "tick_step",
 ---Longest `client_op_id`.
 M.MAX_CLIENT_OP_ID = 64
 
+---Longest `body` of `new`, in characters.
+M.MAX_BODY = 20000
+
 ---Longest entry of a list value (a tag, a ref, an id).
 M.MAX_ENTRY = 300
 
@@ -69,7 +73,7 @@ M.MAX_ENTRY = 300
 ---@type table<string, table<string, string>>
 local FIELDS = {
   set = { id = "string", patch = "object", if_match = "string", expect = "object" },
-  new = { area = "string", title = "string", fields = "object", body = "null" },
+  new = { area = "string", title = "string", fields = "object", body = "string" },
   reorder = {
     id = "string",
     after = "string",
@@ -604,7 +608,13 @@ local function do_new(op, ctx)
       return refuse("invalid_argument", key .. " contains a control character")
     end
   end
+  if op.body ~= nil and has_control(op.body) then
+    return refuse("invalid_argument", "body contains a control character")
+  end
   local over = over_limit("title", op.title)
+  if too_long(op.body, M.MAX_BODY) then
+    over = ("body is longer than %d characters"):format(M.MAX_BODY)
+  end
   for key, value in pairs(fields) do
     over = over or over_limit(key, value)
   end
@@ -626,6 +636,7 @@ local function do_new(op, ctx)
       today = ctx.today,
       index = false,
       title = op.title,
+      body = op.body,
       dry_run = ctx.dry,
     })
   )
