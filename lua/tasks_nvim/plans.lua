@@ -308,6 +308,9 @@ function M.summary(file, opts)
   return out
 end
 
+---The longest slug of a plan (the file name has room for `-NN` and `.md`).
+M.MAX_SLUG = 200
+
 ---@class Tasks.NewPlanOpts
 ---@field root? string
 ---@field title string
@@ -398,6 +401,9 @@ function M.new(area, opts)
   if not vault.valid_slug(base) or vault.is_reserved_name(base) then
     return nil, "invalid slug: " .. tostring(base)
   end
+  if #base > M.MAX_SLUG then
+    return nil, ("slug is longer than %d characters"):format(M.MAX_SLUG)
+  end
 
   local pairs_ = { { "title", title }, { "status", status } }
   if #areas > 0 then
@@ -455,7 +461,7 @@ function M.new(area, opts)
     local held = backlog_taken[slug] ~= nil
       or fsio.is_file(vault.task_path(root, area, slug))
       or fsio.is_dir(vault.task_dir(root, area, slug))
-      or (opts.dry_run and fsio.is_file(path))
+      or (opts.dry_run and (fsio.is_file(path) or fsio.is_dir(path)))
     if not held and opts.dry_run then
       return { id = area .. "/" .. slug, path = path, slug = slug, renamed = n > 1 }, nil
     end

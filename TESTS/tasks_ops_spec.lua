@@ -828,6 +828,14 @@ return function(H)
       { dry_run = true }
     )
     eq({ held.slug, held.renamed }, { "alpha-2", true })
+    -- A folder with the name of a plan file holds it as well, in the dry run and in the real run.
+    vim.fn.mkdir(root .. "/lib.nvim/ROADMAP/plans/dir-slug.md", "p")
+    local folder_dry = one(
+      { { op = "plan_new", area = "lib.nvim", title = "Dir slug" } },
+      { dry_run = true }
+    )
+    local folder_real = one({ { op = "plan_new", area = "lib.nvim", title = "Dir slug" } })
+    eq(folder_dry.id, folder_real.id, "the dry run names the plan the real run makes")
     -- A slug can be asked for.
     local own = one(
       { { op = "plan_new", area = "lib.nvim", title = "Whatever", slug = "my-own" } },
@@ -850,6 +858,31 @@ return function(H)
       { op = "plan_new", area = "lib.nvim", title = "X", phases = { "a,b" } },
       "must not contain"
     )
+    -- a control character is refused in every text the request carries, not in the title only
+    for _, field in ipairs({ "summary", "slug", "target", "gate", "status" }) do
+      local op = { op = "plan_new", area = "lib.nvim", title = "X" }
+      op[field] = "bad\27value"
+      refused(op, "control character")
+    end
+    refused(
+      { op = "plan_new", area = "lib.nvim", title = "X", areas = { "a\27b" } },
+      "control character"
+    )
+    refused(
+      { op = "plan_new", area = "lib.nvim", title = "X", phases = { "a\27b" } },
+      "control character"
+    )
+    refused({ op = "plan_new", area = "lib.\27[31mnvim", title = "X" }, "control character")
+    refused(
+      { op = "plan_new", area = string.rep("a", 400), title = "X" },
+      "longer",
+      "payload_too_large"
+    )
+    refused(
+      { op = "plan_new", area = "lib.nvim", title = "X", slug = string.rep("a", 201) },
+      "longer than"
+    )
+    refused({ op = "new", area = "lib.\27[31mnvim", title = "X" }, "control character")
     refused({ op = "plan_new", area = "lib.nvim", title = "X", gate = "soft" }, "gate")
     refused({ op = "plan_new", area = "lib.nvim", title = "X", status = "done" }, "status")
     refused({ op = "plan_new", area = "lib.nvim", title = "X", summary = "two\nlines" }, "one line")
