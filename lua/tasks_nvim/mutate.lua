@@ -599,6 +599,28 @@ local function normalize_patch(patch, opts)
   return result, nil
 end
 
+---A one-id `blocked_by`/`after` is written as a plain scalar. Where the file holds the key as a YAML block list
+---(Obsidian's Properties editor writes those), the list stays a list: a one-element list keeps the style.
+---@param text string
+---@param pairs_ table[]
+---@return table[]
+local function keep_block_lists(text, pairs_)
+  local parsed = fm.parse(text)
+  if not parsed or not parsed.has_block then
+    return pairs_
+  end
+  local out = {}
+  for i, kv in ipairs(pairs_) do
+    local e = parsed.by_key[kv[1]]
+    if type(kv[2]) == "string" and e and e.block then
+      out[i] = { kv[1], { kv[2] } }
+    else
+      out[i] = kv
+    end
+  end
+  return out
+end
+
 ---Whether `patch` would be accepted by `set`, and in what shape: the validation without a task and without a write.
 ---@param patch table<string, any>
 ---@param opts? { allow_unknown?: boolean }
@@ -970,7 +992,7 @@ function M.set(id, patch, opts)
   if cerr then
     return nil, cerr, cinfo
   end
-  local probe, uerr = fm.update_text(text, pairs_)
+  local probe, uerr = fm.update_text(text, keep_block_lists(text, pairs_))
   if not probe then
     return nil, "cannot update " .. task.path .. ": " .. tostring(uerr)
   end
@@ -1022,7 +1044,7 @@ function M.set(id, patch, opts)
       }),
       keys
     )
-    local wrote, wr_err = fm.update(task.path, pairs_)
+    local wrote, wr_err = fm.update(task.path, keep_block_lists(cur, pairs_))
     if not wrote then
       return nil, wr_err
     end
