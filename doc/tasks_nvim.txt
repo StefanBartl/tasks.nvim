@@ -133,7 +133,8 @@ A wrong key or value is ignored with a message and listed in
   :Tasks attach {id} {file} [name=]      Copy a file into `assets/`.
   :Tasks folderize {id}                  Make a plain task a folder task.
   :Tasks template [--to=]                The task file template.
-  :Tasks open {id}                       Open the task file.
+  :Tasks open {id|part}                  Open the task file; a part of the name is
+                                         enough when it points at one task.
   :Tasks preview {id}                    Browser preview (mdview.nvim).
   :Tasks index [{area}] [--all] [--check]
                                          (Re)write the generated overviews;

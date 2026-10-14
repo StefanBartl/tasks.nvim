@@ -269,6 +269,37 @@ function M.register_types()
     end,
   })
 
+  -- `:Tasks open <part>`: anything is accepted here, `cmd.task_open` resolves it (exact id, else a part of a name).
+  composer.register_type("TASK_QUERY", {
+    desc = "Id or part of the name of a task, open or finished",
+    validate = function(raw)
+      return true, raw, nil
+    end,
+    complete = function(arg_lead)
+      local ids = vim.list_extend({}, open_ids())
+      vim.list_extend(ids, done_ids())
+      table.sort(ids)
+      local out = prefix_ci(ids, arg_lead)
+      -- a slug without its area, where it names one task only
+      local count = {}
+      for _, id in ipairs(ids) do
+        local slug = id:match("/(.+)$")
+        count[slug] = (count[slug] or 0) + 1
+      end
+      local slugs = {}
+      for slug, n in pairs(count) do
+        if n == 1 then
+          slugs[#slugs + 1] = slug
+        end
+      end
+      table.sort(slugs)
+      if not arg_lead:find("/", 1, true) then
+        vim.list_extend(out, prefix_ci(slugs, arg_lead))
+      end
+      return out
+    end,
+  })
+
   -- `--to=`: the target words, and after `file:` a path completed like a file name (the prefix stays).
   composer.register_type("TASK_TARGET", {
     validate = function(raw)
@@ -1015,8 +1046,14 @@ local function nested_routes()
 
     {
       path = { "task", "open" },
-      args = { { name = "id", type = "TASK_ID", allow_done = true, desc = ANY_TASK_DESC } },
-      desc = "Open the file of a task (an open one, else its finished copy in Backlog/)",
+      args = {
+        {
+          name = "id",
+          type = "TASK_QUERY",
+          desc = "Task id, or a part of its name (`area/` narrows)",
+        },
+      },
+      desc = "Open the file of a task (an open one, else its finished copy in Backlog/); a part of the name is enough when it points at one task, else the candidates are offered",
       run = function(ctx)
         cmd().task_open(ctx)
       end,

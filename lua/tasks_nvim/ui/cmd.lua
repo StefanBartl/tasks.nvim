@@ -1649,20 +1649,60 @@ function M.task_template(ctx)
   end
 end
 
----`:Tasks open <id>` -- an open task, else its finished copy in `Backlog/`.
+---Seam for the choice among several tasks (`nil`: `vim.ui.select`); specs replace it.
+---@type (fun(items: Tasks.Match[], opts: table, cb: fun(choice: Tasks.Match|nil)))|nil
+M.select_task = nil
+
+---`:Tasks open <id|part>` -- an open task, else its finished copy in `Backlog/`. Anything but a full id is looked
+---up by `tasks_nvim.match`: one hit is opened, several are offered, none is told (with the closest slugs).
 ---@param ctx table
 function M.task_open(ctx)
   if not no_stray_words(ctx) then
     return
   end
-  local id = ctx.args.id
-  local task, find_err = scan.find(id)
-  task = task or scan.find_done(id)
-  if not task then
-    notify.error(find_err or ("no such task: " .. id))
+  local query = ctx.args.id
+  local task, find_err = scan.find(query)
+  task = task or scan.find_done(query)
+  if task then
+    open_file(task.path)
     return
   end
-  open_file(task.path)
+  if find_err and find_err:find("exists as", 1, true) then
+    notify.error(find_err)
+    return
+  end
+  local match = require("tasks_nvim.match")
+  local found, near = match.match(query)
+  local one = match.unique(found)
+  local function open_id(id)
+    local t = scan.find(id) or scan.find_done(id)
+    if t then
+      open_file(t.path)
+    else
+      notify.error("no such task: " .. id)
+    end
+  end
+  if one then
+    return open_id(one.id)
+  end
+  if #found == 0 then
+    local hint = #near > 0 and ("; did you mean " .. table.concat(near, ", ") .. "?") or ""
+    -- a full id that is none keeps its reason ("no such open task"); a part of a name has none
+    local reason = query:find("/", 1, true) and find_err or ("no task matches '%s'"):format(query)
+    notify.error(reason .. hint)
+    return
+  end
+  local select = M.select_task or vim.ui.select
+  select(found, {
+    prompt = ("%d tasks match '%s'> "):format(#found, query),
+    format_item = function(m)
+      return m.id .. (m.done and "  [finished]" or "") .. (m.title and ("  " .. m.title) or "")
+    end,
+  }, function(choice)
+    if choice then
+      open_id(choice.id)
+    end
+  end)
 end
 
 ---`:Tasks preview <id>` -- the task file (an open one, else its finished
