@@ -109,6 +109,11 @@ return function(H)
   eq(second.created, {}, "creating again changes nothing")
   eq((ops.create_vault(newdir, { "../x" })), nil, "an invalid area is refused")
   eq((ops.create_vault(newdir, { "TOOLS" })), nil, "a reserved folder is no area")
+  local dev_root, dev_err = ops.check_vault_target(newdir, { "NUL" })
+  ok(
+    dev_root == nil and dev_err:find("invalid area name", 1, true),
+    "a Windows device name is refused before anything is made (it stores nothing there)"
+  )
   eq((ops.create_vault("", {})), nil)
   -- a folder that cannot be made is told, not reported as a vault with the area missing
   local blocked = H.tmpdir() .. "/blocked/vault"
