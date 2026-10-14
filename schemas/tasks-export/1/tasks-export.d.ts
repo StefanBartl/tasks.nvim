@@ -630,6 +630,7 @@ export interface ResultEntry {
     | "would_create"
     | "would_done"
     | "would_move"
+    | "moved"
     | "blocked"
     | "failed";
   etag_before?: Etag;
@@ -668,12 +669,23 @@ export interface ResultEntry {
   plans_closed?: string[];
   notes?: string[];
   move?: MovePlan;
+  /**
+   * `move_area`: the id the task has after the move.
+   */
+  new_id?: string;
+  /**
+   * `move_area`: the places that named the old id and now name the new one.
+   */
+  rewritten?: {
+    kind: "blocked_by" | "after" | "refs" | "plan_target";
+    id: string;
+  }[];
 }
 /**
  * The operation that undoes a change: send it as a new operation (its `if_match` is the version the change left). A key the change added is `null` in the patch of a `set`.
  */
 export interface Inverse {
-  op: "set" | "reorder" | "tick_step" | "set_body";
+  op: "set" | "reorder" | "tick_step" | "set_body" | "move_area";
   id: string;
   /**
    * `tick_step`: the number of the step.
@@ -687,6 +699,10 @@ export interface Inverse {
    * `set_body`: the text below the frontmatter that the task had.
    */
   body?: string;
+  /**
+   * `move_area`: the area the task came from (`id` is the id it has now).
+   */
+  to_area?: string;
   patch?: {};
   after?: string;
   before?: string;

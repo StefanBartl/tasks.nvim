@@ -610,10 +610,7 @@ return function(H)
     "finished already: a repeated request does no harm"
   )
 
-  -- ── move_area: a report, never a move ───────────────────────────────────────
-  local mv = one({ { op = "move_area", id = "lib.nvim/alpha", to_area = "cascade.nvim" } })
-  eq(mv.error.code, "invalid_argument", "without dry_run the move is refused")
-  has(mv.error.message, "dry run")
+  -- ── move_area: a report with dry_run, the move without ───────────────────────
   local plan_doc = ops(
     { { op = "move_area", id = "lib.nvim/alpha", to_area = "cascade.nvim" } },
     { dry_run = true }
@@ -629,6 +626,49 @@ return function(H)
     { dry_run = true }
   )
   eq(blocked.results[1].error.code, "invalid_argument")
+
+  -- the move: file, references and indexes follow, the answer carries the way moved_back
+  local moved = one({ { op = "move_area", id = "lib.nvim/alpha", to_area = "cascade.nvim" } })
+  eq({ moved.ok, moved.outcome, moved.new_id }, { true, "moved", "cascade.nvim/alpha" })
+  eq(scan.find("lib.nvim/alpha", { root = root }), nil, "the old id is gone")
+  eq(find("cascade.nvim/alpha").area, "cascade.nvim")
+  eq(
+    find("lib.nvim/beta").blocked_by,
+    { "cascade.nvim/alpha" },
+    "what named the old id names the new one"
+  )
+  eq(moved.rewritten, { { kind = "blocked_by", id = "lib.nvim/beta" } })
+  eq(moved.inverse.op, "move_area")
+  eq({ moved.inverse.id, moved.inverse.to_area }, { "cascade.nvim/alpha", "lib.nvim" })
+  eq(moved.etag_after, find("cascade.nvim/alpha").etag)
+  has(H.read(root .. "/cascade.nvim/ROADMAP/TASKS.md"), "alpha")
+  local moved_back = one({ moved.inverse })
+  eq({ moved_back.ok, moved_back.outcome, moved_back.new_id }, { true, "moved", "lib.nvim/alpha" })
+  eq(find("lib.nvim/beta").blocked_by, { "lib.nvim/alpha" })
+
+  -- a taken slug, a stale_move version and an unknown area write nothing
+  local clash = one({ { op = "new", area = "cascade.nvim", title = "Alpha" } })
+  eq(clash.outcome, "created")
+  local state = everything()
+  local refused_move =
+    one({ { op = "move_area", id = "lib.nvim/alpha", to_area = "cascade.nvim" } })
+  eq({ refused_move.ok, refused_move.error.code }, { false, "invalid_argument" })
+  eq(everything(), state, "a refused_move move touches not one byte")
+  os.remove(find(clash.id).path)
+  local stale_move = one({
+    {
+      op = "move_area",
+      id = "lib.nvim/alpha",
+      to_area = "cascade.nvim",
+      if_match = "sha256:0000000000000000",
+    },
+  })
+  eq(stale_move.error.code, "conflict")
+  eq(
+    one({ { op = "move_area", id = "lib.nvim/alpha", to_area = "nowhere.nvim" } }).error.code,
+    "not_found"
+  )
+  eq(find("lib.nvim/alpha").area, "lib.nvim")
 
   -- ── a dry run writes nothing and says what it would do ──────────────────────
   local snapshot = everything()
@@ -694,7 +734,7 @@ return function(H)
     { op = "set", id = "lib.nvim/ghost", patch = { status = "open" } },
     { op = "new", area = "lib.nvim", title = "A path test" },
     { op = "done", id = "lib.nvim/ghost", confirm = "x" },
-    { op = "move_area", id = "lib.nvim/alpha", to_area = "cascade.nvim" },
+    { op = "move_area", id = "lib.nvim/alpha", to_area = "lib.nvim" },
   })
   lacks(text, root)
   lacks(text, (root:gsub("/", "\\")))

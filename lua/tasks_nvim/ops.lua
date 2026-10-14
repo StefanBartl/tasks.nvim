@@ -28,7 +28,10 @@
 ---    `inverse` (the old text) when the old text is within the same limit
 ---  - `reopen` { id, status?, if_match? }: bring a finished task back to `ROADMAP/tasks` (status `open`, or the one
 ---    given), take its row out of the Backlog README; an open task is `unchanged`; a folder task is refused; no `inverse`
----  - `move_area` { id, to_area }: only as a dry run in this version (the report of `moves.preview`)
+---  - `move_area` { id, to_area, if_match? }: a dry run answers the report of `moves.preview` (new id, conflicts, what names
+---    the old id); without it the open task moves to the other area under the same slug and every `blocked_by`, `after`,
+---    `refs` and plan `target` that named the old id names the new one, all or nothing (`moves.move`); the answer has an
+---    `inverse` (`move_area` back, with the version of the moved file)
 ---  - `plan_new` { area, title, areas?, target?, phases?, gate?, status?, summary?, slug? }: make a plan file; a dry run names
 ---    the id it would get and whether the slug had to be changed (`plans.new`)
 ---
@@ -102,7 +105,7 @@ local FIELDS = {
     if_match = "string",
   },
   done = { id = "string", confirm = "string", done_in = "strings", remind = "string" },
-  move_area = { id = "string", to_area = "string" },
+  move_area = { id = "string", to_area = "string", if_match = "string" },
   tick_step = { id = "string", n = "integer", done = "boolean", if_match = "string" },
   append_note = { id = "string", text = "string", if_match = "string" },
   reopen = { id = "string", status = "string", if_match = "string" },
@@ -921,10 +924,44 @@ local function do_move_area(op, ctx)
     return refuse("invalid_argument", "move_area needs id and to_area")
   end
   if not ctx.dry then
-    return refuse(
-      "invalid_argument",
-      "move_area can only be asked as a dry run in this version (dry_run: true): the report says what the move would break"
-    )
+    local r, err, info = moves.move(op.id, op.to_area, {
+      root = ctx.root,
+      today = ctx.today,
+      index = false,
+      if_match = op.if_match,
+    })
+    if not r then
+      return mutate_failure(ctx, err, info)
+    end
+    ctx.touched[r.from_area] = true
+    ctx.touched[r.area] = true
+    local changed = { r.id, r.new_id }
+    local rewritten = {}
+    for _, w in ipairs(r.rewritten) do
+      changed[#changed + 1] = w.id
+      rewritten[#rewritten + 1] = { kind = w.kind, id = w.id }
+    end
+    local entry = {
+      ok = true,
+      id = r.id,
+      outcome = "moved",
+      new_id = r.new_id,
+      etag_after = r.etag_after,
+      etag_before = r.etag_before,
+      file = rel(ctx, r.to),
+      rewritten = rewritten,
+      changed_ids = changed,
+      inverse = json.object({
+        op = "move_area",
+        id = r.new_id,
+        to_area = r.from_area,
+        if_match = r.etag_after,
+      }),
+    }
+    if #r.notes > 0 then
+      entry.notes = r.notes
+    end
+    return entry
   end
   local report, err, info = moves.preview(op.id, op.to_area, { root = ctx.root })
   if not report then

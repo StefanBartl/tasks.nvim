@@ -69,6 +69,7 @@ return function(H)
     "eff_prio",
     "etag",
     "if_match",
+    "move_area",
     "move_area_preview",
     "plan_new",
     "reminders",

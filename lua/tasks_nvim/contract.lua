@@ -63,6 +63,7 @@ M.CAPABILITIES = {
   "hello",
   "if_match",
   "list",
+  "move_area",
   "move_area_preview",
   "next",
   "ops",

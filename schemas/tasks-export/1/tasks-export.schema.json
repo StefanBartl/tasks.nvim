@@ -1731,7 +1731,7 @@
       "required": ["op", "id"],
       "properties": {
         "op": {
-          "enum": ["set", "reorder", "tick_step", "set_body"]
+          "enum": ["set", "reorder", "tick_step", "set_body", "move_area"]
         },
         "id": {
           "type": "string"
@@ -1747,6 +1747,10 @@
         },
         "body": {
           "description": "`set_body`: the text below the frontmatter that the task had.",
+          "type": "string"
+        },
+        "to_area": {
+          "description": "`move_area`: the area the task came from (`id` is the id it has now).",
           "type": "string"
         },
         "patch": {
@@ -1873,6 +1877,7 @@
             "would_create",
             "would_done",
             "would_move",
+            "moved",
             "blocked",
             "failed"
           ]
@@ -1959,6 +1964,27 @@
         },
         "move": {
           "$ref": "#/$defs/MovePlan"
+        },
+        "new_id": {
+          "description": "`move_area`: the id the task has after the move.",
+          "type": "string"
+        },
+        "rewritten": {
+          "description": "`move_area`: the places that named the old id and now name the new one.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "id"],
+            "properties": {
+              "kind": {
+                "enum": ["blocked_by", "after", "refs", "plan_target"]
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "additionalProperties": false
