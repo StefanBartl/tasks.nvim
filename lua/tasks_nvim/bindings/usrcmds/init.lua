@@ -39,8 +39,6 @@ function M.register()
     return false
   end
   registered = true
-  -- `:TasksVault` is a second verb: its failure to register must not take `:Tasks` down with it.
-  require("tasks_nvim.bindings.usrcmds.vault").register()
   return true
 end
 
