@@ -443,6 +443,17 @@ return function(H)
       eq(hook_calls[1].tasks[1].id, "lib.nvim/alpha", "the hook receives the sorted list")
       run("tasks all")
       eq(hook_calls[2].area, nil, "'all' is no area")
+      -- the filters of the CLI that the editor lacked: a plan and a stage of it (a hook of its own, the counts
+      -- below are of the other one)
+      local hook_before = cmd.dashboard
+      local planned
+      cmd.dashboard = function(v)
+        planned = v.filter
+      end
+      run("tasks lib.nvim --plan=lib.nvim/some-plan --phase=build,design")
+      cmd.dashboard = hook_before
+      eq(planned.plan, { "lib.nvim/some-plan" }, "the plan filter reaches the list")
+      eq(planned.phase, { "build", "design" }, "the phase filter reaches the list")
       run("tasks lib.nvim --to=buffer")
       eq(#hook_calls, 2, "an explicit --to bypasses the hook")
       vim.cmd("bwipeout!")

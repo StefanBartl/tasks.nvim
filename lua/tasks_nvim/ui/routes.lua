@@ -443,6 +443,8 @@ local LIST_FLAGS = {
   },
   { name = "ready", bool = true, desc = "Only tasks that can start now (no open blocker)" },
   { name = "waiting", bool = true, desc = "Only tasks that wait on an open blocker" },
+  { name = "plan", type = "TASK_PLAN", desc = "Only the tasks of this plan file (area/slug)" },
+  { name = "phase", type = "STRING", desc = "Only the tasks in this stage of their plan" },
   { name = "reminders", bool = true, desc = "Only tasks whose reminder (remind:) is due" },
   { name = "unestimated", bool = true, desc = "Only tasks missing an effort or a value" },
   {
@@ -493,6 +495,8 @@ local function filter_flags(extra)
     ready = true,
     waiting = true,
     reminders = true,
+    -- (the commands that take these filters name their own `--plan`, with their own words)
+    plan = true,
   }
   local out = {}
   for _, flag in ipairs(LIST_FLAGS) do
