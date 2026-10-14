@@ -72,6 +72,12 @@ M.METHODS = {
       return contract.estimate(params, opts)
     end,
   },
+  plan_for = {
+    params = { id = "string", direction = "string" },
+    run = function(params, opts)
+      return contract.plan_for(params, opts)
+    end,
+  },
   next = {
     params = { n = "integer", actor = "string", area = "string" },
     run = function(params, opts)

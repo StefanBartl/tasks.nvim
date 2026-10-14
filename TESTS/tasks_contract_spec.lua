@@ -401,6 +401,51 @@ return function(H)
   )
   golden("estimate")
 
+  -- ── plan_for: what a task needs, and what waits for it ──
+  local needs = call("plan_for", { id = "cascade.nvim/iota" })
+  eq(
+    { needs.kind, needs.direction, needs.total, needs.truncated },
+    { "tasks.planfor", "needs", 2, false }
+  )
+  eq(needs.rev, snap.rev, "the rev of the snapshot: both documents are one state")
+  eq(
+    vim.tbl_map(function(n)
+      return { n.id, n.distance }
+    end, needs.nodes),
+    { { "cascade.nvim/iota", 0 }, { "lib.nvim/alpha", 1 } },
+    "the task itself first, then what it needs, by distance"
+  )
+  eq(needs.edges, { { from = "lib.nvim/alpha", to = "cascade.nvim/iota", kind = "blocked_by" } })
+  eq(needs.nodes[2].state, "ready", "the state the plan gives the task")
+  local unlocks = call("plan_for", { id = "lib.nvim/alpha", direction = "unlocks" })
+  eq(unlocks.direction, "unlocks")
+  local waiting = {}
+  for _, n in ipairs(unlocks.nodes) do
+    waiting[#waiting + 1] = n.id
+  end
+  ok(
+    vim.tbl_contains(waiting, "cascade.nvim/iota"),
+    "iota waits for alpha: " .. vim.inspect(waiting)
+  )
+  eq(unlocks.nodes[1].id, "lib.nvim/alpha")
+  local alone = call("plan_for", { id = "lib.nvim/alpha-twin" })
+  eq({ alone.total, #alone.edges }, { 1, 0 }, "a task that needs nothing is a graph of one")
+  local cyc = call("plan_for", { id = "lib.nvim/cyc-a" })
+  ok(#cyc.cycles >= 1, "the cycle the task is in is named")
+  local function refused_plan_for(params, code, needle)
+    local doc, _, got = call("plan_for", params)
+    eq({ doc.kind, got }, { "tasks.error", code }, vim.inspect(params))
+    has(doc.message, needle)
+  end
+  refused_plan_for({}, "invalid_argument", "needs the parameter id")
+  refused_plan_for({ id = "lib.nvim/nope" }, "not_found", "no such open task")
+  refused_plan_for(
+    { id = "lib.nvim/alpha", direction = "sideways" },
+    "invalid_argument",
+    "needs or unlocks"
+  )
+  golden("planfor")
+
   -- ── next ──
   local nxt = call("next", { n = 3 })
   eq(nxt.kind, "tasks.next")

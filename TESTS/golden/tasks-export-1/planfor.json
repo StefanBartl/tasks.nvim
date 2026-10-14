@@ -1,0 +1,48 @@
+{
+  "cycles": [],
+  "digest": "sha256:dc82637266b6bced",
+  "direction": "needs",
+  "edges": [
+    {
+      "from": "lib.nvim/alpha",
+      "kind": "blocked_by",
+      "to": "cascade.nvim/iota"
+    }
+  ],
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "id": "cascade.nvim/iota",
+  "incomplete": [],
+  "kind": "tasks.planfor",
+  "nodes": [
+    {
+      "distance": 0,
+      "id": "cascade.nvim/iota",
+      "stage": 1,
+      "state": "waiting",
+      "status": "open",
+      "title": "Iota waits across areas"
+    },
+    {
+      "distance": 1,
+      "id": "lib.nvim/alpha",
+      "on_critical_path": true,
+      "stage": 0,
+      "state": "ready",
+      "status": "open",
+      "title": "Alpha \u003cscript>alert(1)\u003c/script> & \"quotes\" \\ slash"
+    }
+  ],
+  "plugin": "tasks.nvim",
+  "rev": "rev:6a1aa5",
+  "schema": 1,
+  "total": 2,
+  "truncated": false,
+  "vault": {
+    "id": "vault"
+  }
+}
