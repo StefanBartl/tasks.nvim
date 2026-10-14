@@ -570,5 +570,5 @@ else, a stray word on the command line included. `vim.g.tasks_nvim_no_vault_comm
    does not find the vault again after a restart.
 
 Step 4 is shown in the question and again, as a warning, after the vault was made; the line to write is then in the
-`+` register. A folder or an area name that is refused (a drive root, a file, `../x`) is reported before the question. A vault that is in use is not replaced unless `--force`. The folder is a plain folder: making it a git
+`+` register. A folder or an area name that is refused (a drive root, a file, `../x`) is reported before the question. A vault that is in use is not replaced unless `--force`; naming the folder in use again (`:TasksVault create <that folder> <area>`) adds an area to it without `--force` and switches nothing. When one of several areas cannot be made, the error names the folders made before it (they stay). The folder is a plain folder: making it a git
 repository is a decision of the user, not of the command.

@@ -24,6 +24,7 @@ return function(H)
   task("lib.nvim", "Alpha Gadget")
   task("lib.nvim", "Gamma")
   task("lib.nvim", "Gamma Ray")
+  task("lib.nvim", "Über uns", "ueber-uns")
   task("lib.nvim", "Quokka migration", "q1")
   local fin = task("lib.nvim", "Beta thing")
   assert(mutate.done(fin.id, o))
@@ -79,8 +80,15 @@ return function(H)
     { "cascade.nvim/alpha-widget", "lib.nvim/alpha-gadget", "lib.nvim/alpha-widget" },
     "the closest slugs are named"
   )
-  eq(#match.match("lib.nvim/"), 6, "an area and nothing else is all its tasks (open and finished)")
+  eq(#match.match("lib.nvim/"), 7, "an area and nothing else is all its tasks (open and finished)")
   eq(match.match(""), {})
+  -- the case of a title that is not ASCII: vim's tolower folds "Ü", string.lower does not
+  eq(
+    ids(match.match("über")),
+    { "lib.nvim/ueber-uns" },
+    "an umlaut in lower case finds a title that starts with it in capitals"
+  )
+  eq(ids(match.match("ÜBER")), { "lib.nvim/ueber-uns" }, "and the other way round")
 
   -- ── the handler ─────────────────────────────────────────────────────────────
   local orig_notify = vim.notify
@@ -136,6 +144,16 @@ return function(H)
   has(notes[1].msg, "no task matches 'alphx'", "no hit is told")
   has(notes[1].msg, "did you mean", "with the closest slugs")
   eq(notes[1].level, vim.log.levels.ERROR)
+
+  -- a missing vault is what is told, not "no task matches"
+  vault.set_root(H.tmpdir() .. "/no-such-vault")
+  open("zebra")
+  ok(
+    not notes[1].msg:find("no task matches", 1, true),
+    "a missing vault is no missing task: " .. notes[1].msg
+  )
+  has(notes[1].msg, "vault", "the vault is named")
+  vault.set_root(root)
 
   -- ── completion ──────────────────────────────────────────────────────────────
   vim.notify = orig_notify

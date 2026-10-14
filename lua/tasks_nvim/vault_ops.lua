@@ -386,6 +386,10 @@ function M.create_vault(dir, areas)
     -- scaffold_area hands back the folders made so far together with the error, so the error is what counts
     local made, err = M.scaffold_area(root, area)
     if err then
+      -- What was made before the one that failed stays on disk: say so, a second try is harmless.
+      if #created > 0 then
+        err = err .. " (already made: " .. table.concat(created, ", ") .. ")"
+      end
       return nil, err
     end
     vim.list_extend(created, made)

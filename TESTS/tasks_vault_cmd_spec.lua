@@ -124,6 +124,17 @@ return function(H)
   local blocked_res, blocked_err = ops.create_vault(blocked, { "blocker.nvim" })
   eq(blocked_res, nil, "an area whose folder cannot be made fails the create")
   has(blocked_err, "cannot create", "and says why")
+  -- what was made before the area that failed is told, it stays on disk
+  local partial = H.tmpdir() .. "/partial/vault"
+  assert(ops.create_vault(partial, {}))
+  local stopper = assert(io.open(partial .. "/blocker.nvim", "w"))
+  stopper:write("a file where the area folder should go")
+  stopper:close()
+  local partial_res, partial_err = ops.create_vault(partial, { "good.nvim", "blocker.nvim" })
+  eq(partial_res, nil)
+  has(partial_err, "already made", "the folders made before the failure are named")
+  has(partial_err, "good.nvim", "with their area")
+  ok(H.exists(partial .. "/good.nvim/Backlog"), "and they are there")
 
   -- ── the handlers ────────────────────────────────────────────────────────────
   local orig = { notify = vim.notify, select = vim.ui.select, input = vim.ui.input }
@@ -340,6 +351,21 @@ return function(H)
   end)
   has(notes[1].msg, root, "status names the vault")
 
+  -- ── a vault without an area names the command that makes one, with its own folder ──
+  local empty = H.tmpdir() .. "/empty-vault"
+  vim.fn.mkdir(empty, "p")
+  vault.set_root(empty)
+  quiet(function()
+    cmd.open(ctx({}))
+  end)
+  has(notes[1].msg, "no area yet", "an empty vault says so")
+  has(
+    notes[1].msg,
+    ":TasksVault create " .. empty,
+    "and names the command with the folder to give it"
+  )
+  vault.set_root(root)
+
   -- ── no vault: one message, no side effect ───────────────────────────────────
   vault.set_root(nil)
   vault.configure({ vault = "" })
@@ -428,6 +454,15 @@ return function(H)
   end)
   has(notes[1].msg, "in use already", "a second create without --force is refused")
   ok(not H.exists(H.tmpdir() .. "/other"))
+  -- naming the vault in use again adds an area to it: no --force, nothing switched
+  quiet(function()
+    cmd.create(ctx({ dir = target }, { yes = true }, { "added.nvim" }))
+  end)
+  ok(
+    H.exists(target .. "/added.nvim/Backlog"),
+    "the folder in use can get another area without --force"
+  )
+  eq(vault.root(), target, "and stays the vault in use")
   plan_shown = nil
   quiet(function()
     cmd.create(ctx({ dir = target .. "-2" }, { force = true, yes = true }))

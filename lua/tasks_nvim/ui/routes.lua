@@ -276,8 +276,16 @@ function M.register_types()
       return true, raw, nil
     end,
     complete = function(arg_lead)
-      local ids = vim.list_extend({}, open_ids())
-      vim.list_extend(ids, done_ids())
+      local ids, seen = {}, {}
+      for _, list in ipairs({ open_ids(), done_ids() }) do
+        for _, id in ipairs(list) do
+          -- an id in both lists (an open task and a finished copy) is one name
+          if not seen[id] then
+            seen[id] = true
+            ids[#ids + 1] = id
+          end
+        end
+      end
       table.sort(ids)
       local out = prefix_ci(ids, arg_lead)
       -- a slug without its area, where it names one task only
