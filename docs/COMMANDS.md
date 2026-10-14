@@ -539,15 +539,21 @@ area of the current buffer (a file inside the vault, or inside a repository fold
 | `tree` | the folder in the file explorer (filetree.nvim when it is there) |
 | `cdx` | a ready prompt for Claude Code that names the folder, into the `+` register (`--rel`, `--file` as above) |
 | `new feature\|task <title...> [--area=]` | a dated note `Backlog/FEATURES\|TASKS/<date>_<slug>.md`, its README row, opened |
-| `create [<dir>] [<area>...] [--force]` | a vault folder with the named areas (see below) |
+| `create [<dir>] [<area>...] [--force] [--yes]` | a vault folder with the named areas; lists what happens first (see below) |
 | `status` (and the bare `:TasksVault`) | the vault in use, its areas and the area of this buffer |
 
 **No vault.** The command exists even then, because `create` is what makes one. Every other verb answers with the same
 single notice (what to do: `:TasksVault create <dir>`, or `vault` in `setup()`, or `$TASKS_VAULT`) and does nothing
 else. `vim.g.tasks_nvim_no_vault_command = true` keeps `:TasksVault` out altogether.
 
-**`create`.** Makes the folder (parents included), a short `README.md` and, for every word after the folder, an area
-(`ROADMAP/tasks`, `Backlog/FEATURES`, `Backlog/TASKS`); what exists stays as it is. The vault is used from then on
-**for this session**; what survives a restart is `setup({ vault = "<dir>" })` or `$TASKS_VAULT`, which the notice
-prints. Without a folder it asks for one. A vault that is in use is not replaced unless `--force`. The folder is a
-plain folder: making it a git repository is a decision of the user, not of the command.
+**`create`.** Goes in four steps and says so *before* it does anything (a confirmation; `--yes` skips it):
+
+1. the folder, name and location (asked for when missing, default `~/tasks-vault`);
+2. the areas, every word after the folder (`ROADMAP/tasks`, `Backlog/FEATURES`, `Backlog/TASKS`; what exists stays);
+3. the vault is used for **this session** at once;
+4. **your step, required**: write `vault = "<dir>"` into the setup of tasks.nvim (or set `$TASKS_VAULT`). Without it nvim
+   does not find the vault again after a restart.
+
+Step 4 is shown in the question and again, as a warning, after the vault was made; the line to write is then in the
+`+` register. A vault that is in use is not replaced unless `--force`. The folder is a plain folder: making it a git
+repository is a decision of the user, not of the command.
