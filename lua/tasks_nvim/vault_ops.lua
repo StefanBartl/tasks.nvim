@@ -65,7 +65,8 @@ function M.part_dir(root, area, part)
 end
 
 ---The file that stands for a part: the index of the Backlog (`README.md`), the roadmap of the area, else the
----generated index. A part without such a file (`features`, `tasks`, `all`) has none: its folder is the answer.
+---generated index. The other parts (`features`, `tasks`, `all`) are folders and have no such file: the folder is
+---the answer (the README lists both buckets, so it is not the index of one of them).
 ---@param root string
 ---@param area string
 ---@param part? string
@@ -80,8 +81,6 @@ function M.part_entry(root, area, part)
       root .. "/" .. area .. "/ROADMAP/ROADMAP.md",
       vault.index_path(root, area),
     }
-  elseif part == "features" or part == "tasks" then
-    candidates = { vault.backlog_readme(root, area) }
   end
   for _, candidate in ipairs(candidates) do
     if fsio.is_file(candidate) then
@@ -329,13 +328,13 @@ One folder per project (an "area"). Each area has:
 Managed by tasks.nvim: `:Tasks new <area> <title>`, `:Tasks done <id>`, `:TasksVault open <area>`.
 ]]
 
----Create a vault folder (and its parents) with the given areas. An existing folder is fine, an existing area
----too; nothing is overwritten. The folder may become a repository later, that is the user's decision.
----@param dir string  the vault folder
+---Whether `dir` may become a vault with `areas`, before anything is made. The folder is normalised to an
+---absolute, forward-slash path. A drive or filesystem root, a file and an unusable area name are refused.
+---@param dir string
 ---@param areas? string[]
----@return { root: string, existed: boolean, created: string[] }|nil result
+---@return string|nil root
 ---@return string|nil err
-function M.create_vault(dir, areas)
+function M.check_vault_target(dir, areas)
   if type(dir) ~= "string" or vim.trim(dir) == "" then
     return nil, "a vault needs a folder"
   end
@@ -350,6 +349,20 @@ function M.create_vault(dir, areas)
     if not vault.valid_area(area) or vault.SKIP[area] or area:match("^[._]") then
       return nil, "invalid area name: " .. tostring(area)
     end
+  end
+  return root, nil
+end
+
+---Create a vault folder (and its parents) with the given areas. An existing folder is fine, an existing area
+---too; nothing is overwritten. The folder may become a repository later, that is the user's decision.
+---@param dir string  the vault folder
+---@param areas? string[]
+---@return { root: string, existed: boolean, created: string[] }|nil result
+---@return string|nil err
+function M.create_vault(dir, areas)
+  local root, check_err = M.check_vault_target(dir, areas)
+  if not root then
+    return nil, check_err
   end
   local existed = fsio.is_dir(root)
   if not existed then

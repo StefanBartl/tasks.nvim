@@ -16,7 +16,8 @@
 ---   create     a vault folder (and areas): says first what happens and what is left to you; used for this session
 ---   status     the vault in use
 ---
---- With no vault every verb but `create` and `status` says the same thing once and does nothing else.
+--- With no vault every verb but `create` says the same thing once and does nothing else (a stray word on the
+--- command line included: the missing vault is what is reported).
 ---
 --- Not its job: the paths and the writes (`tasks_nvim.vault_ops`), the grammar (`ui/vault_routes`).
 
@@ -77,8 +78,24 @@ local function no_stray_words(ctx)
   return true
 end
 
+---Whether `word` is the name of an area, in any case (no prefix: `tasks` is a part although `tasks.nvim` is an
+---area it starts).
+---@param names string[]
+---@param word string
+---@return boolean
+local function is_area_name(names, word)
+  local low = word:lower()
+  for _, name in ipairs(names) do
+    if name:lower() == low then
+      return true
+    end
+  end
+  return false
+end
+
 ---Which area and part the typed words mean. `:TasksVault open features` is the part of the area of the
----buffer, `:TasksVault open lib features` area and part.
+---buffer, `:TasksVault open lib features` area and part. A single word that is a part and also the name of an
+---area (`all` and the area `ALL`) means the area; the part is still there as the second word.
 ---@param root string
 ---@param first string|nil
 ---@param second string|nil
@@ -87,7 +104,7 @@ end
 ---@return string|nil err
 local function split_words(root, first, second)
   local names = vault.area_names(root)
-  if first and ops.is_part(first) and second == nil and not vim.tbl_contains(names, first) then
+  if first and ops.is_part(first) and second == nil and not is_area_name(names, first) then
     return nil, first, nil
   end
   local area
@@ -148,6 +165,21 @@ local function with_target(ctx, root, cb)
       go(choice)
     end
   end)
+end
+
+---Settle the vault and the words of a verb that takes no free text: the vault first, so a missing vault is the
+---one thing reported.
+---@param ctx table
+---@return string|nil root
+local function prepare(ctx)
+  local root = vault_root()
+  if not root then
+    return nil
+  end
+  if not no_stray_words(ctx) then
+    return nil
+  end
+  return root
 end
 
 ---The file or folder a path verb works on: the folder, or with `--file` the index file of the part.
@@ -215,10 +247,7 @@ end
 ---`:TasksVault open [<area>] [<part>]`
 ---@param ctx table
 function M.open(ctx)
-  if not no_stray_words(ctx) then
-    return
-  end
-  local root = vault_root()
+  local root = prepare(ctx)
   if not root then
     return
   end
@@ -238,10 +267,7 @@ end
 ---`:TasksVault clipboard [<area>] [<part>] [--rel] [--file]`
 ---@param ctx table
 function M.clipboard(ctx)
-  if not no_stray_words(ctx) then
-    return
-  end
-  local root = vault_root()
+  local root = prepare(ctx)
   if not root then
     return
   end
@@ -262,10 +288,7 @@ end
 ---`:TasksVault paste [<area>] [<part>] [--rel] [--file]`
 ---@param ctx table
 function M.paste(ctx)
-  if not no_stray_words(ctx) then
-    return
-  end
-  local root = vault_root()
+  local root = prepare(ctx)
   if not root then
     return
   end
@@ -281,10 +304,7 @@ end
 ---`:TasksVault link [<area>] [<part>]` -- `[lib.nvim backlog](../tasks-vault/lib.nvim/Backlog/README.md)`.
 ---@param ctx table
 function M.link(ctx)
-  if not no_stray_words(ctx) then
-    return
-  end
-  local root = vault_root()
+  local root = prepare(ctx)
   if not root then
     return
   end
@@ -303,10 +323,7 @@ end
 ---@param ctx table
 ---@param action "files"|"grep"
 local function pick(ctx, action)
-  if not no_stray_words(ctx) then
-    return
-  end
-  local root = vault_root()
+  local root = prepare(ctx)
   if not root then
     return
   end
@@ -343,10 +360,7 @@ end
 ---`:TasksVault tree [<area>] [<part>]`
 ---@param ctx table
 function M.tree(ctx)
-  if not no_stray_words(ctx) then
-    return
-  end
-  local root = vault_root()
+  local root = prepare(ctx)
   if not root then
     return
   end
@@ -375,10 +389,7 @@ end
 ---`:TasksVault cdx [<area>] [<part>] [--rel]`
 ---@param ctx table
 function M.cdx(ctx)
-  if not no_stray_words(ctx) then
-    return
-  end
-  local root = vault_root()
+  local root = prepare(ctx)
   if not root then
     return
   end
@@ -467,6 +478,7 @@ function M.create_plan(root, areas)
     "",
     "  1. Folder (name and location):",
     "       " .. root,
+    "       (a README.md is added when there is none)",
     "  2. Areas to make:  "
       .. (
         #areas > 0 and table.concat(areas, ", ") or "none yet (:Tasks new <area> <title> makes one)"
@@ -529,12 +541,16 @@ function M.create(ctx)
     notify.warn(M.created_message(res))
   end
   local function plan_and_make(dir)
-    -- Checked before the question, so a refused folder is not first offered.
-    local root = fsio.norm(vim.fn.fnamemodify(dir, ":p"))
-    local confirm = require("tasks_nvim.ui.confirm")
+    -- Checked before the question, so a folder or an area that is refused is not first offered.
+    local root, target_err = ops.check_vault_target(dir, areas)
+    if not root then
+      notify.error(tostring(target_err))
+      return
+    end
     if ctx.flags and ctx.flags.yes then
       return make(dir)
     end
+    local confirm = require("tasks_nvim.ui.confirm")
     confirm.yesno(M.create_plan(root, areas), "create it", function(accepted)
       if accepted then
         make(dir)
@@ -559,10 +575,7 @@ end
 ---`:TasksVault` and `:TasksVault status`
 ---@param ctx table
 function M.status(ctx)
-  if not no_stray_words(ctx) then
-    return
-  end
-  local root = vault_root()
+  local root = prepare(ctx)
   if not root then
     return
   end

@@ -527,12 +527,14 @@ in it" stay apart. The grammar is verb-first, like `:Tasks`.
 `<area>` is a folder of the vault; a prefix is enough (`lib` for `lib.nvim`) as long as it is unique. Left out, it is the
 area of the current buffer (a file inside the vault, or inside a repository folder named like an area), else a picker.
 `<part>` is `backlog` (default), `features` (`Backlog/FEATURES`), `tasks` (`Backlog/TASKS`), `roadmap` (`ROADMAP`) or
-`all` (the area folder); a part word alone (`:TasksVault clipboard features`) takes the area from the buffer.
+`all` (the area folder); a part word alone (`:TasksVault clipboard features`) takes the area from the buffer. A word
+that is both a part and the name of an area (`all` and the area `ALL`, in any case) means the area; the part is then the
+second word (`:TasksVault clipboard ALL all`). Part words are never completed to an area by prefix.
 
 | Verb | What it does |
 | --- | --- |
-| `open` | the index of the part in a buffer (`Backlog/README.md`; for `roadmap` its `ROADMAP.md`, else `TASKS.md`), else the folder in the explorer |
-| `clipboard` | the path of the folder into the `+` register; `--rel` relative to the current file, `--file` the index file instead of the folder |
+| `open` | `backlog`: `Backlog/README.md` in a buffer; `roadmap`: its `ROADMAP.md`, else `TASKS.md`; `features`, `tasks` and `all` are folders and open in the explorer |
+| `clipboard` | the path of the folder into the `+` register; `--rel` relative to the current file, `--file` the index file instead of the folder (`backlog` and `roadmap` have one) |
 | `paste` | the same path at the cursor (a buffer that cannot take text gets the `+` register and a note) |
 | `link` | `[<area> <part>](<relative path>)` at the cursor, relative to the current file |
 | `find` / `grep` | a pickers.nvim picker rooted at the folder: file names / content (without pickers.nvim: the explorer) |
@@ -544,16 +546,18 @@ area of the current buffer (a file inside the vault, or inside a repository fold
 
 **No vault.** The command exists even then, because `create` is what makes one. Every other verb answers with the same
 single notice (what to do: `:TasksVault create <dir>`, or `vault` in `setup()`, or `$TASKS_VAULT`) and does nothing
-else. `vim.g.tasks_nvim_no_vault_command = true` keeps `:TasksVault` out altogether.
+else, a stray word on the command line included. `vim.g.tasks_nvim_no_vault_command = true` keeps `:TasksVault` out,
+`vim.g.tasks_nvim_no_command = true` keeps `:Tasks` out (a host that mounts its own verb); the two are independent.
 
 **`create`.** Goes in four steps and says so *before* it does anything (a confirmation; `--yes` skips it):
 
 1. the folder, name and location (asked for when missing, default `~/tasks-vault`);
-2. the areas, every word after the folder (`ROADMAP/tasks`, `Backlog/FEATURES`, `Backlog/TASKS`; what exists stays);
+2. the areas, every word after the folder (`ROADMAP/tasks`, `Backlog/FEATURES`, `Backlog/TASKS`; what exists stays), and a
+   `README.md` when the folder has none;
 3. the vault is used for **this session** at once;
 4. **your step, required**: write `vault = "<dir>"` into the setup of tasks.nvim (or set `$TASKS_VAULT`). Without it nvim
    does not find the vault again after a restart.
 
 Step 4 is shown in the question and again, as a warning, after the vault was made; the line to write is then in the
-`+` register. A vault that is in use is not replaced unless `--force`. The folder is a plain folder: making it a git
+`+` register. A folder or an area name that is refused (a drive root, a file, `../x`) is reported before the question. A vault that is in use is not replaced unless `--force`. The folder is a plain folder: making it a git
 repository is a decision of the user, not of the command.

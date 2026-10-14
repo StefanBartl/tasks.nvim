@@ -31,6 +31,12 @@ return function(H)
     "the index of the Backlog is its README"
   )
   eq(ops.part_entry(root, "lib.nvim", "all"), nil, "a part without an index file has none")
+  eq(
+    ops.part_entry(root, "lib.nvim", "features"),
+    nil,
+    "features is a folder: the README lists both buckets, it is not the index of one"
+  )
+  eq(ops.part_entry(root, "lib.nvim", "tasks"), nil, "tasks is a folder too")
   eq(ops.part_entry(root, "lib.nvim", "roadmap"), nil, "no ROADMAP.md and no TASKS.md: none")
   H.write(root .. "/lib.nvim/ROADMAP/TASKS.md", "# tasks\n")
   eq(ops.part_entry(root, "lib.nvim", "roadmap"), root .. "/lib.nvim/ROADMAP/TASKS.md")
@@ -143,6 +149,63 @@ return function(H)
     cmd.clipboard(ctx({ target = "lib" }, { file = true }))
   end)
   eq(copied, root .. "/lib.nvim/Backlog/README.md", "--file: the index file")
+
+  quiet(function()
+    cmd.clipboard(ctx({ target = "lib", part = "features" }, { file = true }))
+  end)
+  eq(copied, nil, "--file for features: a folder has no index file")
+
+  -- a word that is a part AND the name of an area (`all` / `ALL`) means the area
+  quiet(function()
+    cmd.clipboard(ctx({ target = "all" }))
+  end)
+  eq(copied, root .. "/ALL/Backlog", "all names the area ALL, not the part")
+  quiet(function()
+    cmd.clipboard(ctx({ target = "ALL", part = "all" }))
+  end)
+  eq(copied, root .. "/ALL", "and the part is still there as the second word")
+
+  -- `tasks` is a part although an area such as tasks-extra starts with it: no prefix match for part words
+  local with_tasks_area = root .. "/tasks-extra"
+  vim.fn.mkdir(with_tasks_area .. "/Backlog/TASKS", "p")
+  local picked_from
+  cmd.select = function(items, _, cb)
+    picked_from = items
+    cb(nil)
+  end
+  quiet(function()
+    cmd.clipboard(ctx({ target = "tasks" }))
+  end)
+  eq(copied, nil, "a part word alone is no prefix of an area: no area is taken from it")
+  ok(picked_from ~= nil, "the buffer has no area either, so the picker is asked")
+  cmd.select = nil
+  vim.fn.delete(with_tasks_area, "rf")
+
+  -- open: a folder part opens the folder, an index part its file
+  local explorer_dir
+  local explorer_was = require("tasks_nvim.ui.cmd").open_explorer
+  require("tasks_nvim.ui.cmd").open_explorer = function(d)
+    explorer_dir = d
+  end
+  quiet(function()
+    cmd.open(ctx({ target = "lib", part = "features" }))
+  end)
+  eq(
+    explorer_dir,
+    root .. "/lib.nvim/Backlog/FEATURES",
+    "open features: the folder, not the README"
+  )
+  require("tasks_nvim.ui.cmd").open_explorer = explorer_was
+  vim.cmd("enew!")
+  quiet(function()
+    cmd.open(ctx({ target = "lib" }))
+  end)
+  eq(
+    vim.fs.normalize(vim.api.nvim_buf_get_name(0)),
+    root .. "/lib.nvim/Backlog/README.md",
+    "open: the index of the Backlog in a buffer"
+  )
+  vim.cmd("enew!")
 
   -- no buffer in an area: the picker is asked, and nothing is copied when it is dismissed
   local dismissed = false
@@ -282,6 +345,11 @@ return function(H)
     cmd.new(ctx({ kind = "task" }, {}, { "x" }))
   end)
   eq(notes[1].msg, first, "new says it too")
+  quiet(function()
+    cmd.clipboard(ctx({ target = "lib" }, {}, { "oops" }))
+  end)
+  eq(#notes, 1, "a stray word does not add a second message")
+  eq(notes[1].msg, first, "the missing vault is what is reported first")
 
   -- create: from nothing, with a prompt for the folder and a plan that is confirmed first
   local confirm = require("tasks_nvim.ui.confirm")
@@ -308,6 +376,15 @@ return function(H)
   has(plan_shown, "REQUIRED", "and marks the step that is left to the user")
   has(plan_shown, 'vault = "' .. target .. '"', "with the line to write")
   has(plan_shown, "will NOT find", "and what happens without it")
+
+  -- a folder or area that is refused is not first offered in a plan
+  plan_shown = nil
+  quiet(function()
+    cmd.create(ctx({}, {}, { "../x" }))
+  end)
+  eq(plan_shown, nil, "an invalid area is refused before the question")
+  has(notes[1].msg, "invalid area name", "and said")
+  ok(not H.exists(target), "nothing is made")
 
   answer = true
   quiet(function()
@@ -342,6 +419,60 @@ return function(H)
   ok(reg.register(), ":TasksVault registers")
   ok(reg.register(), "and a second time")
   eq(vim.fn.exists(":TasksVault"), 2, ":TasksVault exists")
+
+  -- the bare command is the status
+  local bare_notes = {}
+  local bare_notify_was = vim.notify
+  vim.notify = function(msg)
+    bare_notes[#bare_notes + 1] = msg
+  end
+  vim.cmd("TasksVault")
+  vim.notify = bare_notify_was
+  ok(bare_notes[1] and bare_notes[1]:find(root, 1, true), "bare :TasksVault names the vault")
+
+  -- the two commands are registered independently by plugin/tasks_nvim.lua
+  local plugin_dir = vim.fs.dirname(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)))
+  local lib_dir = vim.env.LIB_NVIM_DIR
+  ok(lib_dir and lib_dir ~= "", "the child needs lib.nvim")
+  ---@param globals string  `--cmd` settings
+  ---@return string
+  local function exists_in_child(globals)
+    local res = vim
+      .system({
+        vim.v.progpath,
+        "-n",
+        "-i",
+        "NONE",
+        "--headless",
+        "-u",
+        "NONE",
+        "--cmd",
+        "set rtp+=" .. vim.fn.fnameescape(plugin_dir),
+        "--cmd",
+        "set rtp+=" .. vim.fn.fnameescape(lib_dir),
+        "--cmd",
+        globals,
+        "-c",
+        "runtime plugin/tasks_nvim.lua",
+        "-c",
+        "lua io.stdout:write((vim.fn.exists(':Tasks') == 2 and 'T' or '-') .. (vim.fn.exists(':TasksVault') == 2 and 'V' or '-'))",
+        "-c",
+        "qa!",
+      }, { text = true })
+      :wait(20000)
+    return vim.trim((res.stdout or "") .. "")
+  end
+  eq(exists_in_child("let g:x = 1"), "TV", "both commands by default")
+  eq(
+    exists_in_child("let g:tasks_nvim_no_command = 1"),
+    "-V",
+    "no_command leaves :TasksVault there (it has its own switch)"
+  )
+  eq(
+    exists_in_child("let g:tasks_nvim_no_vault_command = 1"),
+    "T-",
+    "no_vault_command keeps it out"
+  )
 
   ---@param line string
   ---@return string[]
