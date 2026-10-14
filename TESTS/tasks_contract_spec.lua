@@ -74,6 +74,7 @@ return function(H)
     "reminders",
     "reopen",
     "reorder",
+    "set_body",
     "tick_step",
   }) do
     table.insert(expected_caps, feature)

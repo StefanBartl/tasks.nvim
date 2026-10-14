@@ -47,7 +47,7 @@ M.PLUGIN = "tasks.nvim"
 M.ENGINE_VERSION = "0.1.0-dev"
 
 ---What this engine can answer; an app shows only what is listed here. Sorted.
----`ops` is the write door (`set`, `new`, `reorder`, `done`, `move_area`, `plan_new`, `tick_step`, `append_note`, `reopen`), `if_match` the compare-and-set on a task's
+---`ops` is the write door (`set`, `new`, `reorder`, `done`, `move_area`, `plan_new`, `tick_step`, `append_note`, `reopen`, `set_body`), `if_match` the compare-and-set on a task's
 ---`etag`, `done_preview` what `done` needs first, `reorder` a move inside a group, `move_area_preview` the report of a
 ---move to another area (the move itself is not there yet).
 ---@type string[]
@@ -71,6 +71,7 @@ M.CAPABILITIES = {
   "reminders",
   "reopen",
   "reorder",
+  "set_body",
   "snapshot",
   "task",
   "tick_step",
