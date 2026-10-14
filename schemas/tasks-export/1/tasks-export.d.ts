@@ -4,7 +4,19 @@
  * tasks-export/1: every document tasks.nvim hands to a machine. One of the kinds below, told apart by `kind`. The engine writes exactly these fields (a field that is not listed fails the contract tests); a reader ignores fields it does not know, because inside one version the contract only grows.
  */
 export type TasksExport =
-  Hello | Snapshot | List | Bodies | Estimate | PlanFor | TaskDocument | Next | Areas | DonePreview | Result | Error;
+  | Hello
+  | Snapshot
+  | List
+  | Bodies
+  | Estimate
+  | PlanFor
+  | Check
+  | TaskDocument
+  | Next
+  | Areas
+  | DonePreview
+  | Result
+  | Error;
 /**
  * tasks.hello: what this engine is and can do. Reads no task.
  */
@@ -273,6 +285,59 @@ export type PlanFor = Head & {
     kind: "blocked_by" | "gate";
   }[];
   cycles: string[][];
+  incomplete: string[];
+};
+/**
+ * tasks.check: the rule check of the vault (`tasks check`), with `stale: refs` also the open tasks that name a file which changed after the task was updated. It reads every task file: a client runs it as a job.
+ */
+export type Check = Head & {
+  kind: "tasks.check";
+  rev: Rev;
+  digest: Digest;
+  /**
+   * No finding of severity error.
+   */
+  ok: boolean;
+  errors: number;
+  warnings: number;
+  /**
+   * Areas checked.
+   */
+  areas: number;
+  /**
+   * Task files read, open and finished.
+   */
+  tasks: number;
+  stale?: "refs";
+  /**
+   * All the findings; `findings` holds at most 1000 of them.
+   */
+  total: number;
+  truncated: boolean;
+  findings: {
+    /**
+     * A stable rule code, e.g. `unknown-status`.
+     */
+    code: string;
+    severity: "error" | "warn";
+    area: string;
+    /**
+     * The task the finding is about, when there is one.
+     */
+    id?: string;
+    /**
+     * Relative to the vault.
+     */
+    file: string;
+    /**
+     * The engine's words; untrusted text.
+     */
+    message: string;
+  }[];
+  /**
+   * What could not be checked (git missing, a budget used up).
+   */
+  notes: string[];
   incomplete: string[];
 };
 /**

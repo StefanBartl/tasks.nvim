@@ -78,6 +78,12 @@ M.METHODS = {
       return contract.plan_for(params, opts)
     end,
   },
+  check = {
+    params = { area = "string", stale = "string" },
+    run = function(params, opts)
+      return contract.check(params, opts)
+    end,
+  },
   next = {
     params = { n = "integer", actor = "string", area = "string" },
     run = function(params, opts)

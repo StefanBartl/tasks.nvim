@@ -129,6 +129,8 @@ mutate(
   (d) => (d.code = "oops"),
 );
 mutate("a list page without its total", "list-page", (d) => delete d.total);
+mutate("a check without its findings", "check", (d) => delete d.findings);
+mutate("a finding with a severity nobody defined", "check", (d) => (d.findings[0].severity = "fatal"));
 mutate("a plan graph without its edges", "planfor", (d) => delete d.edges);
 mutate("a plan graph whose edge kind nobody defined", "planfor", (d) => (d.edges[0].kind = "soft"));
 mutate("an estimate without its range", "estimate", (d) => delete d.range);

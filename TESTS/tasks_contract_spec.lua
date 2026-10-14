@@ -446,6 +446,43 @@ return function(H)
   )
   golden("planfor")
 
+  -- ── check: the rule check as a document (a client runs it as a job) ──
+  local chk = call("check")
+  eq(chk.kind, "tasks.check")
+  eq(chk.rev, snap.rev, "the rev of the snapshot: both documents are one state")
+  local rule_check = require("tasks_nvim.check").run({ root = root })
+  eq({ chk.errors, chk.warnings, chk.areas, chk.tasks, chk.total, chk.ok }, {
+    rule_check.errors,
+    rule_check.warnings,
+    rule_check.areas,
+    rule_check.tasks,
+    #rule_check.findings,
+    rule_check.ok,
+  }, "the figures of `tasks check`")
+  local by_code = {}
+  for _, f in ipairs(chk.findings) do
+    by_code[f.code .. "|" .. (f.id or "")] = f
+    lacks(f.file, ":", "a path relative to the vault: " .. f.file)
+    lacks(f.message, root, "no path of this machine in " .. f.code)
+  end
+  eq(by_code["bad-prio|lib.nvim/broken"].severity, "error")
+  eq(by_code["doing-while-blocked|lib.nvim/beta"].severity, "warn")
+  eq(by_code["doing-while-blocked|lib.nvim/beta"].file, "lib.nvim/ROADMAP/tasks/beta.md")
+  local one_area = call("check", { area = "cascade.nvim" })
+  ok(one_area.areas == 1 and one_area.total < chk.total, "one area is a part of the whole")
+  local with_refs = call("check", { stale = "refs" })
+  eq(with_refs.stale, "refs")
+  eq(type(with_refs.notes), "table")
+  ok(with_refs.total >= chk.total, "the stale refs only add findings")
+  local function refused_check(params, want, needle)
+    local doc, _, got = call("check", params)
+    eq({ doc.kind, got }, { "tasks.error", want }, vim.inspect(params))
+    has(doc.message, needle)
+  end
+  refused_check({ stale = "all" }, "invalid_argument", "stale must be refs")
+  refused_check({ area = "nope.nvim" }, "not_found", "unknown area")
+  golden("check")
+
   -- ── next ──
   local nxt = call("next", { n = 3 })
   eq(nxt.kind, "tasks.next")
