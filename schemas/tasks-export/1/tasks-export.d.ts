@@ -4,7 +4,7 @@
  * tasks-export/1: every document tasks.nvim hands to a machine. One of the kinds below, told apart by `kind`. The engine writes exactly these fields (a field that is not listed fails the contract tests); a reader ignores fields it does not know, because inside one version the contract only grows.
  */
 export type TasksExport =
-  Hello | Snapshot | List | Bodies | Estimate | TaskDocument | Next | Areas | DonePreview | Result | Error;
+  Hello | Snapshot | List | Bodies | Estimate | PlanFor | TaskDocument | Next | Areas | DonePreview | Result | Error;
 /**
  * tasks.hello: what this engine is and can do. Reads no task.
  */
@@ -233,6 +233,46 @@ export type Estimate = Head & {
    * How many of the tasks were taken with assumed values.
    */
   assumed: number;
+  incomplete: string[];
+};
+/**
+ * tasks.planfor: the tasks one task needs before it can start (`needs`) or the tasks that wait for it (`unlocks`), with the hard edges between them, in the order of their distance from the task. The same tasks as `plan --for`.
+ */
+export type PlanFor = Head & {
+  kind: "tasks.planfor";
+  rev: Rev;
+  digest: Digest;
+  id: string;
+  direction: "needs" | "unlocks";
+  /**
+   * All the tasks in the graph; `nodes` holds at most 500 of them.
+   */
+  total: number;
+  truncated: boolean;
+  nodes: {
+    id: string;
+    title: string;
+    status: string;
+    state?: string;
+    stage?: number;
+    /**
+     * Steps from the task itself (0).
+     */
+    distance: number;
+    on_critical_path?: true;
+  }[];
+  edges: {
+    /**
+     * The task that has to be finished first.
+     */
+    from: string;
+    /**
+     * The task that waits.
+     */
+    to: string;
+    kind: "blocked_by" | "gate";
+  }[];
+  cycles: string[][];
   incomplete: string[];
 };
 /**

@@ -129,6 +129,8 @@ mutate(
   (d) => (d.code = "oops"),
 );
 mutate("a list page without its total", "list-page", (d) => delete d.total);
+mutate("a plan graph without its edges", "planfor", (d) => delete d.edges);
+mutate("a plan graph whose edge kind nobody defined", "planfor", (d) => (d.edges[0].kind = "soft"));
 mutate("an estimate without its range", "estimate", (d) => delete d.range);
 mutate("an estimate that counts assumptions as text", "estimate", (d) => (d.assumed = "two"));
 mutate("a body without its etag", "bodies-page", (d) => delete d.items[0].etag);

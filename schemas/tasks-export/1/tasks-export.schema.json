@@ -20,6 +20,9 @@
       "$ref": "#/$defs/Estimate"
     },
     {
+      "$ref": "#/$defs/PlanFor"
+    },
+    {
       "$ref": "#/$defs/TaskDocument"
     },
     {
@@ -1093,6 +1096,139 @@
           "type": "integer",
           "minimum": 0,
           "description": "How many of the tasks were taken with assumed values."
+        },
+        "incomplete": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "PlanFor": {
+      "description": "tasks.planfor: the tasks one task needs before it can start (`needs`) or the tasks that wait for it (`unlocks`), with the hard edges between them, in the order of their distance from the task. The same tasks as `plan --for`.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": [
+        "kind",
+        "rev",
+        "digest",
+        "id",
+        "direction",
+        "total",
+        "truncated",
+        "nodes",
+        "edges",
+        "cycles",
+        "incomplete"
+      ],
+      "properties": {
+        "kind": {
+          "const": "tasks.planfor"
+        },
+        "rev": {
+          "$ref": "#/$defs/Rev"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "id": {
+          "type": "string"
+        },
+        "direction": {
+          "enum": [
+            "needs",
+            "unlocks"
+          ]
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "All the tasks in the graph; `nodes` holds at most 500 of them."
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "title",
+              "status",
+              "distance"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "distance": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Steps from the task itself (0)."
+              },
+              "on_critical_path": {
+                "const": true
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "from",
+              "to",
+              "kind"
+            ],
+            "properties": {
+              "from": {
+                "type": "string",
+                "description": "The task that has to be finished first."
+              },
+              "to": {
+                "type": "string",
+                "description": "The task that waits."
+              },
+              "kind": {
+                "enum": [
+                  "blocked_by",
+                  "gate"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "cycles": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         },
         "incomplete": {
           "type": "array",

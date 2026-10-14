@@ -63,6 +63,7 @@ M.CAPABILITIES = {
   "move_area_preview",
   "next",
   "ops",
+  "plan_for",
   "plan_new",
   "reminders",
   "reopen",
@@ -1041,6 +1042,145 @@ function M.estimate(params, opts)
   doc.quick_wins = vim.list_slice(sums.quick_wins, 1)
   doc.unestimated = vim.list_slice(sums.unestimated, 1)
   doc.assumed = n_assumed
+  doc.incomplete = view.errors
+  return seal(doc, rev_of(view, entries)), nil
+end
+
+---The most tasks one `plan_for` document names (the rest is counted in `total` and `truncated` says so).
+M.PLAN_FOR_MAX_NODES = 500
+
+---The tasks one task needs before it can start (`needs`: its hard blockers, transitively, across areas), or the tasks
+---that wait for it (`unlocks`), with the edges between them, the part of the plan's critical path they lie on and the
+---cycles they touch. The tasks are those of `plan --for`; a client that shows the graph never walks it itself.
+---@param params? { id?: string, direction?: string }
+---@param opts? { root?: string, view?: Tasks.ContractView }
+---@return table|nil doc
+---@return Tasks.ContractError|string|nil err
+function M.plan_for(params, opts)
+  params = params or {}
+  if type(params.id) ~= "string" or params.id == "" then
+    return nil,
+      { code = "invalid_argument", message = "plan_for needs the parameter id", retryable = false }
+  end
+  local direction = params.direction or "needs"
+  if direction ~= "needs" and direction ~= "unlocks" then
+    return nil,
+      {
+        code = "invalid_argument",
+        message = "direction must be needs or unlocks",
+        retryable = false,
+      }
+  end
+  local view, err = opts and opts.view or nil, nil
+  if not view then
+    view, err = M.view(opts)
+  end
+  if not view then
+    return nil, err
+  end
+  local index = view.shared.index
+  local target = index.open[params.id]
+  if not target then
+    return nil,
+      { code = "not_found", message = "no such open task: " .. params.id, retryable = false }
+  end
+  -- who a task waits on (hard edges only: `blocked_by` and the gate of a plan), and who waits on it
+  local function blockers(t)
+    local out = {}
+    for _, b in ipairs(plan.hard_blockers(t, index)) do
+      if index.open[b] then
+        out[#out + 1] = b
+      end
+    end
+    return out
+  end
+  local dependents = {}
+  for _, t in ipairs(view.open) do
+    for _, b in ipairs(blockers(t)) do
+      dependents[b] = dependents[b] or {}
+      dependents[b][#dependents[b] + 1] = t.id
+    end
+  end
+  -- breadth first from the task: the distance is the number of steps, the first way found is the shortest
+  local distance, order, queue = { [target.id] = 0 }, { target.id }, { target.id }
+  local head = 1
+  while head <= #queue do
+    local id = queue[head]
+    head = head + 1
+    local next_ids = direction == "needs" and blockers(index.open[id]) or (dependents[id] or {})
+    for _, n in ipairs(next_ids) do
+      if distance[n] == nil then
+        distance[n] = distance[id] + 1
+        order[#order + 1] = n
+        queue[#queue + 1] = n
+      end
+    end
+  end
+  table.sort(order, function(a, b)
+    if distance[a] ~= distance[b] then
+      return distance[a] < distance[b]
+    end
+    return (view.rank[a] or math.huge) < (view.rank[b] or math.huge)
+  end)
+  local on_path = {}
+  for _, id in ipairs(view.plan.critical.path) do
+    on_path[id] = true
+  end
+  local total = #order
+  local kept = {}
+  for i = 1, math.min(total, M.PLAN_FOR_MAX_NODES) do
+    kept[order[i]] = true
+  end
+  local nodes, edges = {}, {}
+  for i = 1, math.min(total, M.PLAN_FOR_MAX_NODES) do
+    local t = index.open[order[i]]
+    local node = view.plan.nodes[t.id]
+    nodes[#nodes + 1] = json.object({
+      id = t.id,
+      title = clip(t.title or "", M.LIMITS.title),
+      status = t.status,
+      state = node and node.state or nil,
+      stage = node and node.stage or nil,
+      distance = distance[t.id],
+      on_critical_path = on_path[t.id] and true or nil,
+    })
+    local hard = {}
+    for _, b in ipairs(t.blocked_by or {}) do
+      hard[b] = "blocked_by"
+    end
+    for _, b in ipairs(blockers(t)) do
+      if kept[b] then
+        edges[#edges + 1] = json.object({ from = b, to = t.id, kind = hard[b] or "gate" })
+      end
+    end
+  end
+  table.sort(edges, function(a, b)
+    if a.to ~= b.to then
+      return a.to < b.to
+    end
+    return a.from < b.from
+  end)
+  local cycles = {}
+  for _, cycle in ipairs(view.plan.cycles) do
+    for _, id in ipairs(cycle) do
+      if kept[id] then
+        cycles[#cycles + 1] = vim.list_slice(cycle, 1)
+        break
+      end
+    end
+  end
+  local entries = {}
+  for _, t in ipairs(view.open) do
+    entries[#entries + 1] = { id = t.id, etag = t.etag or etag_of(t.path) }
+  end
+  local doc = M.head("tasks.planfor", view.root)
+  doc.id = target.id
+  doc.direction = direction
+  doc.total = total
+  doc.truncated = total > M.PLAN_FOR_MAX_NODES
+  doc.nodes = json.memo(nodes)
+  doc.edges = edges
+  doc.cycles = cycles
   doc.incomplete = view.errors
   return seal(doc, rev_of(view, entries)), nil
 end
