@@ -929,9 +929,13 @@ end
 ---The most ids and the most assumptions one `estimate` request holds.
 M.ESTIMATE_MAX_ITEMS = 1000
 
+---The most days one assumed effort may be (ten years): a sum of larger numbers could not be written down.
+M.ESTIMATE_MAX_EFFORT_DAYS = 3650
+
 ---The figures of `estimate` for some open tasks, optionally as they would be if some efforts and values were
 ---different (`assume`: nothing is written). The figures are those of `tasks_nvim.estimate`, the same as the snapshot
 ---gives for the whole vault, so a client that shows a sum of a draft never reckons it itself.
+---The tasks come in the order of the snapshot (`view.open`), so the lists of the two documents agree.
 ---@param params? { ids?: string[], assume?: { id?: string, effort?: string, value?: integer }[] }
 ---@param opts? { root?: string, view?: Tasks.ContractView }
 ---@return table|nil doc
@@ -976,9 +980,6 @@ function M.estimate(params, opts)
   else
     chosen = vim.list_slice(view.open, 1)
   end
-  table.sort(chosen, function(a, b)
-    return (view.rank[a.id] or math.huge) < (view.rank[b.id] or math.huge)
-  end)
   local in_scope = {}
   for _, t in ipairs(chosen) do
     in_scope[t.id] = true
@@ -997,11 +998,24 @@ function M.estimate(params, opts)
         )
       end
     end
+    if entry.effort == nil and entry.value == nil then
+      return bad(("%s: needs an effort or a value"):format(where))
+    end
     if entry.effort ~= nil and not model.is_effort(entry.effort) then
       return bad(
         ("%s.effort: '%s' is not an effort (XS S M L XL or <n>d)"):format(
           where,
           tostring(entry.effort)
+        )
+      )
+    end
+    -- a number of days a sum could not be written with (2^53 and more, or beyond a double) is refused here
+    if entry.effort ~= nil and model.effort_days(entry.effort) > M.ESTIMATE_MAX_EFFORT_DAYS then
+      return bad(
+        ("%s.effort: '%s' is more than %d days"):format(
+          where,
+          tostring(entry.effort):sub(1, 40),
+          M.ESTIMATE_MAX_EFFORT_DAYS
         )
       )
     end
@@ -1088,20 +1102,30 @@ function M.plan_for(params, opts)
       { code = "not_found", message = "no such open task: " .. params.id, retryable = false }
   end
   -- who a task waits on (hard edges only: `blocked_by` and the gate of a plan), and who waits on it
+  -- (once for each task, each blocker once: a repeated `blocked_by` entry is one edge)
+  local memo = {}
   local function blockers(t)
-    local out = {}
+    local hit = memo[t.id]
+    if hit then
+      return hit
+    end
+    local out, seen = {}, {}
     for _, b in ipairs(plan.hard_blockers(t, index)) do
-      if index.open[b] then
+      if index.open[b] and not seen[b] then
+        seen[b] = true
         out[#out + 1] = b
       end
     end
+    memo[t.id] = out
     return out
   end
   local dependents = {}
-  for _, t in ipairs(view.open) do
-    for _, b in ipairs(blockers(t)) do
-      dependents[b] = dependents[b] or {}
-      dependents[b][#dependents[b] + 1] = t.id
+  if direction == "unlocks" then
+    for _, t in ipairs(view.open) do
+      for _, b in ipairs(blockers(t)) do
+        dependents[b] = dependents[b] or {}
+        dependents[b][#dependents[b] + 1] = t.id
+      end
     end
   end
   -- breadth first from the task: the distance is the number of steps, the first way found is the shortest
@@ -1163,13 +1187,19 @@ function M.plan_for(params, opts)
     end
     return a.from < b.from
   end)
+  -- a cycle is named when all its members are in `nodes` (a client can resolve every id of it)
   local cycles = {}
   for _, cycle in ipairs(view.plan.cycles) do
+    local whole, touches = true, false
     for _, id in ipairs(cycle) do
       if kept[id] then
-        cycles[#cycles + 1] = vim.list_slice(cycle, 1)
-        break
+        touches = true
+      else
+        whole = false
       end
+    end
+    if touches and whole then
+      cycles[#cycles + 1] = vim.list_slice(cycle, 1)
     end
   end
   local entries = {}
@@ -1196,7 +1226,7 @@ M.CHECK_MAX_FINDINGS = 1000
 ---longer than a question, so a client runs it as a job and never waits for it with a screen in its hands. The wording of
 ---a finding is the engine's.
 ---@param params? { area?: string, stale?: string }
----@param opts? { root?: string }
+---@param opts? { root?: string, ref_opts?: table }  # `ref_opts` reaches `staleness.compute` (specs)
 ---@return table|nil doc
 ---@return Tasks.ContractError|string|nil err
 function M.check(params, opts)
@@ -1233,6 +1263,7 @@ function M.check(params, opts)
       })
     end
     local notes = {}
+    local added_warnings = 0
     if params.stale == "refs" then
       local scoped = {}
       for _, t in ipairs(view.open) do
@@ -1240,11 +1271,20 @@ function M.check(params, opts)
           scoped[#scoped + 1] = t
         end
       end
-      local ok, report = pcall(staleness.compute, scoped, { root = view.root })
+      local ok, report = pcall(
+        staleness.compute,
+        scoped,
+        vim.tbl_extend("force", { root = view.root }, opts and opts.ref_opts or {})
+      )
       if ok then
         for _, t in ipairs(scoped) do
           local changes = report.stale[t.id]
           if changes and #changes > 0 then
+            -- the refs as the snapshot names them (an absolute one is not spelled out)
+            local shown = vim.tbl_map(function(c)
+              return vim.tbl_extend("force", c, { ref = safe_path(view.root, c.ref) })
+            end, changes)
+            added_warnings = added_warnings + 1
             findings[#findings + 1] = json.object({
               code = "stale-refs",
               severity = "warn",
@@ -1255,25 +1295,43 @@ function M.check(params, opts)
                 redact(
                   view.root,
                   "a file named in refs changed after the task was updated: "
-                    .. staleness.describe(changes, 5)
+                    .. staleness.describe(shown, 5)
                 ),
                 600
               ),
             })
           end
         end
+        -- a note that names a folder of this machine (`<repo>: not a git repository`) is told without it
         for _, n in ipairs(report.notes or {}) do
-          notes[#notes + 1] = clip(redact(view.root, tostring(n)), 300)
+          local text = tostring(n)
+          if text:find("git time budget", 1, true) or text:find("beyond the limit", 1, true) then
+            notes[#notes + 1] = clip(text, 300)
+          elseif text:find("vault not found", 1, true) then
+            notes[#notes + 1] = "refs not checked"
+          else
+            notes[#notes + 1] = "a folder could not be dated by git; file times were used"
+          end
         end
       else
         notes[#notes + 1] = "refs could not be checked"
       end
     end
+    -- one total order: errors first, then by file, code, task and wording; a cut at the limit drops the least important
     table.sort(findings, function(a, b)
+      if a.severity ~= b.severity then
+        return a.severity == "error"
+      end
       if a.file ~= b.file then
         return a.file < b.file
       end
-      return a.code < b.code
+      if a.code ~= b.code then
+        return a.code < b.code
+      end
+      if (a.id or "") ~= (b.id or "") then
+        return (a.id or "") < (b.id or "")
+      end
+      return a.message < b.message
     end)
     local total = #findings
     for i = #findings, M.CHECK_MAX_FINDINGS + 1, -1 do
@@ -1286,7 +1344,7 @@ function M.check(params, opts)
     local doc = M.head("tasks.check", view.root)
     doc.ok = result.ok
     doc.errors = result.errors
-    doc.warnings = result.warnings
+    doc.warnings = result.warnings + added_warnings
     doc.areas = result.areas
     doc.tasks = result.tasks
     doc.stale = params.stale

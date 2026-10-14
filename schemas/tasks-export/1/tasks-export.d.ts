@@ -284,6 +284,9 @@ export type PlanFor = Head & {
     to: string;
     kind: "blocked_by" | "gate";
   }[];
+  /**
+   * The cycles whose members are all among `nodes`.
+   */
   cycles: string[][];
   incomplete: string[];
 };

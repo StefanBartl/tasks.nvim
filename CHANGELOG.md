@@ -5,6 +5,10 @@ the version is not tagged yet (the repository is not published).
 
 ## [Unreleased]
 
+### Fixed
+
+- Review of `estimate`, `plan_for` and `check`: an assumed effort of more than 3650 days (or a longer digit string) is refused by name instead of failing as `internal`; an `assume` entry needs an effort or a value; `estimate` lists its tasks in the order of the snapshot; `plan_for` names a repeated `blocked_by` entry once, builds the dependents only for `unlocks`, and names a cycle only when it lies whole among the nodes; `check` counts the stale-refs warnings in `warnings`, tells no folder of this machine in its notes or messages, sorts errors first with a total order, and takes `ref_opts` for the specs.
+
 ### Added
 
 - `check` in `tasks-export/1` (capability `check`, document `tasks.check`): the rule check of the vault as a document - findings with a stable `code`, a severity, the area, the task id when there is one and the file relative to the vault; with `stale: refs` also the open tasks that name a file which changed after the task was updated. At most 1000 findings. New `contract.check`.

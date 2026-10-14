@@ -1,6 +1,6 @@
 {
   "areas": 1,
-  "digest": "sha256:224faf1e4b85eb17",
+  "digest": "sha256:7de9441672ce8877",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -14,14 +14,6 @@
       "file": "lib.nvim/ROADMAP/TASKS.md",
       "message": "ROADMAP/TASKS.md is missing although tasks are open (tasks index regenerates it)",
       "severity": "error"
-    },
-    {
-      "area": "lib.nvim",
-      "code": "doing-while-blocked",
-      "file": "lib.nvim/ROADMAP/tasks/beta.md",
-      "id": "lib.nvim/beta",
-      "message": "status is doing but lib.nvim/alpha is still open",
-      "severity": "warn"
     },
     {
       "area": "lib.nvim",
@@ -57,19 +49,27 @@
     },
     {
       "area": "lib.nvim",
-      "code": "blocked-by-parked",
-      "file": "lib.nvim/ROADMAP/tasks/epsilon.md",
-      "id": "lib.nvim/epsilon",
-      "message": "lib.nvim/epsilon waits on lib.nvim/delta, which is parked",
-      "severity": "warn"
-    },
-    {
-      "area": "lib.nvim",
       "code": "unknown-status",
       "file": "lib.nvim/ROADMAP/tasks/odd-status.md",
       "id": "lib.nvim/odd-status",
       "message": "unknown status 'wip' (expected doing, decision, blocked, open, parked, done)",
       "severity": "error"
+    },
+    {
+      "area": "lib.nvim",
+      "code": "doing-while-blocked",
+      "file": "lib.nvim/ROADMAP/tasks/beta.md",
+      "id": "lib.nvim/beta",
+      "message": "status is doing but lib.nvim/alpha is still open",
+      "severity": "warn"
+    },
+    {
+      "area": "lib.nvim",
+      "code": "blocked-by-parked",
+      "file": "lib.nvim/ROADMAP/tasks/epsilon.md",
+      "id": "lib.nvim/epsilon",
+      "message": "lib.nvim/epsilon waits on lib.nvim/delta, which is parked",
+      "severity": "warn"
     }
   ],
   "generated_at": "2026-01-01T00:00:00Z",
