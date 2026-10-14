@@ -66,6 +66,12 @@ M.METHODS = {
       return contract.bodies(params, opts)
     end,
   },
+  estimate = {
+    params = { ids = "string_list", assume = "object_list" },
+    run = function(params, opts)
+      return contract.estimate(params, opts)
+    end,
+  },
   next = {
     params = { n = "integer", actor = "string", area = "string" },
     run = function(params, opts)

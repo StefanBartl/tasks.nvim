@@ -37,6 +37,7 @@ nvim --headless -u NONE -l scripts/tasks.lua --capabilities          # the same 
 | `list` | `area`, `status` (list), `limit` (1..100), `offset` | `tasks.list`: a page of open tasks in plan order |
 | `task` | `id` (`<area>/<slug>`) | `tasks.task`: one task with its body and steps |
 | `bodies` | `ids` (list, up to 1000) or `offset`, `limit` (1..1000) | `tasks.bodies`: `{ id, etag, body, body_truncated }` of the open tasks in plan order, for a reader that searches the text; a page ends early at 2 MiB of text (`next_offset`); the `rev` is that of the snapshot of the same state |
+| `estimate` | `ids` (list, up to 1000), `assume` (list of `{ id, effort?, value? }`, up to 1000) | `tasks.estimate`: the figures of an estimate for the tasks named (default: all open tasks) - `tasks`, `days` and its `range` (every size at its low and at its high end), `value`, `n_with_effort`, `n_without_effort`, `n_with_value`, `n_without_value`, `roi`, `quick_wins`, `unestimated` - as they would be with the efforts and values of `assume` (nothing is written; an id outside `ids`, an effort the engine would not write and a value outside 1..5 are `invalid_argument`); `assumed` says how many tasks were taken so. The figures are those of the snapshot: a client that shows the sum of a draft never reckons it itself |
 | `next` | `n` (0..10), `actor`, `area` | `tasks.next`: what to start next, with the reason |
 | `areas` | none | `tasks.areas`: the areas with their open counts |
 | `done_preview` | `id` | `tasks.donepreview`: what finishing the task would do, and the token for it |
@@ -293,7 +294,7 @@ The documents are built from files anyone may have edited or synced, so the read
 | `schemas/tasks-export/1/tasks-export.d.ts` | the TypeScript types generated from it (`json-schema-to-typescript` 16; no tuples: the generator does not understand `prefixItems`) |
 | `TESTS/golden/tasks-export-1/*.json` | the documents of the synthetic fixture vault (`TESTS/contract_fixture.lua`), byte for byte: a change of one is a change of the contract |
 | `TESTS/tasks_contract_spec.lua`, `TESTS/tasks_cli_contract_spec.lua`, `TESTS/tasks_ops_spec.lua` | the Lua side: every document against the golden files, the dispatcher, the command line, the write door (every operation, conflicts, dry runs, limits, two writers at once in two processes) |
-| `contract/check.mjs` | the outside view (Node 22): every golden document validates (Ajv, strict), 23 broken documents are refused, the reader rules hold, the `.d.ts` equals the generated one |
+| `contract/check.mjs` | the outside view (Node 22): every golden document validates (Ajv, strict), 25 broken documents are refused, the reader rules hold, the `.d.ts` equals the generated one |
 
 ```sh
 nvim --headless -u NONE -l TESTS/golden/regenerate.lua     # on purpose; read `git diff TESTS/golden`, commit with the code

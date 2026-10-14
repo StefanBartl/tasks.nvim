@@ -336,6 +336,71 @@ return function(H)
   )
   golden("bodies-page")
 
+  -- ── estimate: the figures of some tasks, also with other values assumed (nothing is written) ──
+  local all = call("estimate")
+  eq(all.kind, "tasks.estimate")
+  local from_snap = snap.estimate
+  eq(
+    { all.tasks, all.days, all.n_with_effort, all.n_without_effort, all.value, all.n_with_value },
+    {
+      from_snap.tasks,
+      from_snap.days,
+      from_snap.n_with_effort,
+      from_snap.n_without_effort,
+      from_snap.value,
+      from_snap.n_with_value,
+    },
+    "without ids and assumptions it is the estimate of the snapshot"
+  )
+  eq(all.rev, snap.rev, "the rev of the snapshot: both documents are one state")
+  ok(all.range.low <= all.days and all.days <= all.range.high, "the sum lies in its range")
+  eq(all.assumed, 0)
+  local files_before = H.read(root .. "/lib.nvim/ROADMAP/tasks/alpha.md")
+  local ids = { "lib.nvim/alpha", "lib.nvim/beta" }
+  local plain = call("estimate", { ids = ids })
+  eq(plain.tasks, 2)
+  local drafted = call("estimate", {
+    ids = ids,
+    assume = {
+      { id = "lib.nvim/alpha", effort = "XL", value = 5 },
+      { id = "lib.nvim/beta", effort = "3d" },
+    },
+  })
+  eq(drafted.assumed, 2)
+  ok(
+    drafted.days > plain.days,
+    "an XL and 3d raise the sum: " .. drafted.days .. " vs " .. plain.days
+  )
+  eq(drafted.n_without_effort, 0, "both have an effort once assumed")
+  eq(H.read(root .. "/lib.nvim/ROADMAP/tasks/alpha.md"), files_before, "nothing is written")
+  local function refused_estimate(params, needle)
+    local doc, _, err_code = call("estimate", params)
+    eq({ doc.kind, err_code }, { "tasks.error", "invalid_argument" }, vim.inspect(params))
+    has(doc.message, needle)
+  end
+  refused_estimate({ ids = { "lib.nvim/nope" } }, "is no open task")
+  refused_estimate(
+    { ids = ids, assume = { { id = "lib.nvim/delta", value = 3 } } },
+    "not one of the tasks"
+  )
+  refused_estimate(
+    { ids = ids, assume = { { id = "lib.nvim/alpha", effort = "huge" } } },
+    "is not an effort"
+  )
+  refused_estimate(
+    { ids = ids, assume = { { id = "lib.nvim/alpha", value = 6 } } },
+    "is not a value"
+  )
+  refused_estimate(
+    { ids = ids, assume = { { id = "lib.nvim/alpha", value = 2.5 } } },
+    "is not a value"
+  )
+  refused_estimate(
+    { ids = ids, assume = { { id = "lib.nvim/alpha", colour = "red" } } },
+    "unknown field"
+  )
+  golden("estimate")
+
   -- ── next ──
   local nxt = call("next", { n = 3 })
   eq(nxt.kind, "tasks.next")

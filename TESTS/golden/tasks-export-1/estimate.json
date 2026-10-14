@@ -1,0 +1,35 @@
+{
+  "assumed": 1,
+  "days": 3,
+  "digest": "sha256:a64470b863126e89",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "incomplete": [],
+  "kind": "tasks.estimate",
+  "n_with_effort": 2,
+  "n_with_value": 2,
+  "n_without_effort": 1,
+  "n_without_value": 1,
+  "plugin": "tasks.nvim",
+  "quick_wins": [],
+  "range": {
+    "high": 3.5,
+    "low": 2.7
+  },
+  "rev": "rev:6a1aa5",
+  "roi": 4,
+  "schema": 1,
+  "tasks": 3,
+  "unestimated": [
+    "lib.nvim/gamma",
+    "lib.nvim/beta"
+  ],
+  "value": 6,
+  "vault": {
+    "id": "vault"
+  }
+}

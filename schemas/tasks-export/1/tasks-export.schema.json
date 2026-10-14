@@ -17,6 +17,9 @@
       "$ref": "#/$defs/Bodies"
     },
     {
+      "$ref": "#/$defs/Estimate"
+    },
+    {
       "$ref": "#/$defs/TaskDocument"
     },
     {
@@ -978,6 +981,118 @@
           "type": "integer",
           "minimum": 1,
           "description": "Absent on the last page."
+        },
+        "incomplete": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "Estimate": {
+      "description": "tasks.estimate: the figures of an estimate for some open tasks, also as they would be with other efforts and values (`assume`; nothing is written). The same figures as `estimate` in the snapshot, with the range of the sizes.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": [
+        "kind",
+        "rev",
+        "digest",
+        "tasks",
+        "days",
+        "range",
+        "n_with_effort",
+        "n_without_effort",
+        "value",
+        "n_with_value",
+        "n_without_value",
+        "quick_wins",
+        "unestimated",
+        "assumed",
+        "incomplete"
+      ],
+      "properties": {
+        "kind": {
+          "const": "tasks.estimate"
+        },
+        "rev": {
+          "$ref": "#/$defs/Rev"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "tasks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "days": {
+          "type": "number",
+          "minimum": 0
+        },
+        "range": {
+          "type": "object",
+          "required": [
+            "low",
+            "high"
+          ],
+          "properties": {
+            "low": {
+              "type": "number",
+              "minimum": 0
+            },
+            "high": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "description": "The sum with every size at its low and at its high end: without it the sum looks more exact than it is."
+        },
+        "n_with_effort": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "n_without_effort": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "value": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "n_with_value": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "n_without_value": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "roi": {
+          "type": "number",
+          "minimum": 0
+        },
+        "quick_wins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unestimated": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "assumed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many of the tasks were taken with assumed values."
         },
         "incomplete": {
           "type": "array",
