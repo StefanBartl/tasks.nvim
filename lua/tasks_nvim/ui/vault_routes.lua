@@ -208,8 +208,9 @@ function M.routes()
           bool = true,
           desc = "Make and use another vault although one is in use",
         },
+        { name = "yes", bool = true, desc = "Skip the question that lists what will happen" },
       },
-      desc = "Create a vault folder (with the areas named after it), and use it for this session; the setup() line that keeps it is printed",
+      desc = "Create a vault folder (with the areas named after it): lists what happens and the setup() step that is left to you, then uses it for this session",
       run = function(ctx)
         cmd().create(ctx)
       end,

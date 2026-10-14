@@ -13,7 +13,7 @@
 ---   tree       the folder in the file explorer
 ---   cdx        a ready prompt for Claude Code naming the folder to the + register
 ---   new        a dated note in Backlog/FEATURES|TASKS (`new feature|task <title...> [--area=]`)
----   create     a vault folder (and areas) and use it for this session
+---   create     a vault folder (and areas): says first what happens and what is left to you; used for this session
 ---   status     the vault in use
 ---
 --- With no vault every verb but `create` and `status` says the same thing once and does nothing else.
@@ -449,10 +449,59 @@ function M.new(ctx)
   end)
 end
 
----`:TasksVault create [<dir>] [<area>...] [--force]`
+---The setup line that keeps a vault.
+---@param root string
+---@return string
+function M.setup_line(root)
+  return ("vault = %q,"):format(root)
+end
+
+---What `create` is about to do and what is left to the user, in the order it happens. The last step is the one
+---that is easy to forget and has no effect until it is done, so it is the one that is marked.
+---@param root string
+---@param areas string[]
+---@return string
+function M.create_plan(root, areas)
+  return table.concat({
+    "Create a task vault",
+    "",
+    "  1. Folder (name and location):",
+    "       " .. root,
+    "  2. Areas to make:  "
+      .. (
+        #areas > 0 and table.concat(areas, ", ") or "none yet (:Tasks new <area> <title> makes one)"
+      ),
+    "  3. In use for this session at once.",
+    "",
+    "  >>> 4. REQUIRED, and done by you afterwards <<<",
+    "       Write the path into the setup of tasks.nvim:",
+    "           " .. M.setup_line(root),
+    "       (or set $TASKS_VAULT). Without this step nvim will NOT find",
+    "       the vault again after a restart.",
+  }, "\n")
+end
+
+---The message after the vault was made: the same required step, once more and impossible to miss.
+---@param res { root: string, existed: boolean, created: string[] }
+---@return string
+function M.created_message(res)
+  return table.concat({
+    (res.existed and "Using the existing folder " or "Created the vault ") .. res.root,
+    #res.created > 0 and ("made: " .. table.concat(res.created, ", ")) or "nothing new to make",
+    "",
+    "!! ONE STEP IS LEFT, AND IT IS YOURS !!",
+    "Without it nvim does not find this vault after a restart:",
+    "  add   " .. M.setup_line(res.root),
+    "  to the setup (opts) of tasks.nvim, or set $TASKS_VAULT.",
+    "The line is in the + register. Until then the vault is in use for this session only.",
+  }, "\n")
+end
+
+---`:TasksVault create [<dir>] [<area>...] [--force] [--yes]`
 ---
----Makes the vault folder (and areas) and uses it for this session. What survives the session is the
----`vault` option of `setup()` (or `$TASKS_VAULT`); the notice says so.
+---Says first what will happen and what is left to the user (confirmation; `--yes` skips it), makes the vault
+---folder and the areas, and uses it for this session. What survives the session is the `vault` option of
+---`setup()` (or `$TASKS_VAULT`): the plan names that step before and the result names it again.
 ---@param ctx table
 function M.create(ctx)
   local current = vault.root()
@@ -465,37 +514,44 @@ function M.create(ctx)
     )
     return
   end
-  local function make(dir)
-    local areas = {}
-    for _, name in ipairs(ctx.rest or {}) do
-      areas[#areas + 1] = name
-    end
-    local res, err = ops.create_vault(dir, areas)
+  local areas = {}
+  for _, name in ipairs(ctx.rest or {}) do
+    areas[#areas + 1] = name
+  end
+  local function make(root)
+    local res, err = ops.create_vault(root, areas)
     if not res then
       notify.error(tostring(err))
       return
     end
     vault.configure({ vault = res.root })
-    notify.info(table.concat({
-      (res.existed and "Using the existing folder " or "Created the vault ") .. res.root,
-      #res.created > 0 and ("made: " .. table.concat(res.created, ", ")) or "nothing new to make",
-      ("In use for this session. To keep it add vault = %q to tasks.nvim's setup() (or set $TASKS_VAULT)."):format(
-        res.root
-      ),
-      "It is a plain folder; make it a git repository yourself if you want one.",
-    }, "\n"))
+    copy(M.setup_line(res.root))
+    notify.warn(M.created_message(res))
+  end
+  local function plan_and_make(dir)
+    -- Checked before the question, so a refused folder is not first offered.
+    local root = fsio.norm(vim.fn.fnamemodify(dir, ":p"))
+    local confirm = require("tasks_nvim.ui.confirm")
+    if ctx.flags and ctx.flags.yes then
+      return make(dir)
+    end
+    confirm.yesno(M.create_plan(root, areas), "create it", function(accepted)
+      if accepted then
+        make(dir)
+      end
+    end)
   end
   local dir = ctx.args.dir
   if dir and dir ~= "" then
-    return make(dir)
+    return plan_and_make(dir)
   end
   vim.ui.input({
-    prompt = "Vault folder: ",
+    prompt = "Vault folder (name and location): ",
     default = vim.fs.joinpath(vim.fn.expand("~"), "tasks-vault"),
     completion = "dir",
   }, function(input)
     if input and vim.trim(input) ~= "" then
-      make(vim.trim(input))
+      plan_and_make(vim.trim(input))
     end
   end)
 end

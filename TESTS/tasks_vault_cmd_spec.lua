@@ -283,27 +283,55 @@ return function(H)
   end)
   eq(notes[1].msg, first, "new says it too")
 
-  -- create: from nothing, with a prompt for the folder
+  -- create: from nothing, with a prompt for the folder and a plan that is confirmed first
+  local confirm = require("tasks_nvim.ui.confirm")
+  local confirm_was = confirm.yesno
+  local plan_shown
+  local answer = true
+  confirm.yesno = function(msg, _, cb)
+    plan_shown = msg
+    cb(answer)
+  end
   local target = H.tmpdir() .. "/via-command"
   vim.ui.input = function(opts, cb)
     ok(opts.prompt:find("Vault folder", 1, true), "asks for the folder")
     cb(target)
   end
+  answer = false
+  quiet(function()
+    cmd.create(ctx({}, {}, { "one.nvim" }))
+  end)
+  ok(not H.exists(target), "a declined plan makes nothing")
+  eq(vault.root(), nil, "and uses nothing")
+  has(plan_shown, target, "the plan names the folder")
+  has(plan_shown, "one.nvim", "and the areas")
+  has(plan_shown, "REQUIRED", "and marks the step that is left to the user")
+  has(plan_shown, 'vault = "' .. target .. '"', "with the line to write")
+  has(plan_shown, "will NOT find", "and what happens without it")
+
+  answer = true
   quiet(function()
     cmd.create(ctx({}, {}, { "one.nvim" }))
   end)
   ok(H.exists(target .. "/one.nvim/Backlog"), "create made the vault and its area")
   eq(vault.root(), target, "and the vault is in use for the session")
-  has(notes[1].msg, "setup()", "the notice says how to keep it")
+  has(notes[1].msg, "ONE STEP IS LEFT", "the result names the open step again")
+  has(notes[1].msg, 'vault = "' .. target .. '"', "with the line to write")
+  eq(copied, 'vault = "' .. target .. '",', "the line is in the clipboard")
+  eq(notes[1].level, vim.log.levels.WARN, "at the level of a warning, not of information")
+
   quiet(function()
     cmd.create(ctx({ dir = H.tmpdir() .. "/other" }))
   end)
   has(notes[1].msg, "in use already", "a second create without --force is refused")
   ok(not H.exists(H.tmpdir() .. "/other"))
+  plan_shown = nil
   quiet(function()
-    cmd.create(ctx({ dir = target .. "-2" }, { force = true }))
+    cmd.create(ctx({ dir = target .. "-2" }, { force = true, yes = true }))
   end)
+  eq(plan_shown, nil, "--yes skips the question")
   eq(vault.root(), target .. "-2", "--force switches the vault")
+  confirm.yesno = confirm_was
 
   -- ── registration and completion ─────────────────────────────────────────────
   vault.configure({ vault = "" })
