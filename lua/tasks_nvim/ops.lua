@@ -23,6 +23,9 @@
 ---    open task; a dropped step is refused; the answer has an `inverse`
 ---  - `append_note` { id, text, if_match? }: add one dated line to the notes of an open task (`## Notizen` / `## Notes`,
 ---    made when missing); no `inverse`
+---  - `set_body` { id, body, if_match? }: replace the text below the frontmatter of an open task (at most 100000 characters, no
+---    control character but the line break and the tab; an empty text is allowed and leaves one blank line); the answer has an
+---    `inverse` (the old text) when the old text is within the same limit
 ---  - `reopen` { id, status?, if_match? }: bring a finished task back to `ROADMAP/tasks` (status `open`, or the one
 ---    given), take its row out of the Backlog README; an open task is `unchanged`; a folder task is refused; no `inverse`
 ---  - `move_area` { id, to_area }: only as a dry run in this version (the report of `moves.preview`)
@@ -47,6 +50,7 @@ local contract = require("tasks_nvim.contract")
 local done_flow = require("tasks_nvim.done_flow")
 local edges = require("tasks_nvim.edges")
 local errors = require("tasks_nvim.errors")
+local fm = require("lib.nvim.markdown.frontmatter")
 local fsio = require("tasks_nvim.fsio")
 local index = require("tasks_nvim.index")
 local json = require("tasks_nvim.json")
@@ -70,6 +74,7 @@ M.OPS = {
   "tick_step",
   "append_note",
   "reopen",
+  "set_body",
 }
 
 ---Longest `client_op_id`.
@@ -77,6 +82,9 @@ M.MAX_CLIENT_OP_ID = 64
 
 ---Longest `body` of `new`, in characters.
 M.MAX_BODY = 20000
+
+---Longest `body` of `set_body`, in characters (the text a task file may grow to is not bounded by `new`).
+M.MAX_SET_BODY = 100000
 
 ---Longest entry of a list value (a tag, a ref, an id).
 M.MAX_ENTRY = 300
@@ -98,6 +106,7 @@ local FIELDS = {
   tick_step = { id = "string", n = "integer", done = "boolean", if_match = "string" },
   append_note = { id = "string", text = "string", if_match = "string" },
   reopen = { id = "string", status = "string", if_match = "string" },
+  set_body = { id = "string", body = "string", if_match = "string" },
   plan_new = {
     area = "string",
     title = "string",
@@ -636,6 +645,62 @@ end
 ---@param op table
 ---@param ctx Tasks.OpsCtx
 ---@return table entry
+local function do_set_body(op, ctx)
+  if op.id == nil or op.body == nil then
+    return refuse("invalid_argument", "set_body needs id and body")
+  end
+  if has_control(op.body) then
+    return refuse("invalid_argument", "body contains a control character")
+  end
+  if too_long(op.body, M.MAX_SET_BODY) then
+    return refuse("payload_too_large", ("body is longer than %d characters"):format(M.MAX_SET_BODY))
+  end
+  local r, err, info = mutate.edit_text(op.id, function(text)
+    local parsed = fm.parse(text)
+    if not parsed or not parsed.has_block or parsed.unterminated then
+      return nil, "the file has no frontmatter block to write below"
+    end
+    local old = fsio.lf(parsed.body)
+    local trimmed = vim.trim(fsio.lf(op.body))
+    local new_body = "\n" .. (trimmed ~= "" and (trimmed .. "\n") or "")
+    if parsed.eol == "\r\n" then
+      new_body = new_body:gsub("\n", "\r\n")
+    end
+    parsed.body = new_body
+    return fm.serialize(parsed), nil, { old = old }
+  end, {
+    root = ctx.root,
+    today = ctx.today,
+    index = false,
+    if_match = op.if_match,
+    dry_run = ctx.dry,
+  })
+  if not r then
+    return mutate_failure(ctx, err, info)
+  end
+  local entry = text_entry(ctx, r)
+  -- the way back is the old text; none when it could not be sent again (too long, a control character)
+  local old = r.extra and r.extra.old
+  if
+    r.changed
+    and not ctx.dry
+    and type(old) == "string"
+    and not has_control(old)
+    and not too_long(old, M.MAX_SET_BODY)
+  then
+    entry.inverse = json.object({
+      op = "set_body",
+      id = r.id,
+      body = old,
+      if_match = r.etag_after,
+    })
+  end
+  return entry
+end
+
+---@param op table
+---@param ctx Tasks.OpsCtx
+---@return table entry
 local function do_new(op, ctx)
   if op.area == nil or op.title == nil then
     return refuse("invalid_argument", "new needs area and title")
@@ -968,6 +1033,7 @@ local HANDLERS = {
   tick_step = do_tick_step,
   append_note = do_append_note,
   reopen = do_reopen,
+  set_body = do_set_body,
 }
 
 -- ── the request ──────────────────────────────────────────────────────────────

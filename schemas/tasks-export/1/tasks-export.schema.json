@@ -1731,7 +1731,7 @@
       "required": ["op", "id"],
       "properties": {
         "op": {
-          "enum": ["set", "reorder", "tick_step"]
+          "enum": ["set", "reorder", "tick_step", "set_body"]
         },
         "id": {
           "type": "string"
@@ -1744,6 +1744,10 @@
         "done": {
           "description": "`tick_step`: whether the step is to be ticked (true) or open (false).",
           "type": "boolean"
+        },
+        "body": {
+          "description": "`set_body`: the text below the frontmatter that the task had.",
+          "type": "string"
         },
         "patch": {
           "type": "object"
@@ -1850,7 +1854,7 @@
           "minimum": 1
         },
         "op": {
-          "enum": ["set", "new", "reorder", "done", "move_area", "plan_new", "tick_step", "append_note", "reopen"]
+          "enum": ["set", "new", "reorder", "done", "move_area", "plan_new", "tick_step", "append_note", "reopen", "set_body"]
         },
         "id": {
           "type": "string"

@@ -19,6 +19,7 @@
     "reminders",
     "reopen",
     "reorder",
+    "set_body",
     "snapshot",
     "task",
     "tick_step"
