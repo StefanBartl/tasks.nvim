@@ -154,7 +154,7 @@ local function with_target(ctx, root, cb)
   end
   local names = vault.area_names(root)
   if #names == 0 then
-    notify.warn("The vault has no area yet: :TasksVault create <dir> <area> makes one")
+    notify.warn(("The vault has no area yet: :TasksVault create %s <area> makes one"):format(root))
     return
   end
   local select = M.select or vim.ui.select
@@ -447,7 +447,7 @@ function M.new(ctx)
   end
   local names = vault.area_names(root)
   if #names == 0 then
-    notify.warn("The vault has no area yet: :TasksVault create <dir> <area>")
+    notify.warn(("The vault has no area yet: :TasksVault create %s <area>"):format(root))
     return
   end
   local select = M.select or vim.ui.select
@@ -521,7 +521,13 @@ end
 function M.create(ctx)
   local current = vault.root()
   local force = ctx.flags and ctx.flags.force
-  if current and not force then
+  -- The folder in use, named again, is the way to add an area to it: nothing else is made or switched.
+  local adds_to_current = false
+  if current and ctx.args and ctx.args.dir then
+    local named = ops.check_vault_target(ctx.args.dir, {})
+    adds_to_current = named ~= nil and fsio.norm(named) == fsio.norm(current)
+  end
+  if current and not force and not adds_to_current then
     notify.warn(
       ("A vault is in use already (%s). :TasksVault create --force <dir> makes and uses another one"):format(
         current

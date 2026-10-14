@@ -34,8 +34,14 @@ end
 local function split_area(query, names)
   local head, tail = query:match("^([^/]*)/(.*)$")
   if head then
+    -- the exact spelling first: on a disk that tells `Foo` from `foo` both can be areas
     for _, name in ipairs(names) do
-      if name:lower() == head:lower() then
+      if name == head then
+        return name, tail
+      end
+    end
+    for _, name in ipairs(names) do
+      if vim.fn.tolower(name) == vim.fn.tolower(head) then
         return name, tail
       end
     end
@@ -55,7 +61,7 @@ local function rank_of(slug, title, text)
     return 2
   elseif low:find(text, 1, true) then
     return 3
-  elseif title and title:lower():find(text, 1, true) then
+  elseif title and vim.fn.tolower(title):find(text, 1, true) then
     return 4
   end
   return nil
@@ -81,7 +87,8 @@ function M.match(query, opts)
   end
   local area, text = split_area(vim.trim(query), names)
   -- `area/` alone leaves no text: every task of the area
-  text = text:lower()
+  -- vim.fn.tolower folds more than ASCII ("Über" -> "über"); a slug is ASCII, a title is not
+  text = vim.fn.tolower(text)
 
   local seen, all = {}, {}
   local function add(id, title, done, rank)

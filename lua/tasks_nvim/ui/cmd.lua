@@ -1687,8 +1687,11 @@ function M.task_open(ctx)
   end
   if #found == 0 then
     local hint = #near > 0 and ("; did you mean " .. table.concat(near, ", ") .. "?") or ""
-    -- a full id that is none keeps its reason ("no such open task"); a part of a name has none
-    local reason = query:find("/", 1, true) and find_err or ("no task matches '%s'"):format(query)
+    -- a full id that is none keeps its reason ("no such open task"); a part of a name has none, unless the
+    -- vault itself is missing: that is what to tell then
+    local _, vault_err = vault.root()
+    local reason = (vault_err or query:find("/", 1, true)) and (vault_err or find_err)
+      or ("no task matches '%s'"):format(query)
     notify.error(reason .. hint)
     return
   end
