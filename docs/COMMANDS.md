@@ -459,9 +459,20 @@ checkbox steps) into the `+` register (default)
 plus a notification. Without a working clipboard provider it opens in a buffer instead and
 says so.
 
-### `:Tasks open <id>`
+### `:Tasks open <id|part of a name>`
 
-Opens the file of an open task, or its finished copy in `Backlog/`.
+Opens the file of an open task, or its finished copy in `Backlog/`. The full id (`area/slug`) opens as it
+always did; anything else is looked up (`tasks_nvim.match`, the engine, so a front end other than the command
+can ask the same question):
+
+- the slug is matched first (equal, then its start, then anywhere in it), then the title of an open task;
+  case does not matter; an open task comes before a finished one of the same closeness;
+- `area/part` looks in that area only, `area/` alone lists all of its tasks;
+- one hit, or one slug that is exactly the text, is opened; several are offered in a list (`vim.ui.select`);
+  none is told with the closest slugs ("did you mean");
+- `<Tab>` completes a slug without its area where it names one task only.
+
+`preview` and the other verbs still take a full id.
 
 ### `:Tasks preview <id>`
 
