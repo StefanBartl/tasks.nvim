@@ -1505,6 +1505,13 @@ function commands.export(ctx)
   return 0
 end
 
+---The options of every CLI verb (`value`: needs `=value`; `flag`: none), a copy of the table the parser reads. The
+---drift spec compares it with the routes of `:Tasks` (`tasks_verbs_drift_spec.lua`).
+---@return table<string, Tasks.CliSpec>
+function M.specs()
+  return vim.deepcopy(SPECS)
+end
+
 ---Run one command line. `argv[1]` is the subcommand.
 ---@param argv string[]
 ---@param io? Tasks.CliIO  defaults to stdout/stderr
