@@ -23,6 +23,9 @@
       "$ref": "#/$defs/PlanFor"
     },
     {
+      "$ref": "#/$defs/Check"
+    },
+    {
       "$ref": "#/$defs/TaskDocument"
     },
     {
@@ -1229,6 +1232,129 @@
               "type": "string"
             }
           }
+        },
+        "incomplete": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "Check": {
+      "description": "tasks.check: the rule check of the vault (`tasks check`), with `stale: refs` also the open tasks that name a file which changed after the task was updated. It reads every task file: a client runs it as a job.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": [
+        "kind",
+        "rev",
+        "digest",
+        "ok",
+        "errors",
+        "warnings",
+        "areas",
+        "tasks",
+        "total",
+        "truncated",
+        "findings",
+        "notes",
+        "incomplete"
+      ],
+      "properties": {
+        "kind": {
+          "const": "tasks.check"
+        },
+        "rev": {
+          "$ref": "#/$defs/Rev"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "ok": {
+          "type": "boolean",
+          "description": "No finding of severity error."
+        },
+        "errors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warnings": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "areas": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Areas checked."
+        },
+        "tasks": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Task files read, open and finished."
+        },
+        "stale": {
+          "const": "refs"
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "All the findings; `findings` holds at most 1000 of them."
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "code",
+              "severity",
+              "area",
+              "file",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "A stable rule code, e.g. `unknown-status`."
+              },
+              "severity": {
+                "enum": [
+                  "error",
+                  "warn"
+                ]
+              },
+              "area": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "description": "The task the finding is about, when there is one."
+              },
+              "file": {
+                "type": "string",
+                "description": "Relative to the vault."
+              },
+              "message": {
+                "type": "string",
+                "description": "The engine's words; untrusted text."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What could not be checked (git missing, a budget used up)."
         },
         "incomplete": {
           "type": "array",

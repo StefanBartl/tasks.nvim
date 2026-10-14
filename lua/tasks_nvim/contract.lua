@@ -22,6 +22,7 @@
 --- Only reads: nothing here changes a file. Not its job: parsing a request, mapping an error to a code (`api`), the
 --- command line (`cli`).
 
+local check = require("tasks_nvim.check")
 local done_flow = require("tasks_nvim.done_flow")
 local error_codes = require("tasks_nvim.errors")
 local estimate = require("tasks_nvim.estimate")
@@ -32,6 +33,7 @@ local next_pick = require("tasks_nvim.next_pick")
 local plan = require("tasks_nvim.plan")
 local plan_scope = require("tasks_nvim.plan_scope")
 local scan = require("tasks_nvim.scan")
+local staleness = require("tasks_nvim.staleness")
 local vault = require("tasks_nvim.vault")
 
 local M = {}
@@ -53,6 +55,7 @@ M.CAPABILITIES = {
   "append_note",
   "areas",
   "bodies",
+  "check",
   "done_preview",
   "eff_prio",
   "estimate",
@@ -1183,6 +1186,117 @@ function M.plan_for(params, opts)
   doc.cycles = cycles
   doc.incomplete = view.errors
   return seal(doc, rev_of(view, entries)), nil
+end
+
+---The most findings one `check` document holds (the rest is counted in `total` and `truncated` says so).
+M.CHECK_MAX_FINDINGS = 1000
+
+---The rule check of the vault (`tasks check`) as a document, and with `stale = "refs"` also the open tasks that name a
+---file which changed after the task was last updated. It reads every task file and, for the refs, asks git: it takes
+---longer than a question, so a client runs it as a job and never waits for it with a screen in its hands. The wording of
+---a finding is the engine's.
+---@param params? { area?: string, stale?: string }
+---@param opts? { root?: string }
+---@return table|nil doc
+---@return Tasks.ContractError|string|nil err
+function M.check(params, opts)
+  params = params or {}
+  local function bad(message)
+    return nil, { code = "invalid_argument", message = message, retryable = false }
+  end
+  if params.stale ~= nil and params.stale ~= "refs" then
+    return bad("stale must be refs")
+  end
+  return fsio.read_scope(function()
+    local view, err = M.build_view(opts)
+    if not view then
+      return nil, err
+    end
+    if params.area ~= nil and not vault.has_area(view.root, params.area) then
+      return nil,
+        { code = "not_found", message = "unknown area: " .. params.area, retryable = false }
+    end
+    local result, cerr = check.run({ root = view.root, area = params.area })
+    if not result then
+      return nil, cerr
+    end
+    ---@type table[]
+    local findings = {}
+    for _, f in ipairs(result.findings) do
+      findings[#findings + 1] = json.object({
+        code = f.code,
+        severity = f.severity == "warn" and "warn" or "error",
+        area = f.area,
+        id = f.id,
+        file = relative(view.root, f.path) or vim.fs.basename(f.path),
+        message = clip(redact(view.root, f.message), 600),
+      })
+    end
+    local notes = {}
+    if params.stale == "refs" then
+      local scoped = {}
+      for _, t in ipairs(view.open) do
+        if params.area == nil or t.area == params.area then
+          scoped[#scoped + 1] = t
+        end
+      end
+      local ok, report = pcall(staleness.compute, scoped, { root = view.root })
+      if ok then
+        for _, t in ipairs(scoped) do
+          local changes = report.stale[t.id]
+          if changes and #changes > 0 then
+            findings[#findings + 1] = json.object({
+              code = "stale-refs",
+              severity = "warn",
+              area = t.area,
+              id = t.id,
+              file = relative(view.root, t.path) or vim.fs.basename(t.path),
+              message = clip(
+                redact(
+                  view.root,
+                  "a file named in refs changed after the task was updated: "
+                    .. staleness.describe(changes, 5)
+                ),
+                600
+              ),
+            })
+          end
+        end
+        for _, n in ipairs(report.notes or {}) do
+          notes[#notes + 1] = clip(redact(view.root, tostring(n)), 300)
+        end
+      else
+        notes[#notes + 1] = "refs could not be checked"
+      end
+    end
+    table.sort(findings, function(a, b)
+      if a.file ~= b.file then
+        return a.file < b.file
+      end
+      return a.code < b.code
+    end)
+    local total = #findings
+    for i = #findings, M.CHECK_MAX_FINDINGS + 1, -1 do
+      findings[i] = nil
+    end
+    local entries = {}
+    for _, t in ipairs(view.open) do
+      entries[#entries + 1] = { id = t.id, etag = t.etag or etag_of(t.path) }
+    end
+    local doc = M.head("tasks.check", view.root)
+    doc.ok = result.ok
+    doc.errors = result.errors
+    doc.warnings = result.warnings
+    doc.areas = result.areas
+    doc.tasks = result.tasks
+    doc.stale = params.stale
+    doc.total = total
+    doc.truncated = total > M.CHECK_MAX_FINDINGS
+    doc.findings = json.memo(findings)
+    doc.notes = notes
+    doc.incomplete = view.errors
+    return seal(doc, rev_of(view, entries)), nil
+  end)
 end
 
 ---What to start next.

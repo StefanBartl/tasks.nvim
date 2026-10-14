@@ -1,0 +1,90 @@
+{
+  "areas": 1,
+  "digest": "sha256:224faf1e4b85eb17",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "errors": 6,
+  "findings": [
+    {
+      "area": "lib.nvim",
+      "code": "index-stale",
+      "file": "lib.nvim/ROADMAP/TASKS.md",
+      "message": "ROADMAP/TASKS.md is missing although tasks are open (tasks index regenerates it)",
+      "severity": "error"
+    },
+    {
+      "area": "lib.nvim",
+      "code": "doing-while-blocked",
+      "file": "lib.nvim/ROADMAP/tasks/beta.md",
+      "id": "lib.nvim/beta",
+      "message": "status is doing but lib.nvim/alpha is still open",
+      "severity": "warn"
+    },
+    {
+      "area": "lib.nvim",
+      "code": "bad-effort",
+      "file": "lib.nvim/ROADMAP/tasks/broken.md",
+      "id": "lib.nvim/broken",
+      "message": "effort 'huge' is neither XS..XL nor days like 0.5d",
+      "severity": "error"
+    },
+    {
+      "area": "lib.nvim",
+      "code": "bad-prio",
+      "file": "lib.nvim/ROADMAP/tasks/broken.md",
+      "id": "lib.nvim/broken",
+      "message": "prio must be 1, 2 or 3, got \"9\"",
+      "severity": "error"
+    },
+    {
+      "area": "lib.nvim",
+      "code": "blocked-by-cycle",
+      "file": "lib.nvim/ROADMAP/tasks/cyc-a.md",
+      "id": "lib.nvim/cyc-a",
+      "message": "blocked_by forms a cycle: lib.nvim/cyc-a -> lib.nvim/cyc-b",
+      "severity": "error"
+    },
+    {
+      "area": "lib.nvim",
+      "code": "done-in-roadmap",
+      "file": "lib.nvim/ROADMAP/tasks/done-here.md",
+      "id": "lib.nvim/done-here",
+      "message": "status is done but the file is still in ROADMAP/tasks/ (tasks done moves it)",
+      "severity": "error"
+    },
+    {
+      "area": "lib.nvim",
+      "code": "blocked-by-parked",
+      "file": "lib.nvim/ROADMAP/tasks/epsilon.md",
+      "id": "lib.nvim/epsilon",
+      "message": "lib.nvim/epsilon waits on lib.nvim/delta, which is parked",
+      "severity": "warn"
+    },
+    {
+      "area": "lib.nvim",
+      "code": "unknown-status",
+      "file": "lib.nvim/ROADMAP/tasks/odd-status.md",
+      "id": "lib.nvim/odd-status",
+      "message": "unknown status 'wip' (expected doing, decision, blocked, open, parked, done)",
+      "severity": "error"
+    }
+  ],
+  "generated_at": "2026-01-01T00:00:00Z",
+  "incomplete": [],
+  "kind": "tasks.check",
+  "notes": [],
+  "ok": false,
+  "plugin": "tasks.nvim",
+  "rev": "rev:6a1aa5",
+  "schema": 1,
+  "tasks": 13,
+  "total": 8,
+  "truncated": false,
+  "vault": {
+    "id": "vault"
+  },
+  "warnings": 2
+}
