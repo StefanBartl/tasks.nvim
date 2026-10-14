@@ -141,6 +141,13 @@ A wrong key or value is ignored with a message and listed in
   :Tasks folder {area} [folder] [--action=] [--list] [--to=]
                                          Picker over a folder of an area.
 
+  :TasksVault {verb} [{area}] [{part}] [--rel] [--file]
+    verbs: open clipboard paste link find grep tree cdx; {part} is backlog (default),
+    features, tasks, roadmap or all.
+  :TasksVault new feature|task {title...} [--area=]   A dated note in the Backlog.
+  :TasksVault create [{dir}] [{area}...] [--force]    Create a vault folder.
+  :TasksVault status                                 The vault in use.
+
 An id is `<area>/<slug>`. `<Tab>` completes verbs, areas, ids, values and the
 settable keys. Details: docs/COMMANDS.md. Scenarios: docs/WORKFLOWS.md.
 

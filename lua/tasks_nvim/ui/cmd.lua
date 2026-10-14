@@ -1102,6 +1102,9 @@ local function open_explorer(dir)
   pcall(vim.cmd, "edit " .. vim.fn.fnameescape(dir))
 end
 
+---@see open_explorer
+M.open_explorer = open_explorer
+
 ---The form flow of `:Tasks new` without arguments: a Markdown form
 ---(`tasks.form`), then the question "attach assets?", then `mutate.new` -- the
 ---one write path the CLI uses too. A failure shows in the form, which stays
@@ -1719,6 +1722,9 @@ local function pickers_backend()
   end
   return command, engine
 end
+
+---@see pickers_backend
+M.pickers_backend = pickers_backend
 
 ---`:Tasks folder <area> [folder] [--action=files|grep|smart] [--list] [--to=]`
 ---

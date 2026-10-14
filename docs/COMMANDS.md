@@ -513,3 +513,41 @@ subfolder" (a collection offers "pick one subfolder of this directory"), so `ope
 use one. Without pickers.nvim it falls back to a plain `vim.ui.select` over the folder's
 `*.md` files: no content search, and `--action=grep|smart` is answered with that hint.
 Full-text search over the whole vault is a job for your picker's own grep on the vault folder.
+
+## `:TasksVault`: the vault itself
+
+`:Tasks` works on tasks; `:TasksVault` works on **where they live**: open, copy, paste and search the Backlog (or
+another part) of an area, make a note in it, create a vault. It is a second command so that "the vault" and "the tasks
+in it" stay apart. The grammar is verb-first, like `:Tasks`.
+
+```
+:TasksVault <verb> [<area>] [<part>] [--rel] [--file]
+```
+
+`<area>` is a folder of the vault; a prefix is enough (`lib` for `lib.nvim`) as long as it is unique. Left out, it is the
+area of the current buffer (a file inside the vault, or inside a repository folder named like an area), else a picker.
+`<part>` is `backlog` (default), `features` (`Backlog/FEATURES`), `tasks` (`Backlog/TASKS`), `roadmap` (`ROADMAP`) or
+`all` (the area folder); a part word alone (`:TasksVault clipboard features`) takes the area from the buffer.
+
+| Verb | What it does |
+| --- | --- |
+| `open` | the index of the part in a buffer (`Backlog/README.md`; for `roadmap` its `ROADMAP.md`, else `TASKS.md`), else the folder in the explorer |
+| `clipboard` | the path of the folder into the `+` register; `--rel` relative to the current file, `--file` the index file instead of the folder |
+| `paste` | the same path at the cursor (a buffer that cannot take text gets the `+` register and a note) |
+| `link` | `[<area> <part>](<relative path>)` at the cursor, relative to the current file |
+| `find` / `grep` | a pickers.nvim picker rooted at the folder: file names / content (without pickers.nvim: the explorer) |
+| `tree` | the folder in the file explorer (filetree.nvim when it is there) |
+| `cdx` | a ready prompt for Claude Code that names the folder, into the `+` register (`--rel`, `--file` as above) |
+| `new feature\|task <title...> [--area=]` | a dated note `Backlog/FEATURES\|TASKS/<date>_<slug>.md`, its README row, opened |
+| `create [<dir>] [<area>...] [--force]` | a vault folder with the named areas (see below) |
+| `status` (and the bare `:TasksVault`) | the vault in use, its areas and the area of this buffer |
+
+**No vault.** The command exists even then, because `create` is what makes one. Every other verb answers with the same
+single notice (what to do: `:TasksVault create <dir>`, or `vault` in `setup()`, or `$TASKS_VAULT`) and does nothing
+else. `vim.g.tasks_nvim_no_vault_command = true` keeps `:TasksVault` out altogether.
+
+**`create`.** Makes the folder (parents included), a short `README.md` and, for every word after the folder, an area
+(`ROADMAP/tasks`, `Backlog/FEATURES`, `Backlog/TASKS`); what exists stays as it is. The vault is used from then on
+**for this session**; what survives a restart is `setup({ vault = "<dir>" })` or `$TASKS_VAULT`, which the notice
+prints. Without a folder it asks for one. A vault that is in use is not replaced unless `--force`. The folder is a
+plain folder: making it a git repository is a decision of the user, not of the command.
