@@ -244,7 +244,7 @@ end
 ---@field gen integer
 ---@field cancel_timer? fun()
 ---@field partial? { started: integer, wanted: integer, err: string|nil }
----@field stats { events: integer, muted: integer, refreshes: integer, errors: integer }
+---@field stats { events: integer, muted: integer, refreshes: integer, errors: integer, watch_errors: integer }
 local Watcher = {}
 Watcher.__index = Watcher
 
@@ -262,7 +262,7 @@ function M.new(opts)
     held = false,
     mute_until = 0,
     gen = 0,
-    stats = { events = 0, muted = 0, refreshes = 0, errors = 0 },
+    stats = { events = 0, muted = 0, refreshes = 0, errors = 0, watch_errors = 0 },
   }, Watcher)
 end
 
@@ -350,6 +350,26 @@ function Watcher:fire()
   end
 end
 
+---A running handle reported an error: it may deliver nothing any more, so release it and rescan everything
+---(the fallback); the refresh's `sync` starts a fresh handle for the folder when it is still there.
+---@param dir string
+---@param handle table|nil  # The handle that failed; an error of a handle that was replaced meanwhile is ignored.
+function Watcher:on_watch_error(dir, handle)
+  if self.stopped then
+    return
+  end
+  local h = self.handles[dir]
+  if h and handle and h.handle ~= handle then
+    return
+  end
+  self.stats.watch_errors = self.stats.watch_errors + 1
+  if h then
+    pcall(h.handle.stop)
+    self.handles[dir] = nil
+  end
+  self:arm()
+end
+
 ---Aim the handles at the folders that exist now: new ones started, vanished
 ---ones released. Failures are counted, not raised.
 ---@return integer started  # Handles watching after the call.
@@ -377,9 +397,17 @@ function Watcher:sync()
     if not self.handles[d.path] then
       local only = d.only
       local dir = d.path
+      local current ---@type table|nil
       local handle, err = self.opts.start(dir, function(_, filename)
         self:on_event(only, filename, dir)
-      end, { debounce_ms = self.opts.raw_debounce_ms })
+      end, {
+        debounce_ms = self.opts.raw_debounce_ms,
+        -- `lib.nvim.fs.watch` reports a backend that failed while running (folder removed, EPERM, ...).
+        on_error = function()
+          self:on_watch_error(dir, current)
+        end,
+      })
+      current = handle
       if handle then
         self.handles[d.path] = { handle = handle, only = only }
       else

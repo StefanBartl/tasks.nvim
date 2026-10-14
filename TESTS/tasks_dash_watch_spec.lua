@@ -344,6 +344,35 @@ return function(H)
   ok(qw.handles[q_roadmap .. "/tasks"] ~= nil, "and the refresh aims a handle at tasks/")
   qd:stop()
 
+  -- ── a running watcher that fails: release it, rescan, start it again ────
+  local ew = world()
+  local ed = ew.new()
+  eq({ ed:start() }, { true })
+  local first = ew.handles[tasks_dir]
+  local first_opts
+  for _, st in ipairs(ew.starts) do
+    if st.path == tasks_dir then
+      first_opts = st.opts
+    end
+  end
+  eq(type(first_opts.on_error), "function", "every handle is started with an on_error")
+  local nstarts = #ew.starts
+  first_opts.on_error("EPERM", tasks_dir)
+  eq(first.stopped, 1, "the failed handle is released")
+  eq(ew.pending(), 1, "and a full rescan is armed (the fallback)")
+  eq(ed.stats.watch_errors, 1)
+  ew.fire()
+  eq(ew.refreshes, 1, "the rescan ran")
+  ok(ew.handles[tasks_dir] ~= first, "and a fresh handle watches the folder again")
+  eq(#ew.starts, nstarts + 1, "exactly one handle was restarted")
+  -- the stale handle's late error does not touch the new one
+  first_opts.on_error("EPERM", tasks_dir)
+  eq(ed.stats.watch_errors, 1, "an error of a replaced handle is ignored")
+  eq(ew.pending(), 0)
+  ed:stop()
+  first_opts.on_error("EPERM", tasks_dir)
+  eq(ew.pending(), 0, "no error handling after stop")
+
   -- ── start failures ──────────────────────────────────────────────────────
   local fw = world()
   fw.fail = function()
