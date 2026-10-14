@@ -114,7 +114,7 @@ function M.area_of_path(root, path)
   local found = vim.fs.find(".git", { path = dir, upward = true, limit = 1 })[1]
   if found then
     local name = vim.fs.basename(vim.fs.dirname(found))
-    -- `lib` for `lib.nvim` is what people type; the repository folder is the exact spelling.
+    -- the repository folder is the exact spelling of the area (a worktree folder fits no area and finds none)
     if vault.has_area(root, name) then
       return name
     end
@@ -262,10 +262,7 @@ function M.new_note(root, area, kind, title, opts)
   if fsio.is_file(path) then
     return nil, ("%s/Backlog/%s/%s exists already"):format(area, bucket, file)
   end
-  local ok, werr = fsio.write_atomic(
-    path,
-    note_text(({ FEATURES = "feature", TASKS = "task" })[bucket], title, date)
-  )
+  local ok, werr = fsio.write_atomic(path, note_text(kind, title, date))
   if not ok then
     return nil, "cannot write " .. path .. ": " .. tostring(werr)
   end
@@ -346,7 +343,12 @@ function M.check_vault_target(dir, areas)
     return nil, root .. " is a file"
   end
   for _, area in ipairs(areas or {}) do
-    if not vault.valid_area(area) or vault.SKIP[area] or area:match("^[._]") then
+    if
+      not vault.valid_area(area)
+      or vault.SKIP[area]
+      or area:match("^[._]")
+      or vault.is_reserved_name(area)
+    then
       return nil, "invalid area name: " .. tostring(area)
     end
   end

@@ -583,12 +583,13 @@ function M.status(ctx)
     return
   end
   local names = vault.area_names(root)
+  local here = ops.area_of_buffer(root)
   notify.info(
     ("Vault: %s\n%d area%s%s\n:TasksVault open|clipboard|paste|link|find|grep|tree|cdx|new <area> [backlog|features|tasks|roadmap|all]"):format(
       root,
       #names,
       #names == 1 and "" or "s",
-      ops.area_of_buffer(root) and (", this buffer: " .. ops.area_of_buffer(root)) or ""
+      here and (", this buffer: " .. here) or ""
     )
   )
 end
