@@ -670,6 +670,56 @@ return function(H)
   )
   eq(find("lib.nvim/alpha").area, "lib.nvim")
 
+  -- a plan whose target it is follows the move, and comes back with it
+  local target_plan = one({
+    { op = "plan_new", area = "lib.nvim", title = "Move target plan", target = "lib.nvim/alpha" },
+  })
+  eq(target_plan.ok, true)
+  local plan_file = root .. "/" .. target_plan.file
+  has(H.read(plan_file), "target: lib.nvim/alpha")
+  local with_plan = one({ { op = "move_area", id = "lib.nvim/alpha", to_area = "cascade.nvim" } })
+  eq(with_plan.outcome, "moved")
+  has(H.read(plan_file), "target: cascade.nvim/alpha")
+  eq(
+    vim.tbl_contains(
+      vim.tbl_map(function(r)
+        return r.kind
+      end, with_plan.rewritten),
+      "plan_target"
+    ),
+    true
+  )
+  one({ with_plan.inverse })
+  has(H.read(plan_file), "target: lib.nvim/alpha")
+
+  -- a folder task moves as a whole, with what lies beside its file
+  local folder_dir = root .. "/lib.nvim/ROADMAP/tasks/folio"
+  H.write(folder_dir .. "/folio.md", F.text(F.meta("Folio", "open")))
+  H.write(folder_dir .. "/asset.txt", "beside the task")
+  local folio = one({ { op = "move_area", id = "lib.nvim/folio", to_area = "cascade.nvim" } })
+  eq(folio.outcome, "moved")
+  eq(vim.fn.isdirectory(folder_dir), 0, "the folder left the old area")
+  eq(H.read(root .. "/cascade.nvim/ROADMAP/tasks/folio/asset.txt"), "beside the task")
+  eq(find("cascade.nvim/folio").folder, true)
+  one({ folio.inverse })
+  eq(H.read(folder_dir .. "/asset.txt"), "beside the task")
+
+  -- a rewrite that cannot be made (the lock of a referencing task is stuck) puts everything back
+  do
+    local lock = root .. "/lib.nvim/ROADMAP/tasks/.beta.md.lock"
+    vim.fn.mkdir(lock, "p")
+    local state_before = everything()
+    local failed_move =
+      one({ { op = "move_area", id = "lib.nvim/alpha", to_area = "cascade.nvim" } })
+    eq(failed_move.ok, false)
+    eq(failed_move.error.code, "lock_stuck")
+    vim.fn.delete(lock, "d")
+    state_before[lock] = nil
+    eq(everything(), state_before, "a failed move leaves every byte as it was")
+    eq(find("lib.nvim/alpha").area, "lib.nvim")
+    eq(find("lib.nvim/beta").blocked_by, { "lib.nvim/alpha" })
+  end
+
   -- ── a dry run writes nothing and says what it would do ──────────────────────
   local snapshot = everything()
   local dry = ops({
