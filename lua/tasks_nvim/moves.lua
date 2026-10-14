@@ -333,10 +333,10 @@ function M.move(id, to_area, opts)
     for _, other_id in ipairs(order) do
       local entry = patches[other_id]
       if next(entry.patch) ~= nil then
-        local r, serr =
+        local r, serr, sinfo =
           mutate.set(other_id, entry.patch, { root = root, today = today, index = false })
         if not r then
-          return nil, "cannot rewrite " .. other_id .. ": " .. tostring(serr)
+          return nil, "cannot rewrite " .. other_id .. ": " .. tostring(serr), sinfo
         end
       end
     end
@@ -359,9 +359,9 @@ function M.move(id, to_area, opts)
     return true
   end
 
-  local called, ok, xerr = pcall(execute)
+  local called, ok, xerr, xinfo = pcall(execute)
   if not called then
-    ok, xerr = nil, tostring(ok)
+    ok, xerr, xinfo = nil, tostring(ok), nil
   end
   if not ok then
     local stuck = {}
@@ -402,7 +402,8 @@ function M.move(id, to_area, opts)
     if #stuck > 0 then
       msg = msg .. " (rollback incomplete: " .. table.concat(stuck, ", ") .. ")"
     end
-    return nil, msg, { code = "io" }
+    -- the reason of the failing step keeps its code (`lock_stuck`, `conflict`, ...): the caller may act on it
+    return nil, msg, xinfo or { code = "io" }
   end
   checkpoint.discard(cp)
 
