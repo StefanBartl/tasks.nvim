@@ -58,7 +58,7 @@ sessions that run without an editor. Nothing is stored anywhere but in the files
 - **Dashboard** (needs [snacks.nvim](https://github.com/folke/snacks.nvim); a plain list without it): filter chips,
   marks, bulk status/priority/finish, export, live refresh when files change.
 - **Folder tasks** with an `assets/` folder for screenshots and logs.
-- **The vault itself**: `:TasksVault open|clipboard|paste|link|find|grep|tree|cdx <area> [backlog|features|tasks|roadmap]`,
+- **The vault itself**: `:TasksVault open|clipboard|paste|link|find|grep|tree|cdx <area> [backlog|features|tasks|roadmap|all]`,
   `new` for a dated note in the Backlog and `create` for a new vault folder ([docs/COMMANDS.md](docs/COMMANDS.md#tasksvault-the-vault-itself)).
 - **Export** to a buffer, the clipboard, the quickfix list, a file (CSV or Markdown) or a browser preview.
 - **Headless CLI** with the same rules and a CI gate (`check`, `index --check`, `md_lint`).
@@ -92,7 +92,7 @@ lazy.nvim:
 {
   "StefanBartl/tasks.nvim",
   dependencies = { "StefanBartl/lib.nvim" },
-  cmd = "Tasks",
+  cmd = { "Tasks", "TasksVault" },
   opts = {
     vault = "~/vault", -- one folder per area; or set $TASKS_VAULT
   },

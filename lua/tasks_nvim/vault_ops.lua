@@ -381,8 +381,9 @@ function M.create_vault(dir, areas)
     created[#created + 1] = "README.md"
   end
   for _, area in ipairs(areas or {}) do
+    -- scaffold_area hands back the folders made so far together with the error, so the error is what counts
     local made, err = M.scaffold_area(root, area)
-    if not made then
+    if err then
       return nil, err
     end
     vim.list_extend(created, made)

@@ -107,10 +107,9 @@ function M.check()
   elseif vim.g.tasks_nvim_no_command then
     info(":Tasks is not registered (vim.g.tasks_nvim_no_command is set)")
   else
-    warn(
-      ":Tasks is not registered",
-      { "call require('tasks_nvim').setup({ ... }) or load the plugin on `cmd = 'Tasks'`" }
-    )
+    warn(":Tasks is not registered", {
+      "call require('tasks_nvim').setup({ ... }) or load the plugin on `cmd = { 'Tasks', 'TasksVault' }`",
+    })
   end
 
   start("tasks.nvim: optional pieces")

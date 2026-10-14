@@ -110,6 +110,15 @@ return function(H)
   eq((ops.create_vault(newdir, { "../x" })), nil, "an invalid area is refused")
   eq((ops.create_vault(newdir, { "TOOLS" })), nil, "a reserved folder is no area")
   eq((ops.create_vault("", {})), nil)
+  -- a folder that cannot be made is told, not reported as a vault with the area missing
+  local blocked = H.tmpdir() .. "/blocked/vault"
+  assert(ops.create_vault(blocked, {}))
+  local blocker = assert(io.open(blocked .. "/blocker.nvim", "w"))
+  blocker:write("a file where the area folder should go")
+  blocker:close()
+  local blocked_res, blocked_err = ops.create_vault(blocked, { "blocker.nvim" })
+  eq(blocked_res, nil, "an area whose folder cannot be made fails the create")
+  has(blocked_err, "cannot create", "and says why")
 
   -- ── the handlers ────────────────────────────────────────────────────────────
   local orig = { notify = vim.notify, select = vim.ui.select, input = vim.ui.input }
@@ -377,6 +386,18 @@ return function(H)
   has(plan_shown, 'vault = "' .. target .. '"', "with the line to write")
   has(plan_shown, "will NOT find", "and what happens without it")
 
+  -- without areas the plan points at the command that makes one (`:Tasks new` refuses an unknown area)
+  plan_shown = nil
+  quiet(function()
+    cmd.create(ctx({ dir = target }, {}))
+  end)
+  has(
+    plan_shown,
+    ":TasksVault create <dir> <area>",
+    "the plan names the command that makes an area"
+  )
+  ok(not plan_shown:find(":Tasks new", 1, true), "and not the one that cannot")
+
   -- a folder or area that is refused is not first offered in a plan
   plan_shown = nil
   quiet(function()
@@ -408,6 +429,16 @@ return function(H)
   end)
   eq(plan_shown, nil, "--yes skips the question")
   eq(vault.root(), target .. "-2", "--force switches the vault")
+
+  -- a clipboard that cannot be written is not reported as written
+  cmd.copy = function()
+    return false
+  end
+  quiet(function()
+    cmd.create(ctx({ dir = target .. "-3" }, { force = true, yes = true }))
+  end)
+  has(notes[1].msg, "could not be written", "a failed copy is told")
+  ok(not notes[1].msg:find("The line is in the + register", 1, true), "and not claimed")
   confirm.yesno = confirm_was
 
   -- ── registration and completion ─────────────────────────────────────────────

@@ -145,7 +145,8 @@ A wrong key or value is ignored with a message and listed in
     verbs: open clipboard paste link find grep tree cdx; {part} is backlog (default),
     features, tasks, roadmap or all.
   :TasksVault new feature|task {title...} [--area=]   A dated note in the Backlog.
-  :TasksVault create [{dir}] [{area}...] [--force]    Create a vault folder.
+  :TasksVault create [{dir}] [{area}...] [--force] [--yes]
+                                                     Create a vault folder (--yes: no question).
   :TasksVault status                                 The vault in use.
 
 An id is `<area>/<slug>`. `<Tab>` completes verbs, areas, ids, values and the
