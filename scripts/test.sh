@@ -17,6 +17,10 @@
 #   4. stdpath('data')/lazy/<name>  (what a plugin manager installed)
 # snacks.nvim (override $SNACKS_DIR) is optional: the dashboard specs drive its picker. It is looked up the
 # same way and handed to the specs; when it is not found the run goes on and says so first.
+#
+#   scripts/test.sh conformance      the conformance suite K1..K15 of testing.nvim (docs/CONFORMANCE.md);
+#                                    extra options go to `testing conformance .`; exit 1 when the repo is
+#                                    gated (`conformance.gate = true` in .testing.lua) and a check failed
 
 set -euo pipefail
 
@@ -150,4 +154,9 @@ export XDG_STATE_HOME="$scratch/state"
 export XDG_CACHE_HOME="$scratch/cache"
 
 # No `exec`: the trap must remove the scratch directory afterwards (`set -e` keeps the exit code).
+if [[ "${1:-}" == "conformance" ]]; then
+  shift
+  nvim -n -i NONE --headless -u NONE -l "$DRIVER" conformance . "$@"
+  exit $?
+fi
 nvim -n -i NONE --headless -u NONE -l "$DRIVER" run . --sentinel 'TASKS_TESTS_OK' "$@"
