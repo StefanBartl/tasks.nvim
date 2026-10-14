@@ -5,6 +5,7 @@
     "bodies",
     "done_preview",
     "eff_prio",
+    "estimate",
     "etag",
     "hello",
     "if_match",

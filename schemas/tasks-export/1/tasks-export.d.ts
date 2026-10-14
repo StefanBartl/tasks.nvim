@@ -3,7 +3,8 @@
 /**
  * tasks-export/1: every document tasks.nvim hands to a machine. One of the kinds below, told apart by `kind`. The engine writes exactly these fields (a field that is not listed fails the contract tests); a reader ignores fields it does not know, because inside one version the contract only grows.
  */
-export type TasksExport = Hello | Snapshot | List | Bodies | TaskDocument | Next | Areas | DonePreview | Result | Error;
+export type TasksExport =
+  Hello | Snapshot | List | Bodies | Estimate | TaskDocument | Next | Areas | DonePreview | Result | Error;
 /**
  * tasks.hello: what this engine is and can do. Reads no task.
  */
@@ -202,6 +203,36 @@ export type Bodies = Head & {
    * Absent on the last page; where to go on when a page ended early (it holds as many bytes as a page may).
    */
   next_offset?: number;
+  incomplete: string[];
+};
+/**
+ * tasks.estimate: the figures of an estimate for some open tasks, also as they would be with other efforts and values (`assume`; nothing is written). The same figures as `estimate` in the snapshot, with the range of the sizes.
+ */
+export type Estimate = Head & {
+  kind: "tasks.estimate";
+  rev: Rev;
+  digest: Digest;
+  tasks: number;
+  days: number;
+  /**
+   * The sum with every size at its low and at its high end: without it the sum looks more exact than it is.
+   */
+  range: {
+    low: number;
+    high: number;
+  };
+  n_with_effort: number;
+  n_without_effort: number;
+  value: number;
+  n_with_value: number;
+  n_without_value: number;
+  roi?: number;
+  quick_wins: string[];
+  unestimated: string[];
+  /**
+   * How many of the tasks were taken with assumed values.
+   */
+  assumed: number;
   incomplete: string[];
 };
 /**

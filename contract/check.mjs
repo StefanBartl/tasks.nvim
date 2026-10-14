@@ -129,6 +129,8 @@ mutate(
   (d) => (d.code = "oops"),
 );
 mutate("a list page without its total", "list-page", (d) => delete d.total);
+mutate("an estimate without its range", "estimate", (d) => delete d.range);
+mutate("an estimate that counts assumptions as text", "estimate", (d) => (d.assumed = "two"));
 mutate("a body without its etag", "bodies-page", (d) => delete d.items[0].etag);
 mutate("a body page with a field nobody defined", "bodies-page", (d) => (d.items[0].path = "x"));
 mutate(

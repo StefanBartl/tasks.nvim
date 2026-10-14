@@ -55,6 +55,7 @@ M.CAPABILITIES = {
   "bodies",
   "done_preview",
   "eff_prio",
+  "estimate",
   "etag",
   "hello",
   "if_match",
@@ -917,6 +918,129 @@ function M.bodies(params, opts)
   if last < #chosen then
     doc.next_offset = last
   end
+  doc.incomplete = view.errors
+  return seal(doc, rev_of(view, entries)), nil
+end
+
+---The most ids and the most assumptions one `estimate` request holds.
+M.ESTIMATE_MAX_ITEMS = 1000
+
+---The figures of `estimate` for some open tasks, optionally as they would be if some efforts and values were
+---different (`assume`: nothing is written). The figures are those of `tasks_nvim.estimate`, the same as the snapshot
+---gives for the whole vault, so a client that shows a sum of a draft never reckons it itself.
+---@param params? { ids?: string[], assume?: { id?: string, effort?: string, value?: integer }[] }
+---@param opts? { root?: string, view?: Tasks.ContractView }
+---@return table|nil doc
+---@return Tasks.ContractError|string|nil err
+function M.estimate(params, opts)
+  params = params or {}
+  local function bad(message)
+    return nil, { code = "invalid_argument", message = message, retryable = false }
+  end
+  if params.ids ~= nil and #params.ids > M.ESTIMATE_MAX_ITEMS then
+    return bad(("ids holds at most %d ids"):format(M.ESTIMATE_MAX_ITEMS))
+  end
+  if params.assume ~= nil and #params.assume > M.ESTIMATE_MAX_ITEMS then
+    return bad(("assume holds at most %d entries"):format(M.ESTIMATE_MAX_ITEMS))
+  end
+  local view, err = opts and opts.view or nil, nil
+  if not view then
+    view, err = M.view(opts)
+  end
+  if not view then
+    return nil, err
+  end
+  local by_id = {}
+  for _, t in ipairs(view.open) do
+    by_id[t.id] = t
+  end
+  -- the tasks asked for, in plan order; an id that is no open task is refused by name
+  local chosen = {}
+  if params.ids ~= nil then
+    local want = {}
+    for _, id in ipairs(params.ids) do
+      if not by_id[id] then
+        return bad(("ids: '%s' is no open task"):format(id))
+      end
+      want[id] = true
+    end
+    for _, t in ipairs(view.open) do
+      if want[t.id] then
+        chosen[#chosen + 1] = t
+      end
+    end
+  else
+    chosen = vim.list_slice(view.open, 1)
+  end
+  table.sort(chosen, function(a, b)
+    return (view.rank[a.id] or math.huge) < (view.rank[b.id] or math.huge)
+  end)
+  local in_scope = {}
+  for _, t in ipairs(chosen) do
+    in_scope[t.id] = true
+  end
+  -- the assumptions: a task with its effort and value as the entry says; what the engine would not write is refused
+  local assumed = {}
+  for i, entry in ipairs(params.assume or {}) do
+    local where = ("assume[%d]"):format(i)
+    if type(entry.id) ~= "string" or not in_scope[entry.id] then
+      return bad(("%s: '%s' is not one of the tasks asked for"):format(where, tostring(entry.id)))
+    end
+    for key in pairs(entry) do
+      if key ~= "id" and key ~= "effort" and key ~= "value" then
+        return bad(
+          ("%s: unknown field '%s' (fields: id, effort, value)"):format(where, tostring(key))
+        )
+      end
+    end
+    if entry.effort ~= nil and not model.is_effort(entry.effort) then
+      return bad(
+        ("%s.effort: '%s' is not an effort (XS S M L XL or <n>d)"):format(
+          where,
+          tostring(entry.effort)
+        )
+      )
+    end
+    if
+      entry.value ~= nil
+      and not (
+        type(entry.value) == "number"
+        and entry.value == math.floor(entry.value)
+        and entry.value >= 1
+        and entry.value <= 5
+      )
+    then
+      return bad(("%s.value: '%s' is not a value (1..5)"):format(where, tostring(entry.value)))
+    end
+    assumed[entry.id] = vim.tbl_extend("force", assumed[entry.id] or {}, entry)
+  end
+  local tasks, n_assumed = {}, 0
+  for _, t in ipairs(chosen) do
+    local a = assumed[t.id]
+    if a then
+      n_assumed = n_assumed + 1
+      t = vim.tbl_extend("force", t, { effort = a.effort or t.effort, value = a.value or t.value })
+    end
+    tasks[#tasks + 1] = t
+  end
+  local sums = estimate.rollup(tasks)
+  local entries = {}
+  for _, t in ipairs(view.open) do
+    entries[#entries + 1] = { id = t.id, etag = t.etag or etag_of(t.path) }
+  end
+  local doc = M.head("tasks.estimate", view.root)
+  doc.tasks = sums.n
+  doc.days = round2(sums.days)
+  doc.range = json.object({ low = round2(sums.range.low), high = round2(sums.range.high) })
+  doc.n_with_effort = sums.n_with_effort
+  doc.n_without_effort = sums.n_without_effort
+  doc.value = sums.value
+  doc.n_with_value = sums.n_with_value
+  doc.n_without_value = sums.n_without_value
+  doc.roi = sums.roi and round2(sums.roi) or nil
+  doc.quick_wins = vim.list_slice(sums.quick_wins, 1)
+  doc.unestimated = vim.list_slice(sums.unestimated, 1)
+  doc.assumed = n_assumed
   doc.incomplete = view.errors
   return seal(doc, rev_of(view, entries)), nil
 end
