@@ -929,9 +929,6 @@ end
 ---The most ids and the most assumptions one `estimate` request holds.
 M.ESTIMATE_MAX_ITEMS = 1000
 
----The most days one assumed effort may be (ten years): a sum of larger numbers could not be written down.
-M.ESTIMATE_MAX_EFFORT_DAYS = 3650
-
 ---The figures of `estimate` for some open tasks, optionally as they would be if some efforts and values were
 ---different (`assume`: nothing is written). The figures are those of `tasks_nvim.estimate`, the same as the snapshot
 ---gives for the whole vault, so a client that shows a sum of a draft never reckons it itself.
@@ -1003,19 +1000,10 @@ function M.estimate(params, opts)
     end
     if entry.effort ~= nil and not model.is_effort(entry.effort) then
       return bad(
-        ("%s.effort: '%s' is not an effort (XS S M L XL or <n>d)"):format(
-          where,
-          tostring(entry.effort)
-        )
-      )
-    end
-    -- a number of days a sum could not be written with (2^53 and more, or beyond a double) is refused here
-    if entry.effort ~= nil and model.effort_days(entry.effort) > M.ESTIMATE_MAX_EFFORT_DAYS then
-      return bad(
-        ("%s.effort: '%s' is more than %d days"):format(
+        ("%s.effort: '%s' is not an effort (XS S M L XL, or <n>d up to %d days)"):format(
           where,
           tostring(entry.effort):sub(1, 40),
-          M.ESTIMATE_MAX_EFFORT_DAYS
+          model.MAX_EFFORT_DAYS
         )
       )
     end
@@ -1303,14 +1291,25 @@ function M.check(params, opts)
           end
         end
         -- a note that names a folder of this machine (`<repo>: not a git repository`) is told without it
+        -- (the two notes that are the engine's own sentences are told as they are, anchored at their start: a note
+        -- that begins with a folder or holds a ref must not pass for one of them; no sentence twice)
+        local told = {}
         for _, n in ipairs(report.notes or {}) do
           local text = tostring(n)
-          if text:find("git time budget", 1, true) or text:find("beyond the limit", 1, true) then
-            notes[#notes + 1] = clip(text, 300)
-          elseif text:find("vault not found", 1, true) then
-            notes[#notes + 1] = "refs not checked"
+          local line
+          if
+            text:match("^git time budget of %d+ ms used up")
+            or text:match("^%d+ distinct file%(s%) beyond the limit of %d+")
+          then
+            line = clip(text, 300)
+          elseif text:match("^vault not found") then
+            line = "refs not checked"
           else
-            notes[#notes + 1] = "a folder could not be dated by git; file times were used"
+            line = "a folder could not be dated by git; file times were used"
+          end
+          if not told[line] then
+            told[line] = true
+            notes[#notes + 1] = line
           end
         end
       else

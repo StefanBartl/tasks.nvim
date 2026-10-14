@@ -158,14 +158,25 @@ function M.is_severity(s)
   return type(s) == "string" and SEVERITY_RANK[s] ~= nil
 end
 
----`XS`..`XL`, or days: `3d`, `0.5d`.
+---The most days an effort may name (ten years). A larger number is no effort: a sum of such numbers could not be
+---written down (2^53 and more, or beyond a double), and one task file would take every document of the vault with it.
+M.MAX_EFFORT_DAYS = 3650
+
+---`XS`..`XL`, or days: `3d`, `0.5d` (up to `MAX_EFFORT_DAYS`).
 ---@param s any
 ---@return boolean
 function M.is_effort(s)
   if type(s) ~= "string" then
     return false
   end
-  return EFFORT_SET[s] == true or s:match("^%d+d$") ~= nil or s:match("^%d*%.%d+d$") ~= nil
+  if EFFORT_SET[s] == true then
+    return true
+  end
+  if s:match("^%d+d$") == nil and s:match("^%d*%.%d+d$") == nil then
+    return false
+  end
+  local days = tonumber(s:sub(1, -2))
+  return days ~= nil and days <= M.MAX_EFFORT_DAYS
 end
 
 ---Where an effort value sits on the common scale (see `EFFORT_DAYS`).
