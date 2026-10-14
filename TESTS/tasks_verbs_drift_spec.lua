@@ -93,13 +93,15 @@ return function(H)
   }
 
   -- the composer side: the first word of each flat route and the names of its options
-  local composer = {}
+  local composer, composer_flags = {}, {}
   for _, route in ipairs(routes.routes({ flat = true })) do
-    local names = {}
+    local names, flags = {}, {}
     for _, flag in ipairs(route.flags or {}) do
       names[flag.name] = true
+      flags[flag.name] = flag.bool and true or false
     end
     composer[route.path[1]] = names
+    composer_flags[route.path[1]] = flags
   end
 
   ---@param set table<string, boolean>
@@ -159,4 +161,30 @@ return function(H)
     OPTIONS,
     "the options of a verb differ between :Tasks and the CLI in a way that is not pinned"
   )
+
+  -- an option both have takes a value in both or in neither (`--blocked` is not `--blocked=x` in the editor)
+  local arity = {}
+  for verb, cli in pairs(specs) do
+    if composer[verb] then
+      local cli_flag, cli_value = {}, {}
+      for _, name in ipairs(cli.flag) do
+        cli_flag[name] = true
+      end
+      for _, name in ipairs(cli.value) do
+        cli_value[name] = true
+      end
+      for name, is_flag in pairs(composer_flags[verb]) do
+        if (is_flag and cli_value[name]) or (not is_flag and cli_flag[name]) then
+          arity[#arity + 1] = ("%s --%s: %s in :Tasks, %s in the CLI"):format(
+            verb,
+            name,
+            is_flag and "a flag" or "a value",
+            is_flag and "a value" or "a flag"
+          )
+        end
+      end
+    end
+  end
+  table.sort(arity)
+  eq(arity, {}, "an option is a flag in one table and takes a value in the other")
 end
