@@ -42,11 +42,11 @@ return function(H)
   )
   refused(
     { ids = ids, assume = { { id = "lib.nvim/est-a", effort = "1" .. ("0"):rep(22) .. "d" } } },
-    "more than 3650 days"
+    "is not an effort"
   )
   refused(
     { ids = ids, assume = { { id = "lib.nvim/est-a", effort = "1" .. ("0"):rep(320) .. "d" } } },
-    "more than 3650 days"
+    "is not an effort"
   )
   refused({ ids = ids, assume = { { id = "lib.nvim/est-a", value = "3" } } }, "is not a value")
   refused({ ids = ids, assume = { { id = { "x" }, value = 3 } } }, "is not one of the tasks")
@@ -80,6 +80,37 @@ return function(H)
   eq(all.unestimated, snap.estimate.unestimated, "the same tasks in the same order")
   eq(all.quick_wins, snap.estimate.quick_wins)
   eq(all.roi, snap.estimate.roi)
+
+  -- ── an effort too large for a sum never gets in: not through a file, not through the write door ──
+  local api = require("tasks_nvim.api")
+  add("huge-file", { { "effort", "1" .. ("0"):rep(22) .. "d" } })
+  add("huge-inf", { { "effort", "1" .. ("0"):rep(320) .. "d" } })
+  local huge_snapshot = contract.snapshot({ root = root })
+  ok(huge_snapshot ~= nil, "a task file with a huge effort does not take the snapshot down")
+  ok(estimate({}) ~= nil, "nor the estimate")
+  local huge_check = contract.check({}, { root = root })
+  local bad_efforts = 0
+  for _, f in ipairs(huge_check.findings) do
+    if f.code == "bad-effort" and f.id:match("huge") then
+      bad_efforts = bad_efforts + 1
+    end
+  end
+  eq(bad_efforts, 2, "the check names both")
+  local wrote_text = api.call(
+    "ops",
+    vim.json.encode({
+      ops = {
+        { op = "set", id = "lib.nvim/est-a", patch = { effort = "99999999999999999999999d" } },
+      },
+    }),
+    { root = root, today = F.TODAY }
+  )
+  local wrote = vim.json.decode(wrote_text)
+  eq(wrote.results[1].ok, false, "the write door refuses it: " .. vim.inspect(wrote))
+  eq(require("tasks_nvim.model").is_effort("3650d"), true)
+  eq(require("tasks_nvim.model").is_effort("3651d"), false)
+  eq(require("tasks_nvim.model").is_effort("3650.5d"), false)
+  eq(require("tasks_nvim.model").is_effort(".5d"), true)
 
   -- ── plan_for: a repeated blocker is one edge, the cut keeps a graph a client can follow ──
   add("pf-base")
@@ -129,12 +160,17 @@ return function(H)
   local top_dir = H.tmpdir()
   local repos = top_dir .. "/repos"
   H.write(repos .. "/lib.nvim/notes.txt", "n\n")
+  H.write(repos .. "/lib.nvim/abs.txt", "n\n")
   local when = os.time({ year = 2026, month = 10, day = 5, hour = 12 })
   uv.fs_utime(repos .. "/lib.nvim/notes.txt", when, when)
+  uv.fs_utime(repos .. "/lib.nvim/abs.txt", when, when)
+  -- two tasks with an error each: the errors must come before the warning, and by file
+  add("rbroken-b", { { "prio", "9" } })
+  add("rbroken-a", { { "prio", "9" } })
   add("stale-demo", {
     { "created", "2026-09-15" },
     { "updated", "2026-09-15" },
-    { "refs", "[notes.txt, " .. root .. "/outside.md]" },
+    { "refs", "[notes.txt, " .. repos .. "/lib.nvim/abs.txt]" },
   })
   local plain = contract.check({}, { root = root })
   local with_refs = contract.check(
@@ -154,6 +190,11 @@ return function(H)
     { "lib.nvim/stale-demo", "warn", "lib.nvim/ROADMAP/tasks/stale-demo.md" }
   )
   has(stale_findings[1].message, "notes.txt")
+  has(
+    stale_findings[1].message,
+    "<external>/abs.txt",
+    "an absolute ref is named by its last part only"
+  )
   lacks(stale_findings[1].message, top_dir, "no path of this machine in the message")
   eq(with_refs.warnings, plain.warnings + 1, "the figures count the stale refs too")
   eq(with_refs.errors, plain.errors)
@@ -171,11 +212,22 @@ return function(H)
     { with_refs.errors, with_refs.warnings },
     "the figures are those of the list"
   )
+  local told = {}
   for _, note in ipairs(with_refs.notes) do
+    ok(not told[note], "a note once: " .. note)
+    told[note] = true
     lacks(note, top_dir, "no path of this machine in a note")
     lacks(note, repos, "no folder in a note")
   end
   -- errors first, then by file: a cut at the limit drops the least important
+  local error_files = {}
+  for _, f in ipairs(with_refs.findings) do
+    if f.severity == "error" and f.code == "bad-prio" then
+      error_files[#error_files + 1] = f.file
+    end
+  end
+  eq(#error_files, 2, "two broken tasks to order")
+  ok(error_files[1] < error_files[2], "by file inside the errors: " .. vim.inspect(error_files))
   local seen_warn = false
   for _, f in ipairs(with_refs.findings) do
     if f.severity == "warn" then
