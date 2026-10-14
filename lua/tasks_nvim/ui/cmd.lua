@@ -296,6 +296,16 @@ local function filter_note(flags)
       parts[#parts + 1] = ("%s=%s"):format(name, flags[name])
     end
   end
+  -- plan and phase come as lists (a comma list on the line)
+  for _, name in ipairs({ "plan", "phase" }) do
+    local v = flags[name]
+    if v ~= nil then
+      parts[#parts + 1] = ("%s=%s"):format(
+        name,
+        type(v) == "table" and table.concat(v, ",") or tostring(v)
+      )
+    end
+  end
   if flags.stale == "refs" then
     parts[#parts + 1] = "stale=refs"
   elseif flags.stale ~= nil then
@@ -314,6 +324,7 @@ local function filter_note(flags)
   end
   return "Filter: " .. table.concat(parts, ", ")
 end
+M.filter_note = filter_note
 
 -- ── tasks ────────────────────────────────────────────────────────────────────
 

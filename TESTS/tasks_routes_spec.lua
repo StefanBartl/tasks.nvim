@@ -454,6 +454,12 @@ return function(H)
       cmd.dashboard = hook_before
       eq(planned.plan, { "lib.nvim/some-plan" }, "the plan filter reaches the list")
       eq(planned.phase, { "build", "design" }, "the phase filter reaches the list")
+      -- ... and the heading of a delivered list says it is filtered by them
+      eq(
+        cmd.filter_note({ plan = { "lib.nvim/some-plan" }, phase = { "build", "design" } }),
+        "Filter: plan=lib.nvim/some-plan, phase=build,design"
+      )
+      eq(cmd.filter_note({}), nil, "no filter, no note")
       run("tasks lib.nvim --to=buffer")
       eq(#hook_calls, 2, "an explicit --to bypasses the hook")
       vim.cmd("bwipeout!")
