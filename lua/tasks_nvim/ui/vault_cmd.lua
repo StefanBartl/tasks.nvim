@@ -154,9 +154,7 @@ local function with_target(ctx, root, cb)
   end
   local names = vault.area_names(root)
   if #names == 0 then
-    notify.warn(
-      "The vault has no area yet: :TasksVault create <dir> <area> or :Tasks new <area> <title>"
-    )
+    notify.warn("The vault has no area yet: :TasksVault create <dir> <area> makes one")
     return
   end
   local select = M.select or vim.ui.select
@@ -481,7 +479,8 @@ function M.create_plan(root, areas)
     "       (a README.md is added when there is none)",
     "  2. Areas to make:  "
       .. (
-        #areas > 0 and table.concat(areas, ", ") or "none yet (:Tasks new <area> <title> makes one)"
+        #areas > 0 and table.concat(areas, ", ")
+        or "none yet (name them: :TasksVault create <dir> <area>...)"
       ),
     "  3. In use for this session at once.",
     "",
@@ -495,8 +494,9 @@ end
 
 ---The message after the vault was made: the same required step, once more and impossible to miss.
 ---@param res { root: string, existed: boolean, created: string[] }
+---@param copied? boolean  false when the line could not be put in the register (nil counts as copied)
 ---@return string
-function M.created_message(res)
+function M.created_message(res, copied)
   return table.concat({
     (res.existed and "Using the existing folder " or "Created the vault ") .. res.root,
     #res.created > 0 and ("made: " .. table.concat(res.created, ", ")) or "nothing new to make",
@@ -505,7 +505,10 @@ function M.created_message(res)
     "Without it nvim does not find this vault after a restart:",
     "  add   " .. M.setup_line(res.root),
     "  to the setup (opts) of tasks.nvim, or set $TASKS_VAULT.",
-    "The line is in the + register. Until then the vault is in use for this session only.",
+    (
+      copied == false and "The + register could not be written, copy the line yourself."
+      or "The line is in the + register."
+    ) .. " Until then the vault is in use for this session only.",
   }, "\n")
 end
 
@@ -537,8 +540,8 @@ function M.create(ctx)
       return
     end
     vault.configure({ vault = res.root })
-    copy(M.setup_line(res.root))
-    notify.warn(M.created_message(res))
+    local copied = copy(M.setup_line(res.root))
+    notify.warn(M.created_message(res, copied))
   end
   local function plan_and_make(dir)
     -- Checked before the question, so a folder or an area that is refused is not first offered.
