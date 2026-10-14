@@ -41,5 +41,16 @@ return {
     },
   },
   -- gated: a failed conformance check makes `scripts/test.sh conformance` exit 1 (docs/CONFORMANCE.md of testing.nvim)
-  conformance = { gate = true },
+  conformance = {
+    gate = true,
+    waivers = {
+      {
+        check = "K6",
+        level = "warn",
+        text = "vault not found",
+        reason = "the plugin needs a task vault (setup vault, $TASKS_VAULT or --vault); the minimal conformance editor has none, and the health message is correct",
+        expires = "2027-04-14",
+      },
+    },
+  },
 }
