@@ -1,7 +1,7 @@
 -- TESTS/tasks_verbs_drift_spec.lua -- the verbs of `:Tasks` (the composer routes of `ui/routes.lua`) and of the CLI
 -- (`SPECS` of `cli.lua`) are two tables that name the same things. They differ on purpose in places (the editor delivers
 -- to buffers, quickfix and files with `--to`, `--force` and asks with `--yes`; the CLI takes every field as an option
--- where the editor opens a form), and by accident in others (the editor has no `--phase` or `--stale-refs` filter).
+-- where the editor opens a form), and by accident in others; `--stale-refs` of the CLI is `--stale=refs` in the editor.
 --
 -- This spec pins the difference as it is. It turns red when it changes: a verb or an option that is added to one table
 -- only. Then either add it to the other table, or - if the difference is meant - change the pinned table below in the
@@ -22,11 +22,11 @@ return function(H)
       composer = { "yes" },
       cli = { "date", "done-in", "no-index", "no-next", "remind", "unblock" },
     },
-    ["estimate"] = { composer = { "list", "walk" }, cli = { "phase", "stale-refs" } },
+    ["estimate"] = { composer = { "list", "walk" }, cli = { "stale-refs" } },
     ["folderize"] = { composer = {}, cli = { "no-index" } },
     ["list"] = {
       composer = { "force", "list", "to" },
-      cli = { "all", "done", "limit", "offset", "phase", "plan", "stale-refs" },
+      cli = { "all", "done", "limit", "offset", "stale-refs" },
     },
     ["lists"] = {
       composer = {},
@@ -80,9 +80,9 @@ return function(H)
       },
     },
     ["next"] = { composer = {}, cli = { "format" } },
-    ["plan"] = { composer = { "force", "list", "to" }, cli = { "phase", "stale-refs" } },
+    ["plan"] = { composer = { "force", "list", "to" }, cli = { "stale-refs" } },
     ["quickwins"] = {
-      composer = { "force", "to" },
+      composer = { "force", "phase", "to" },
       cli = { "max-effort", "min-value", "stale-refs" },
     },
     ["set"] = { composer = {}, cli = { "no-index" } },

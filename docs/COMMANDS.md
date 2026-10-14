@@ -34,6 +34,7 @@ lowercase word `all` is the keyword; `ALL` with capitals is the area of that nam
 | `--value=4,5` / `--value=>=4` | the written `value` (1-5, the expected benefit), or "this or more"; a task without a value never matches |
 | `--actor=a,b` | any of `cdx me pair none`: who can do it. `me` also finds `status: decision` and the tag `needs-user` (derived, nothing to migrate); `none` finds the tasks nobody classified |
 | `--tag=a,b` | any of these tags |
+| `--plan=area/slug,...` / `--phase=a,b` | the tasks of these plan files / the tasks in these stages of their plan (the CLI takes the same; `--stale-refs` there is the editor's `--stale=refs`) |
 | `--stale=<days>` | not updated for at least that many days (no date counts as stale) |
 | `--stale=refs` | a file named in the task's `refs:` changed on a later day than `updated` (git commit date, mtime as fallback); the heading names the changed files. Details in [ENGINE.md](ENGINE.md#--stalerefs----tasks-whose-referenced-files-changed) (section `--stale=refs`) |
 | `--blocked` | status `blocked`, or a non-empty `blocked_by` |
