@@ -221,8 +221,7 @@ shapes, rules and errors are in docs/CONTRACT.md; the JSON Schemas are in
 <
 
 Methods: `hello`, `snapshot`, `list`, `task`, `next`, `areas`, `done_preview`
-and `ops`, the write door (`set`, `new`, `reorder`, `done`, `move_area` as a
-dry run). Exit codes: 0 an answer, 2 `invalid_argument`, 1 any other error (a
+and `ops`, the write door (`set`, `new`, `reorder`, `done`, `move_area`). Exit codes: 0 an answer, 2 `invalid_argument`, 1 any other error (a
 `tasks.error` document, also on stdout; for `ops`: any operation failed).
 `--params=-` reads the JSON from stdin. From Lua: `require("tasks_nvim.api").call()`,
 which never throws. A document has no path of this machine, a missing

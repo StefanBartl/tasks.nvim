@@ -143,7 +143,7 @@ characters of letters, digits and `. _ : -`) is echoed in the answer, for a clie
 | `append_note` | `id`, `text`, `if_match`? | add one line `- YYYY-MM-DD: <text>` below the last line of the notes of an open task (`## Notizen`, or `## Notes` in a task written in English; the section is made at the end when it is missing). `text` is one line of at most 1000 characters, no control character (the 8-bit controls and the Unicode line separators are refused too). Sets `updated`. No `inverse` |
 | `reopen` | `id`, `status`?, `if_match`? | bring a finished task back: the file goes from `Backlog/<bucket>/` to `ROADMAP/tasks/`, `status` is `open` (or the one given), `done_in` and `remind` are dropped, its row leaves the Backlog README. `if_match` is the version of the finished file. An open task is `unchanged`; a task that is a folder, or an open task or plan of that name, is refused. The entry has `file`, and `notes` when the README row could not be taken out. No `inverse` (finishing again needs `done_preview`). What `done` set in motion beside the file (ticked steps, a closed plan, refreshed marker documents) stays as it is |
 | `set_body` | `id`, `body`, `if_match`? | replace the text below the frontmatter of an open task (what the `body` of the `task` document holds) by `body`: at most 100000 characters, no control character but the line break and the tab (a carriage return is refused: send line feeds, the file keeps its own line ending); the white space at both ends is trimmed, an empty `body` leaves one blank line. The frontmatter is untouched but for `updated`. The entry has an `inverse` (a `set_body` with the old text) unless the old text could not be sent again (longer than the limit, a control character); the old text comes back trimmed at the ends. A task whose body the `task` document cut (`body_truncated`) must not be edited with the text it was given: the client does not offer it |
-| `move_area` | `id`, `to_area` | only as a dry run in this version: the report of what the move would break (below) |
+| `move_area` | `id`, `to_area`, `if_match`? | a dry run answers the report of what the move would break (below); without it the open task moves to `to_area` under the same slug (a folder task as a whole), `updated` is set, and every `blocked_by`, `after` and `refs` of other tasks and every plan `target` that named the old id names the new one: all or nothing, a failure puts every file back (`rollback incomplete: <path>` names what could not be). The entry has `outcome` `moved`, `new_id`, `rewritten` and an `inverse` (a `move_area` back, with the version of the moved file). A document that names the id is not rewritten (its generated blocks are refreshed; a hand-written mention is in `notes`) |
 | `plan_new` | `area`, `title`, `areas`?, `target`?, `phases`?, `gate`?, `status`?, `summary`?, `slug`? | make a plan file under `ROADMAP/plans/` (what `plan-new` makes). The entry has `file`, `slug` and `renamed` (the slug was taken: plans, tasks, finished items share one namespace per area, so `-2`, `-3` ... is chosen). A **dry run** names the id the plan would get and writes nothing, so a form can show the name and the collision while the person types |
 
 **The shape is checked first, for the whole request**: an unknown operation or field, a wrong type, an empty or too long
@@ -156,7 +156,7 @@ The answer, `tasks.result`, has one entry per operation:
 | Field | |
 |---|---|
 | `n`, `op`, `id` | the position, the operation and the task it is about (for `new`: the id it got) |
-| `ok`, `outcome` | `changed`, `unchanged`, `created`, `done`; a dry run says `would_change`, `would_create`, `would_done`, `would_move` (or `blocked`: the move cannot be made); `failed` |
+| `ok`, `outcome` | `changed`, `unchanged`, `created`, `done`; a dry run says `would_change`, `would_create`, `would_done`, `would_move` (or `blocked`: the move cannot be made); `moved`; `failed` |
 | `etag_before`, `etag_after` | the version of the file before and after (a dry run: only before) |
 | `inverse` | the operation that undoes it: send it as a new operation, its `if_match` is the version the change left. A key a `set` added is `null` in the inverse patch. `done`, `new`, `append_note` and `reopen` have none in this version (`set_body` has one unless the old text is too long) |
 | `restore` | a `reorder` only: one `set` for every file it wrote that gives the file its old `order` back (a key the move added is `null`), each with the version the move left in `if_match`. Send them all to take a move back **exactly**: `inverse` only puts the task back in its place, a task that had no `order` would keep one and the neighbours the move numbered stay numbered |
@@ -191,8 +191,8 @@ are. A task file that is a link is not written through (`forbidden`). No error c
 
 **`move_area`** answers, as a dry run, with `move`: `new_id`, `from`, `to`, `conflicts` (the slug is taken in the target
 area), `references` (the `blocked_by`, `after`, `refs`, plan `target` and documents that name the old id and would
-dangle) and `notes`. The move itself, rewriting those places with a rollback, is a later version; without `dry_run` the
-operation fails with `invalid_argument`.
+dangle) and `notes`. Without `dry_run` the move is made (see the table above); a report that is not `ok` (a taken slug)
+fails with `invalid_argument` and writes nothing.
 
 The exit code of `tasks call ops` is `0` when every operation worked, `1` when any failed (the document says which), `2`
 for a bad request.
