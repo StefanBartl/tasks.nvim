@@ -6,7 +6,7 @@
 --- (`tasks_nvim.json`). The contract is versioned (`schema: 1`), only ever grows inside a version, and is described by
 --- the JSON Schemas in `schemas/tasks-export/1/`. The Markdown files stay the single source of truth.
 ---
---- Documents (`kind`): `tasks.hello`, `tasks.snapshot`, `tasks.list`, `tasks.task`, `tasks.next`, `tasks.areas`,
+--- Documents (`kind`): `tasks.hello`, `tasks.snapshot`, `tasks.list`, `tasks.task`, `tasks.next`, `tasks.areas`, `tasks.finished`,
 --- `tasks.error`. Every one starts with the same head (`schema`, `plugin`, `kind`, `generated_at`, `vault.id`,
 --- `engine`); a document that comes from a scan also carries `rev` (what the vault looked like) and `digest` (the hash
 --- of the content: without `generated_at` and `engine`, so two runs on an unchanged vault have the same digest).
@@ -60,6 +60,7 @@ M.CAPABILITIES = {
   "eff_prio",
   "estimate",
   "etag",
+  "finished",
   "hello",
   "if_match",
   "list",
@@ -1443,6 +1444,223 @@ function M.areas(opts)
   end
   local doc = M.head("tasks.areas", view.root)
   doc.areas = areas_of(view)
+  return seal(doc, nil), nil
+end
+
+---The Monday of the week a day falls in (`YYYY-MM-DD`).
+---@param date string  # a valid day
+---@return string
+local function week_start(date)
+  local y, m, d = date:match("^(%d%d%d%d)-(%d%d)-(%d%d)$")
+  -- noon: a change of the clock cannot move the day
+  local t = os.time({ year = tonumber(y), month = tonumber(m), day = tonumber(d), hour = 12 }) --[[@as integer]]
+  local wday = os.date("*t", t).wday -- 1 is Sunday
+  return os.date("%Y-%m-%d", t - ((wday + 5) % 7) * 86400) --[[@as string]]
+end
+
+---A sum of days, to the hundredth.
+---@param n number
+---@return number
+local function days_sum(n)
+  return round2(n)
+end
+
+---One row of a count: `{ <key> = value, count, effort_days }`. The key is left out for tasks that do not carry the
+---field (missing means unknown, never a value of its own).
+---@param key string
+---@param bucket { value: any, count: integer, days: number }
+---@return table
+local function count_row(key, bucket)
+  return json.object({
+    [key] = bucket.value,
+    count = bucket.count,
+    effort_days = days_sum(bucket.days),
+  })
+end
+
+---Count `items` by `of(item)` into rows, the biggest first, then by value (the unknown last).
+---@param items Tasks.Task[]
+---@param key string
+---@param of fun(t: Tasks.Task): any
+---@param ascending? boolean  # order by value instead (months, weeks)
+---@return table[]
+local function count_by(items, key, of, ascending)
+  local buckets, order = {}, {}
+  for _, t in ipairs(items) do
+    local v = of(t)
+    local slot = v == nil and "\0unknown" or tostring(v)
+    local b = buckets[slot]
+    if not b then
+      b = { value = v, count = 0, days = 0 }
+      buckets[slot] = b
+      order[#order + 1] = b
+    end
+    b.count = b.count + 1
+    b.days = b.days + (model.effort_days(t.effort) or 0)
+  end
+  table.sort(order, function(a, b)
+    if (a.value == nil) ~= (b.value == nil) then
+      return b.value == nil
+    end
+    if not ascending and a.count ~= b.count then
+      return a.count > b.count
+    end
+    return tostring(a.value) < tostring(b.value)
+  end)
+  return vim.tbl_map(function(b)
+    return count_row(key, b)
+  end, order)
+end
+
+---The finished tasks of the Backlogs and what they add up to. `since` and `until` (both days, both included) narrow
+---it by the day `done` ran (the date in the file name); a task whose file has no such date is counted under
+---`undated` and is only in the figures when no window is asked for. Every figure covers all the tasks that match, the
+---page (`items`, newest first) only what `limit` and `offset` ask for. The area is the one the file is in now.
+---@param params? { area?: string, since?: string, until?: string, limit?: integer, offset?: integer }
+---@param opts? { root?: string }
+---@return table|nil doc
+---@return Tasks.ContractError|string|nil err
+function M.finished(params, opts)
+  params = params or {}
+  local limit = params.limit or M.LIMITS.list_items
+  local offset = params.offset or 0
+  if
+    type(limit) ~= "number"
+    or limit < 1
+    or limit > M.LIMITS.list_items
+    or limit ~= math.floor(limit)
+  then
+    return nil,
+      {
+        code = "invalid_argument",
+        message = ("limit must be 1..%d"):format(M.LIMITS.list_items),
+        retryable = false,
+      }
+  end
+  if type(offset) ~= "number" or offset < 0 or offset ~= math.floor(offset) then
+    return nil,
+      {
+        code = "invalid_argument",
+        message = "offset must be a whole number of 0 or more",
+        retryable = false,
+      }
+  end
+  for _, name in ipairs({ "since", "until" }) do
+    if params[name] ~= nil and not model.is_date(params[name]) then
+      return nil,
+        {
+          code = "invalid_argument",
+          message = name .. " must be a day, YYYY-MM-DD",
+          retryable = false,
+        }
+    end
+  end
+  if params.since and params["until"] and params.since > params["until"] then
+    return nil, { code = "invalid_argument", message = "since is after until", retryable = false }
+  end
+  local root, rerr = vault.root(opts)
+  if not root then
+    return nil, rerr
+  end
+  if params.area ~= nil and not vault.has_area(root, params.area) then
+    return nil,
+      { code = "not_found", message = "unknown area: " .. tostring(params.area), retryable = false }
+  end
+  local names = {}
+  for _, a in ipairs(vault.areas(root)) do
+    if params.area == nil or a.name == params.area then
+      names[#names + 1] = a.name
+    end
+  end
+  local windowed = params.since ~= nil or params["until"] ~= nil
+  local matching, undated, incomplete = {}, 0, {}
+  local dates = {}
+  for _, name in ipairs(names) do
+    local tasks, errors = scan.backlog(name, { root = root })
+    if type(errors) == "table" then
+      for _, e in ipairs(errors) do
+        incomplete[#incomplete + 1] = redact(root, tostring(e))
+      end
+    end
+    for _, t in ipairs(tasks or {}) do
+      local date = model.done_date(t.path)
+      if date == nil then
+        undated = undated + 1
+      end
+      local inside = (date ~= nil or not windowed)
+        and (params.since == nil or (date ~= nil and date >= params.since))
+        and (params["until"] == nil or (date ~= nil and date <= params["until"]))
+      if inside then
+        matching[#matching + 1] = t
+        dates[t] = date
+      end
+    end
+  end
+  table.sort(matching, function(a, b)
+    local da, db = dates[a] or "", dates[b] or ""
+    if da ~= db then
+      return da > db
+    end
+    return a.id < b.id
+  end)
+  local days, without = 0, 0
+  for _, t in ipairs(matching) do
+    local d = model.effort_days(t.effort)
+    if d then
+      days = days + d
+    else
+      without = without + 1
+    end
+  end
+  local items = {}
+  for i = offset + 1, math.min(offset + limit, #matching) do
+    local t = matching[i]
+    local d = model.effort_days(t.effort)
+    items[#items + 1] = json.object({
+      id = t.id,
+      area = t.area,
+      slug = t.slug,
+      title = t.title,
+      done = dates[t],
+      kind = model.is_kind(t.kind) and t.kind or nil,
+      prio = t.prio,
+      effort = d and t.effort or nil,
+      effort_days = d,
+      value = t.value,
+      tags = vim.list_slice(t.tags or {}, 1),
+      done_in = t.done_in,
+      file = relative(root, t.path) or vim.fs.basename(t.path),
+    })
+  end
+  local doc = M.head("tasks.finished", root)
+  doc.total = #matching
+  doc.offset = offset
+  doc.limit = limit
+  doc.items = json.memo(items)
+  if offset + limit < #matching then
+    doc.next_offset = offset + limit
+  end
+  doc.undated = undated
+  doc.stats = json.object({
+    effort_days = days_sum(days),
+    without_effort = without,
+    by_area = count_by(matching, "area", function(t)
+      return t.area
+    end),
+    by_kind = count_by(matching, "kind", function(t)
+      return model.is_kind(t.kind) and t.kind or nil
+    end),
+    by_prio = count_by(matching, "prio", function(t)
+      return t.prio
+    end),
+    by_month = count_by(matching, "month", function(t)
+      return dates[t] and dates[t]:sub(1, 7) or nil
+    end, true),
+    by_week = count_by(matching, "week", function(t)
+      return dates[t] and week_start(dates[t]) or nil
+    end, true),
+  })
+  doc.incomplete = incomplete
   return seal(doc, nil), nil
 end
 

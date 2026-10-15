@@ -15,6 +15,7 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- `finished` in `tasks-export/1` (capability `finished`, document `tasks.finished`): the finished tasks of the Backlogs newest first, one page (`id`, `area`, `title`, `done` - the day in the file name - `kind`, `prio`, `effort`, `value`, `tags`, `done_in`), narrowed by `area`, `since` and `until`, and what ALL that match add up to (`stats`: the sum of the efforts, and counts by area, kind, priority, month and week - the Monday - each with its days), so a client that shows how much was done and when never counts it itself. An undated file is counted in `undated`. New `contract.finished`, `model.done_date`; goldens `finished` and `finished-window`, mutations in `contract/check.mjs`.
 - A task file whose lists are YAML block lists (`tags:` + `  - a`, as Obsidian's Properties editor writes them) is a valid task: `check` has no `frontmatter-invalid`, and `set` keeps the style of the list it changes (a one-id `blocked_by`/`after` stays a list there) and the bytes of the lists it does not touch (`lib.nvim/frontmatter-block-lists`; spec `tasks_block_lists_spec`).
 - The dashboard watcher reacts to a handle that fails while running (`lib.nvim.fs.watch` `on_error`): the handle is released, everything is rescanned and the folder watched again (`lib.nvim/fs-watch-meldet-fehler`; counted in `stats.watch_errors`).
 

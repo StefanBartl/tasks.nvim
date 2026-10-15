@@ -14,6 +14,7 @@ export type TasksExport =
   | TaskDocument
   | Next
   | Areas
+  | Finished
   | DonePreview
   | Result
   | Error;
@@ -407,6 +408,27 @@ export type Areas = Head & {
   areas: Area[];
 };
 /**
+ * tasks.finished: the finished tasks of the Backlogs, newest first, one page, and what ALL that match add up to. Asked with `since` and `until` (days, both included) it covers the tasks `done` ran for in that window; the area is the one the file is in now.
+ */
+export type Finished = Head & {
+  kind: "tasks.finished";
+  digest: Digest;
+  total: number;
+  offset: number;
+  limit: number;
+  items: FinishedItem[];
+  /**
+   * Absent on the last page.
+   */
+  next_offset?: number;
+  /**
+   * Finished files (of the area asked for) without a `YYYY-MM-DD_` in the name: they are in the figures only when no window is asked for.
+   */
+  undated: number;
+  stats: FinishedStats;
+  incomplete: string[];
+};
+/**
  * tasks.donepreview: what finishing a task would do, with nothing written, and the `confirm` token that `done` needs for exactly this version of the file.
  */
 export type DonePreview = Head & {
@@ -608,6 +630,65 @@ export interface TaskBrief {
   prio?: number;
   effort?: string;
   reason?: "freed" | "area" | "vault";
+}
+/**
+ * A finished task of `Backlog/`: what the engine knows without the plan (a finished task has no readiness). `done` is the day in the file's name; absent for a file without one.
+ */
+export interface FinishedItem {
+  id: string;
+  area: string;
+  slug: string;
+  title: string;
+  done?: Date;
+  kind?: Kind;
+  prio?: number;
+  effort?: Effort;
+  effort_days?: number;
+  value?: number;
+  tags: string[];
+  done_in?: string;
+  file: string;
+}
+/**
+ * What the finished tasks add up to, over ALL that match the window (not the page). A task that does not carry the field has a row without the key (missing means unknown). The rows of `by_month` and `by_week` are oldest first, the others the biggest first.
+ */
+export interface FinishedStats {
+  /**
+   * The sum of the efforts that are written down.
+   */
+  effort_days: number;
+  /**
+   * Tasks without an effort (not counted in `effort_days`).
+   */
+  without_effort: number;
+  by_area: {
+    area: string;
+    count: number;
+    effort_days: number;
+  }[];
+  by_kind: {
+    kind?: Kind;
+    count: number;
+    effort_days: number;
+  }[];
+  by_prio: {
+    prio?: number;
+    count: number;
+    effort_days: number;
+  }[];
+  by_month: {
+    month?: string;
+    count: number;
+    effort_days: number;
+  }[];
+  by_week: {
+    /**
+     * A calendar day, YYYY-MM-DD.
+     */
+    week?: string;
+    count: number;
+    effort_days: number;
+  }[];
 }
 /**
  * What happened to one operation of a request, in the order they were sent. A failed operation does not stop the others.

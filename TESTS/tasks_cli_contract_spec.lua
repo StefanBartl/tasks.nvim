@@ -140,9 +140,17 @@ return function(H)
   has(r.out, "lib.nvim/old-done\tdone\t")
   has(r.out, "Old and done")
   r = run({ "list", "--done", "--format=ids" })
-  eq(vim.trim(r.out), "lib.nvim/old-done")
-  r = run({ "list", "--done", "cascade.nvim" })
-  eq(r.out, "", "an area without finished tasks")
+  eq(vim.split(vim.trim(r.out), "\n"), {
+    "lib.nvim/undated-leftover",
+    "lib.nvim/old-done",
+    "cascade.nvim/no-effort",
+    "cascade.nvim/shipped-feature",
+    "lib.nvim/shipped-bug",
+  }, "the file name sorts them, newest first")
+  r = run({ "list", "--done", "cascade.nvim", "--format=ids" })
+  eq(vim.split(vim.trim(r.out), "\n"), { "cascade.nvim/no-effort", "cascade.nvim/shipped-feature" })
+  r = run({ "list", "--done", "--kind=bug", "--format=ids" })
+  eq(vim.trim(r.out), "lib.nvim/shipped-bug", "a filter narrows the finished tasks")
   r = run({ "list", "--done", "--format=json" })
   eq(r.code, 2)
   r = run({ "list", "--done", "--sort=roi" })
