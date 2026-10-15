@@ -67,6 +67,10 @@ local vault = require("tasks_nvim.vault")
 
 local M = {}
 
+---The write door (`lib.nvim.contract.ops`), made at the bottom of this file.
+---@type Lib.Contract.Ops
+local door
+
 ---The operations, in the order the documentation names them.
 M.OPS = {
   "set",
@@ -124,6 +128,14 @@ local FIELDS = {
   },
 }
 
+---@param names table<string, any>
+---@return string
+local function sorted_names(names)
+  local out = vim.tbl_keys(names)
+  table.sort(out)
+  return table.concat(out, ", ")
+end
+
 ---The plain keys `new` takes in `fields`.
 ---@type table<string, boolean>
 local NEW_FIELDS = {
@@ -140,122 +152,6 @@ local NEW_FIELDS = {
   status = true,
   slug = true,
 }
-
----@param value any
----@param kind string
----@return boolean
-local function typed(value, kind)
-  if kind == "string" then
-    return type(value) == "string"
-  elseif kind == "object" then
-    return type(value) == "table" and (next(value) == nil or not vim.islist(value))
-  elseif kind == "strings" then
-    if type(value) == "string" then
-      return true
-    end
-    if type(value) ~= "table" or not vim.islist(value) then
-      return false
-    end
-    for _, v in ipairs(value) do
-      if type(v) ~= "string" then
-        return false
-      end
-    end
-    return true
-  elseif kind == "integer" then
-    return type(value) == "number" and value == math.floor(value) and value >= 1 and value < 1e6
-  elseif kind == "boolean" then
-    return type(value) == "boolean"
-  elseif kind == "null" then
-    return false -- only ever absent (a `body` is a later version)
-  end
-  return false
-end
-
----@param names table<string, any>
----@return string
-local function sorted_names(names)
-  local out = vim.tbl_keys(names)
-  table.sort(out)
-  return table.concat(out, ", ")
-end
-
----Check the shape of a request, all of it, before anything runs.
----@param params { client_op_id?: string, dry_run?: boolean, ops?: table[] }
----@return Tasks.ContractError|nil err
-local function check_shape(params)
-  local list = params.ops
-  if list == nil then
-    return errors.fail("invalid_argument", "ops: the list of operations is missing")
-  end
-  if #list == 0 then
-    return errors.fail("invalid_argument", "ops: the list of operations is empty")
-  end
-  if #list > contract.LIMITS.batch_ops then
-    return errors.fail(
-      "payload_too_large",
-      ("ops: at most %d operations in one request, got %d"):format(contract.LIMITS.batch_ops, #list)
-    )
-  end
-  local cid = params.client_op_id
-  if cid ~= nil and (#cid < 1 or #cid > M.MAX_CLIENT_OP_ID or not cid:match("^[%w._:%-]+$")) then
-    return errors.fail(
-      "invalid_argument",
-      ("client_op_id must be 1 to %d characters of letters, digits and . _ : -"):format(
-        M.MAX_CLIENT_OP_ID
-      )
-    )
-  end
-  for i, op in ipairs(list) do
-    local name = op.op
-    if type(name) ~= "string" or not FIELDS[name] then
-      return errors.fail(
-        "invalid_argument",
-        ("ops[%d]: unknown operation %s (operations: %s)"):format(
-          i,
-          vim.inspect(name),
-          table.concat(M.OPS, ", ")
-        )
-      )
-    end
-    for key, value in pairs(op) do
-      if key ~= "op" then
-        local kind = FIELDS[name][key]
-        if not kind then
-          return errors.fail(
-            "invalid_argument",
-            ("ops[%d] (%s): unknown field '%s' (fields: %s)"):format(
-              i,
-              name,
-              tostring(key),
-              sorted_names(FIELDS[name])
-            )
-          )
-        end
-        -- a JSON `null` for a field is the same as leaving it out
-        if value ~= vim.NIL and not typed(value, kind) then
-          return errors.fail(
-            "invalid_argument",
-            ("ops[%d] (%s): %s must be %s"):format(
-              i,
-              name,
-              key,
-              kind == "object" and "an object"
-                or (
-                  kind == "strings" and "text or a list of text"
-                  or (
-                    kind == "integer" and "a whole number from 1"
-                    or (kind == "boolean" and "true or false" or "text")
-                  )
-                )
-            )
-          )
-        end
-      end
-    end
-  end
-  return nil
-end
 
 -- ── what a front end may write ───────────────────────────────────────────────
 
@@ -341,12 +237,7 @@ end
 ---@param info? table
 ---@return table
 local function failure(ctx, err, info)
-  local e = vim.deepcopy(errors.classify(err, info, { patterns = contract.ERROR_PATTERNS }))
-  e.message = contract.redact(ctx.root, e.message)
-  if e.details then
-    e.details = json.object(e.details)
-  end
-  return { ok = false, outcome = "failed", error = e }
+  return door.failure(ctx.root, err, info)
 end
 
 ---@param code string
@@ -354,9 +245,7 @@ end
 ---@param details? table
 ---@return table
 local function refuse(code, message, details)
-  local e = errors.fail(code, message)
-  e.details = details and json.object(details) or nil
-  return { ok = false, outcome = "failed", error = e }
+  return door.refuse(code, message, details)
 end
 
 ---A failure from `mutate` whose reason has no code: its validation messages are all about the request.
@@ -1055,60 +944,48 @@ local HANDLERS = {
 
 -- ── the request ──────────────────────────────────────────────────────────────
 
----Run a request and answer it with a `tasks.result` document.
----@param params { client_op_id?: string, dry_run?: boolean, ops?: table[] }  # The request without its `schema`.
----@param opts? { root?: string, today?: string }
----@return table|nil doc
----@return Tasks.ContractError|string|nil err
-function M.run(params, opts)
-  opts = opts or {}
-  local shape = check_shape(params)
-  if shape then
-    return nil, shape
-  end
-  local root, rerr = vault.root(opts)
-  if not root then
-    return nil, rerr
-  end
-  local today = opts.today or model.today()
-  if not model.is_date(today) then
-    return nil, errors.fail("invalid_argument", "today is not a date (YYYY-MM-DD)")
-  end
-  ---@type Tasks.OpsCtx
-  local ctx = { root = root, today = today, dry = params.dry_run == true, touched = {} }
+---The door: shape check, the loop over the operations, the `tasks.result` document and the entries a document
+---cannot hold are `lib.nvim.contract.ops`'s; what an operation DOES is a handler above.
+local ops = {}
+for _, name in ipairs(M.OPS) do
+  ops[name] = { fields = FIELDS[name], run = HANDLERS[name] }
+end
 
-  local results = {}
-  local all_ok = true
-  local list = params.ops or {}
-  for i, op in ipairs(list) do
-    -- a JSON `null` for a field of the operation is the same as leaving it out
-    for key, value in pairs(op) do
-      if value == vim.NIL then
-        op[key] = nil
-      end
+door = contract_ops.make({
+  doc = contract.doc,
+  order = M.OPS,
+  ops = ops,
+  limits = { batch_ops = contract.LIMITS.batch_ops, client_op_id = M.MAX_CLIENT_OP_ID },
+  patterns = contract.ERROR_PATTERNS,
+  ---@param params table
+  ---@param opts { root?: string, today?: string }
+  ---@return Tasks.OpsCtx|nil ctx
+  ---@return Tasks.ContractError|string|nil err
+  context = function(params, opts)
+    local root, rerr = vault.root(opts)
+    if not root then
+      return nil, rerr
     end
-    local ran, entry = pcall(HANDLERS[op.op], op, ctx)
-    if not ran then
-      entry = refuse("internal", errors.scrub(contract.redact(root, tostring(entry))))
+    local today = opts.today or model.today()
+    if not model.is_date(today) then
+      return nil, errors.fail("invalid_argument", "today is not a date (YYYY-MM-DD)")
     end
-    entry.n = i
-    entry.op = op.op
-    entry.changed_ids = entry.changed_ids or {}
-    if not entry.ok then
-      all_ok = false
+    return { root = root, today = today, dry = params.dry_run == true, touched = {} }
+  end,
+  ---The index of every area that changed, once.
+  ---@param ctx Tasks.OpsCtx
+  ---@param results table[]
+  finish = function(ctx, results)
+    if ctx.dry then
+      return
     end
-    results[#results + 1] = entry
-  end
-
-  -- the index of every area that changed, once
-  if not ctx.dry then
     local areas = vim.tbl_keys(ctx.touched)
     table.sort(areas)
     local by_area = {}
     for _, area in ipairs(areas) do
-      local res, ierr = index.write_area(area, { root = root })
+      local res, ierr = index.write_area(area, { root = ctx.root })
       by_area[area] = res and { action = res.action }
-        or { action = "error", error = contract.redact(root, tostring(ierr)) }
+        or { action = "error", error = contract.redact(ctx.root, tostring(ierr)) }
     end
     for _, entry in ipairs(results) do
       local area = entry.id and entry.id:match("^([^/]+)/")
@@ -1116,14 +993,16 @@ function M.run(params, opts)
         entry.index = json.object(by_area[area])
       end
     end
-  end
+  end,
+})
 
-  local doc = contract.head("tasks.result", root)
-  doc.client_op_id = params.client_op_id
-  doc.dry_run = ctx.dry
-  doc.ok = all_ok
-  doc.results = results
-  return contract.seal(doc, nil), nil
+---Run a request and answer it with a `tasks.result` document.
+---@param params { client_op_id?: string, dry_run?: boolean, ops?: table[] }  # The request without its `schema`.
+---@param opts? { root?: string, today?: string }
+---@return table|nil doc
+---@return Lib.Contract.Error|Tasks.ContractError|string|nil err
+function M.run(params, opts)
+  return door.run(params, opts)
 end
 
 return M

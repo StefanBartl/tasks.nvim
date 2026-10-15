@@ -393,124 +393,39 @@ end
 ---@return string|nil err  `"exists"` when the file was already present
 function M.create_exclusive(path, content)
   drop_cache()
-  local ok, perr = ensure_parent(path)
-  if not ok then
-    return false, perr
-  end
-  local fd, open_err = uv.fs_open(path, "wx", 420) -- 0644
-  if not fd then
-    if tostring(open_err):match("^EEXIST") then
-      return false, M.EXISTS
-    end
-    return false, "open failed: " .. tostring(open_err)
-  end
-  local written, write_err = uv.fs_write(fd, content, 0)
-  uv.fs_close(fd)
-  if not written or written ~= #content then
-    pcall(os.remove, path)
-    return false, "write failed: " .. tostring(write_err or path)
-  end
-  return true, nil
+  return require("lib.nvim.fs.create_exclusive")(path, content)
 end
 
----Run `fn` while holding an advisory lock on `path`: a hidden `.<name>.lock` file next to it, created exclusively. Every
----tasks.nvim process that read-modify-writes the same file (the Backlog README, a task's frontmatter) goes through it,
----so two of them (an agent's CLI and the dashboard) never start from the same text and drop each other's change. It
----serialises the cooperating writers only; an editor with the file open is not one of them.
+---Run `fn` while holding an advisory lock on `path` (`lib.nvim.fs.with_lock`): a hidden `.<name>.lock` file next to
+---it. Every tasks.nvim process that read-modify-writes the same file (the Backlog README, a task's frontmatter) goes
+---through it, so two of them (an agent's CLI and the dashboard) never start from the same text and drop each other's
+---change. What the open read scope knows is dropped once the lock is held: another writer may have changed the disk
+---while this one waited.
 ---
----A holder that died leaves its file behind: a lock older than `opts.stale_s` (10 s; a locked write takes
----milliseconds) is taken over. Waiting is bounded (`opts.wait_ms`, 2 s), then `nil, err, info`.
----
----`info.code` says why: `locked` (another process holds it right now; asking again can help, `retryable`),
----`lock_stuck` (a lock that nobody will release: older than the takeover age and not deletable, or a folder or link
----where the lock file should be; remove it by hand) or `io`. What `fn` answers (up to three values) is handed back.
+---`info.code` says why a lock failed: `locked` (another process holds it right now; `retryable`), `lock_stuck` (a
+---lock nobody will release; remove it by hand) or `io`. What `fn` answers (up to three values) is handed back.
 ---@generic R
 ---@param path string
 ---@param fn fun(): R, string|nil, table|nil
 ---@param opts? { wait_ms?: integer, stale_s?: integer }
 ---@return R|nil result
 ---@return string|nil err
----@return table|nil info  # `{ code = "locked"|"lock_stuck"|"io", retryable = boolean, lock = string }` for a failed lock, else what `fn` gave
+---@return table|nil info
 function M.with_lock(path, fn, opts)
-  opts = opts or {}
-  local lock = M.dirname(path) .. "/." .. path:match("([^/\\]+)$") .. ".lock"
-  local deadline = uv.hrtime() + (opts.wait_ms or 2000) * 1000000
-  local stale_s = opts.stale_s or 10
-  while true do
-    local ok, err = M.create_exclusive(lock, tostring(uv.os_getpid()))
-    if ok then
-      break
-    end
-    -- Contention is not only "exists": on Windows a lock that was unlinked a moment ago answers EPERM / EACCES /
-    -- EBUSY to a create until the delete completes. Any other error is real.
-    local exists = M.is_exists(err)
-    local transient = exists
-      or (
-        type(err) == "string"
-        and (
-          err:find("EPERM", 1, true)
-          or err:find("EACCES", 1, true)
-          or err:find("EBUSY", 1, true)
-        )
-      )
-    if not transient then
-      return nil,
-        ("cannot lock %s: %s"):format(path, tostring(err)),
-        { code = "io", retryable = false, lock = lock }
-    end
-    local stuck = ("%s has a lock that cannot be taken over: remove it by hand (%s)"):format(
-      path,
-      lock
-    )
-    if exists then
-      local st = uv.fs_lstat(lock)
-      -- a folder or a link where the lock file should be (a checked-in `.<name>.lock/`): nobody will ever release it
-      if st and st.type ~= "file" then
-        return nil, stuck, { code = "lock_stuck", retryable = false, lock = lock }
-      end
-      if st and os.time() - st.mtime.sec > stale_s then
-        pcall(uv.fs_unlink, lock)
-      end
-    end
-    -- the deadline applies on EVERY turn: a stale lock that cannot be deleted must not spin the editor
-    if uv.hrtime() > deadline then
-      local st = uv.fs_lstat(lock)
-      if st and os.time() - st.mtime.sec > stale_s then
-        -- older than the takeover age and still there: deleting it failed, and waiting longer will not change that
-        return nil, stuck, { code = "lock_stuck", retryable = false, lock = lock }
-      end
-      return nil,
-        ("%s is being written by another process (%s: %s)"):format(path, lock, tostring(err)),
-        { code = "locked", retryable = true, lock = lock }
-    end
-    vim.wait(10)
-  end
-  local ran, res, res2, res3 = pcall(fn)
-  pcall(uv.fs_unlink, lock)
-  if not ran then
-    error(res, 0)
-  end
-  return res, res2, res3
+  return require("lib.nvim.fs.with_lock")(path, function()
+    drop_cache()
+    return fn()
+  end, opts)
 end
 
----The SHA-256 of some bytes, 64 hex digits. `vim.fn.sha256` refuses a string with a NUL byte (a Blob), so such a text
----is hashed with each NUL replaced by two other bytes: still a function of the bytes, which is all a version tag and
----a content digest have to be.
----@param text string
----@return string
-function M.sha256(text)
-  if text:find("%z") then
-    text = text:gsub("%z", "\255\254")
-  end
-  return vim.fn.sha256(text)
-end
+---The SHA-256 of some bytes, 64 hex digits (`lib.nvim.fs.etag`: a text with a NUL byte is hashed with the NUL
+---replaced, still a function of the bytes).
+---@type fun(text: string): string
+M.sha256 = require("lib.nvim.fs.etag").sha256
 
 ---The version tag of some bytes: `sha256:` and the first 16 hex digits of their SHA-256.
----@param text string
----@return string
-function M.etag(text)
-  return "sha256:" .. M.sha256(text):sub(1, 16)
-end
+---@type fun(text: string): string
+M.etag = require("lib.nvim.fs.etag").of
 
 ---Rename a file or folder (one filesystem, so atomic). The target must not exist.
 ---Goes through `lib.nvim.cross.fs.mutate`, which retries a Windows sharing violation (an

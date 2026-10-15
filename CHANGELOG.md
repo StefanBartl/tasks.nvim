@@ -5,6 +5,10 @@ the version is not tagged yet (the repository is not published).
 
 ## [Unreleased]
 
+### Changed
+
+- The copies of the shared contract mechanics are gone: `tasks_nvim.json` and `tasks_nvim.errors` are `lib.nvim.json.canonical` and `lib.nvim.contract.errors`, the head, seal and canonical bytes of `tasks_nvim.contract` are a `lib.nvim.contract.doc` instance, `tasks_nvim.api` and `tasks_nvim.host` are `lib.nvim.contract.api` and `.host` over the engine's own table of methods, `tasks_nvim.ops` runs on `lib.nvim.contract.ops` (its handlers stay), and `tasks_nvim.fsio` takes `sha256`, `etag`, `with_lock` and `create_exclusive` from `lib.nvim.fs.*`. No byte of a document changes: the golden files, the schemas, `digest` and all specs are unchanged. Two messages are now the shared ones: an `integer` field of an operation names its range (`a whole number from 1 to 999999`), and `ops` refuses a request that is not an object or whose `ops` is not a list by name.
+
 ### Fixed
 
 - Review of `:Tasks open` by a part of a name and of `:TasksVault`: a title is matched in any case also when it is not ASCII (`über` finds `Über uns`), `area/part` prefers the exact spelling of the area, the completion lists an id once, a missing vault is told instead of "no task matches"; the hint for a vault without an area names the command with the vault's own folder, and naming the folder in use again adds an area to it without `--force`; a `create` that fails at a later area names the folders made before it.
