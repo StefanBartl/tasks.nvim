@@ -13,7 +13,7 @@ return function(H)
   local fixture = dofile(here .. "/contract_fixture.lua")
   local api = require("tasks_nvim.api")
   local contract = require("tasks_nvim.contract")
-  local json = require("tasks_nvim.json")
+  local json = require("lib.nvim.json.canonical")
 
   local root = fixture.build(H)
   local golden_files = dofile(here .. "/contract_golden.lua")
@@ -800,10 +800,10 @@ return function(H)
   golden("error-unknown-parameter")
 
   -- a document over the limit is an error, not a cut-off document
-  local max = contract.MAX_DOC_BYTES
-  contract.MAX_DOC_BYTES = 200
+  local max = contract.doc.MAX_DOC_BYTES
+  contract.doc.MAX_DOC_BYTES = 200
   local big = vim.json.decode((api.call("snapshot", nil, { root = root })))
-  contract.MAX_DOC_BYTES = max
+  contract.doc.MAX_DOC_BYTES = max
   eq(big.code, "payload_too_large")
   has(big.message, "ask for a page or an area")
 

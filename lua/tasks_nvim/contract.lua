@@ -3,7 +3,7 @@
 ---@description
 --- One Lua table per document kind, built from what the engine already knows (`scan`, `plan`, `next_pick`, `model`,
 --- `estimate`), never from a second reading of the files; `encode` turns a document into its canonical bytes
---- (`tasks_nvim.json`). The contract is versioned (`schema: 1`), only ever grows inside a version, and is described by
+--- (`lib.nvim.json.canonical`). The contract is versioned (`schema: 1`), only ever grows inside a version, and is described by
 --- the JSON Schemas in `schemas/tasks-export/1/`. The Markdown files stay the single source of truth.
 ---
 --- Documents (`kind`): `tasks.hello`, `tasks.snapshot`, `tasks.list`, `tasks.task`, `tasks.next`, `tasks.areas`, `tasks.finished`, `tasks.links`,
@@ -17,17 +17,18 @@
 ---  - **missing means unknown, never 0**: a task without an effort has no `effort_days` and no `roi`;
 ---  - **a broken task is still there** (`valid: false`, `problems`), it does not vanish from the list;
 ---  - **a document is at most 8 MiB**; a bigger one is the error `payload_too_large`, not a cut-off document;
----  - an empty container is `[]` or `{}` as its kind says (`tasks_nvim.json`), never the other.
+---  - an empty container is `[]` or `{}` as its kind says (`lib.nvim.json.canonical`), never the other.
 ---
 --- Only reads: nothing here changes a file. Not its job: parsing a request, mapping an error to a code (`api`), the
 --- command line (`cli`).
 
+local doc_mod = require("lib.nvim.contract.doc")
 local check = require("tasks_nvim.check")
 local done_flow = require("tasks_nvim.done_flow")
-local error_codes = require("tasks_nvim.errors")
+local error_codes = require("lib.nvim.contract.errors")
 local estimate = require("tasks_nvim.estimate")
 local fsio = require("tasks_nvim.fsio")
-local json = require("tasks_nvim.json")
+local json = require("lib.nvim.json.canonical")
 local links = require("tasks_nvim.links")
 local model = require("tasks_nvim.model")
 local next_pick = require("tasks_nvim.next_pick")
@@ -84,22 +85,60 @@ M.CAPABILITIES = {
 ---Sizes the contract promises to keep.
 M.LIMITS = { title = 300, summary = 1000, body_bytes = 262144, list_items = 100, batch_ops = 100 }
 
----A document is never bigger than this.
-M.MAX_DOC_BYTES = 8 * 1024 * 1024
+---The messages of the engine that carry no code of their own, matched before the shared patterns of
+---`lib.nvim.contract.errors` (`{ code, find, retryable? }`). The one fragile spot, until every source gives its code.
+---@type Lib.Contract.ErrorPattern[]
+M.ERROR_PATTERNS = {
+  { code = "not_found", find = { "vault not found", "unknown area" } },
+  {
+    code = "invalid_argument",
+    find = { "expected <area>/<slug>", "invalid area name", "nothing to set" },
+  },
+}
+
+local plugin_root =
+  vim.fs.dirname(vim.fs.dirname(vim.fs.dirname(fsio.norm(debug.getinfo(1, "S").source:sub(2)))))
+
+-- Head, seal, canonical bytes, the 8 MiB limit and the path rules are `lib.nvim.contract.doc`'s; what a document
+-- CONTAINS is this module's.
+local builder = doc_mod.new({
+  plugin = M.PLUGIN,
+  schema = M.SCHEMA,
+  scope_key = "vault",
+  engine_version = M.ENGINE_VERSION,
+  plugin_root = plugin_root,
+})
+
+-- Seams for specs and golden files: read at call time, so a spec replaces them on this module.
+local base_clock, base_engine_info = builder.clock, builder.engine_info
+builder.clock = function()
+  return M.clock()
+end
+builder.engine_info = function()
+  return M.engine_info()
+end
+
+---The time a document is stamped with (UTC, `YYYY-MM-DDTHH:MM:SSZ`). A seam: golden files and reproducible runs set a
+---fixed one; nothing else changes it.
+---@return string
+function M.clock()
+  return base_clock()
+end
+
+---What the head says about the engine (same seam, same reason).
+---@return { version: string, git: string, nvim: string }
+function M.engine_info()
+  return base_engine_info()
+end
+
+---The head every document starts with.
+---@type fun(kind: string, root?: string): table
+M.head = builder.head
+
+local relative, safe_path, redact, seal =
+  builder.relative, builder.safe_path, builder.redact, builder.seal
 
 -- ── small helpers ────────────────────────────────────────────────────────────
-
----@param s string
----@return string  # 64 hex digits
-local function sha256(s)
-  return fsio.sha256(s)
-end
-
----@param s string
----@return string  # the first 16 hex digits of the SHA-256
-local function sha16(s)
-  return sha256(s):sub(1, 16)
-end
 
 ---@param n number
 ---@return number
@@ -115,127 +154,6 @@ local function clip(s, max)
     return s
   end
   return vim.fn.strcharpart(s, 0, max - 1) .. "\226\128\166"
-end
-
----@param s string
----@return string
-local function lower_slash(s)
-  return (s:gsub("\\", "/"))
-end
-
----`path` relative to the vault, with `/`; `nil` when it is not inside it.
----@param root string
----@param path string
----@return string|nil
-local function relative(root, path)
-  local p, r = lower_slash(path), lower_slash(root):gsub("/+$", "")
-  if p:sub(1, #r + 1):lower() == (r .. "/"):lower() then
-    return p:sub(#r + 2)
-  end
-  return nil
-end
-
----A `refs:` entry or a path in a message without anything that belongs to this machine.
----@param root string
----@param s string
----@return string
-local function safe_path(root, s)
-  local text = lower_slash(s)
-  local rel = relative(root, text)
-  if rel then
-    return rel
-  end
-  if text:match("^%a:/") or text:match("^/") or text:match("^~") then
-    return "<external>/" .. (text:match("([^/]+)/*$") or "")
-  end
-  return text
-end
-
----Free text (a message of the engine) with the vault root named `<vault>`.
----@param root string
----@param s string
----@return string
-local function redact(root, s)
-  local out = s
-  for _, form in ipairs({ root, (root:gsub("/", "\\")) }) do
-    local at = 1
-    while true do
-      local i, j = out:lower():find(form:lower(), at, true)
-      if not i then
-        break
-      end
-      out = out:sub(1, i - 1) .. "<vault>" .. out:sub(j + 1)
-      at = i + #"<vault>"
-    end
-  end
-  return out
-end
-
-local git_cache
-local git_tries = 0
-
----Short commit of this plugin checkout; "unknown" when there is no git or no checkout. A definite answer is kept for
----the life of the process. A lookup that did not finish in time (a loaded machine, a slow start of git) is not: it is
----asked again, three times at most, so a long-lived host does not stay "unknown" because of one slow moment. Only the
----first look gets the full wait; a retry is quick (a warm git answers in about 100 ms), so a machine that stays loaded
----holds a request for 3 s in all, not 6.
----@return string
-local function engine_git()
-  if git_cache then
-    return git_cache
-  end
-  local here = debug.getinfo(1, "S").source:sub(2)
-  local plugin_root = vim.fs.dirname(vim.fs.dirname(vim.fs.dirname(fsio.norm(here))))
-  local wait_ms = git_tries == 0 and 2000 or 500
-  local ok, res = pcall(function()
-    return vim
-      .system({ "git", "-C", plugin_root, "rev-parse", "--short", "HEAD" }, { text = true })
-      :wait(wait_ms)
-  end)
-  if ok and res and res.code == 0 then
-    local sha = vim.trim(res.stdout or "")
-    if sha:match("^%x+$") then
-      git_cache = sha
-      return git_cache
-    end
-  end
-  -- git ran and said there is no commit (code 1..): that stays. No answer in time (the code 124 of `:wait`, the signal
-  -- of the kill, or an error of the start): try again on a later call.
-  git_tries = git_tries + 1
-  local answered = ok and res and res.code ~= 124 and (res.signal or 0) == 0
-  if answered or git_tries >= 3 then
-    git_cache = "unknown"
-    return git_cache
-  end
-  return "unknown"
-end
-
----The time a document is stamped with (UTC, `YYYY-MM-DDTHH:MM:SSZ`). A seam: golden files and reproducible runs set a
----fixed one; nothing else changes it.
----@return string
-function M.clock()
-  return os.date("!%Y-%m-%dT%H:%M:%SZ") --[[@as string]]
-end
-
----What the head says about the engine (same seam, same reason).
----@return { version: string, git: string, nvim: string }
-function M.engine_info()
-  return { version = M.ENGINE_VERSION, git = engine_git(), nvim = tostring(vim.version()) }
-end
-
----The head every document starts with.
----@param kind string
----@param root? string
----@return table
-function M.head(kind, root)
-  return {
-    schema = M.SCHEMA,
-    plugin = M.PLUGIN,
-    kind = kind,
-    generated_at = M.clock(),
-    vault = json.object({ id = root and vim.fs.basename(root) or "" }),
-    engine = json.object(M.engine_info()),
-  }
 end
 
 ---The version tag of a file's bytes: what a later write compares against.
@@ -549,23 +467,7 @@ local function rev_of(view, entries)
   for _, u in ipairs(view.unlisted) do
     lines[#lines + 1] = "unlisted:" .. u.id .. "\t" .. u.status
   end
-  table.sort(lines)
-  return "rev:" .. sha256(table.concat(lines, "\n")):sub(1, 6)
-end
-
----Put `rev` and `digest` on a document. The digest is the hash of the compact document without `generated_at` and
----without `engine`: it says what the vault contains, so it is the same for the same vault whenever and by whichever
----build of the engine it was made.
----@param doc table
----@param rev? string
----@return table
-local function seal(doc, rev)
-  doc.rev = rev
-  local at, engine = doc.generated_at, doc.engine
-  doc.generated_at, doc.engine, doc.digest = nil, nil, nil
-  doc.digest = "sha256:" .. sha16(json.encode(doc))
-  doc.generated_at, doc.engine = at, engine
-  return doc
+  return builder.rev_of(lines)
 end
 
 M.redact = redact
@@ -1737,7 +1639,7 @@ function M.done_preview(id, opts)
   end
   local pv, err, info = done_flow.preview(id, { root = root, today = opts.today })
   if not pv then
-    return nil, error_codes.classify(err, info)
+    return nil, error_codes.classify(err, info, { patterns = M.ERROR_PATTERNS })
   end
   local doc = M.head("tasks.donepreview", root)
   doc.id = pv.id
@@ -1762,43 +1664,14 @@ function M.done_preview(id, opts)
 end
 
 ---An error document.
----@param err Tasks.ContractError
----@param root? string
----@return table
-function M.error_doc(err, root)
-  local doc = M.head("tasks.error", root)
-  doc.code = err.code
-  doc.message = root and redact(root, err.message) or err.message
-  doc.retryable = err.retryable == true
-  if err.details then
-    doc.details = json.object(err.details)
-  end
-  return doc
-end
+---@type fun(err: Tasks.ContractError, root?: string): table
+M.error_doc = builder.error_doc
 
 ---The canonical bytes of a document; one bigger than the limit is an error, never a cut-off document.
----@param doc table
----@param opts? Tasks.JsonOpts
----@return string|nil text
----@return Tasks.ContractError|nil err
-function M.encode(doc, opts)
-  local ok, text = pcall(json.encode, doc, opts)
-  if not ok then
-    return nil, { code = "internal", message = tostring(text), retryable = false }
-  end
-  -- an error document is exempt: the limit must never keep a client from being told why
-  if #text > M.MAX_DOC_BYTES and doc.kind ~= "tasks.error" then
-    return nil,
-      {
-        code = "payload_too_large",
-        message = ("the document is %d bytes, more than the %d the contract allows; ask for a page or an area"):format(
-          #text,
-          M.MAX_DOC_BYTES
-        ),
-        retryable = false,
-      }
-  end
-  return text, nil
-end
+---@type fun(doc: table, opts?: Tasks.JsonOpts): string|nil, Tasks.ContractError|nil
+M.encode = builder.encode
+
+---The document builder (head, seal, encode, error_doc) of this contract.
+M.doc = builder
 
 return M
