@@ -15,6 +15,7 @@ export type TasksExport =
   | Next
   | Areas
   | Finished
+  | Links
   | DonePreview
   | Result
   | Error;
@@ -429,6 +430,33 @@ export type Finished = Head & {
   incomplete: string[];
 };
 /**
+ * tasks.links: where the areas hang together. A link is a `blocked_by` or `after` to an open task of another area, a ref that names another area (`lib.nvim@803de65`, `lib.nvim:anchor`; a path says nothing about the repo), or a plan whose open tasks lie in several areas. `pairs` groups the edges by the two areas (`a` sorts before `b`, the busiest pair first); `tasks` lists, for every open task that touches two or more areas, the areas it touches (its own and those of every link it is part of, in both directions). The edges of the pairs are cut at 2000 (`truncated`); `edge_count`, the counts and `tasks` cover all of them.
+ */
+export type Links = Head & {
+  kind: "tasks.links";
+  rev: Rev;
+  digest: Digest;
+  edge_count: number;
+  truncated: boolean;
+  pairs: {
+    a: string;
+    b: string;
+    count: number;
+    kinds: {
+      [k: string]: number;
+    };
+    edges: LinkEdge[];
+  }[];
+  tasks: {
+    id: string;
+    /**
+     * @minItems 2
+     */
+    areas: [string, string, ...string[]];
+  }[];
+  incomplete: string[];
+};
+/**
  * tasks.donepreview: what finishing a task would do, with nothing written, and the `confirm` token that `done` needs for exactly this version of the file.
  */
 export type DonePreview = Head & {
@@ -691,6 +719,17 @@ export interface FinishedStats {
     count: number;
     effort_days: number;
   }[];
+}
+/**
+ * One link between the open tasks of two areas, seen from the task it starts at. `to` is the other task (`blocked_by`, `after`) or the plan (`plan`); `ref` is the ref as written (`refs`).
+ */
+export interface LinkEdge {
+  from: string;
+  from_area: string;
+  to_area: string;
+  kind: "blocked_by" | "after" | "refs" | "plan";
+  to?: string;
+  ref?: string;
 }
 /**
  * What happened to one operation of a request, in the order they were sent. A failed operation does not stop the others.

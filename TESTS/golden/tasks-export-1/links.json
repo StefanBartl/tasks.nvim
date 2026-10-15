@@ -1,0 +1,69 @@
+{
+  "digest": "sha256:56ef67043f6c7525",
+  "edge_count": 2,
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "incomplete": [],
+  "kind": "tasks.links",
+  "pairs": [
+    {
+      "a": "cascade.nvim",
+      "b": "lib.nvim",
+      "count": 2,
+      "edges": [
+        {
+          "from": "cascade.nvim/iota",
+          "from_area": "cascade.nvim",
+          "kind": "blocked_by",
+          "to": "lib.nvim/alpha",
+          "to_area": "lib.nvim"
+        },
+        {
+          "from": "cascade.nvim/theta",
+          "from_area": "cascade.nvim",
+          "kind": "refs",
+          "ref": "lib.nvim@abc1234",
+          "to_area": "lib.nvim"
+        }
+      ],
+      "kinds": {
+        "blocked_by": 1,
+        "refs": 1
+      }
+    }
+  ],
+  "plugin": "tasks.nvim",
+  "rev": "rev:a9077a",
+  "schema": 1,
+  "tasks": [
+    {
+      "areas": [
+        "cascade.nvim",
+        "lib.nvim"
+      ],
+      "id": "cascade.nvim/iota"
+    },
+    {
+      "areas": [
+        "cascade.nvim",
+        "lib.nvim"
+      ],
+      "id": "cascade.nvim/theta"
+    },
+    {
+      "areas": [
+        "cascade.nvim",
+        "lib.nvim"
+      ],
+      "id": "lib.nvim/alpha"
+    }
+  ],
+  "truncated": false,
+  "vault": {
+    "id": "vault"
+  }
+}

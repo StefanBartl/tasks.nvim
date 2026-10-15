@@ -38,6 +38,9 @@
       "$ref": "#/$defs/Finished"
     },
     {
+      "$ref": "#/$defs/Links"
+    },
+    {
       "$ref": "#/$defs/DonePreview"
     },
     {
@@ -1836,6 +1839,81 @@
         },
         "stats": {
           "$ref": "#/$defs/FinishedStats"
+        },
+        "incomplete": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "LinkEdge": {
+      "description": "One link between the open tasks of two areas, seen from the task it starts at. `to` is the other task (`blocked_by`, `after`) or the plan (`plan`); `ref` is the ref as written (`refs`).",
+      "type": "object",
+      "required": ["from", "from_area", "to_area", "kind"],
+      "properties": {
+        "from": { "type": "string" },
+        "from_area": { "type": "string" },
+        "to_area": { "type": "string" },
+        "kind": { "enum": ["blocked_by", "after", "refs", "plan"] },
+        "to": { "type": "string" },
+        "ref": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "Links": {
+      "description": "tasks.links: where the areas hang together. A link is a `blocked_by` or `after` to an open task of another area, a ref that names another area (`lib.nvim@803de65`, `lib.nvim:anchor`; a path says nothing about the repo), or a plan whose open tasks lie in several areas. `pairs` groups the edges by the two areas (`a` sorts before `b`, the busiest pair first); `tasks` lists, for every open task that touches two or more areas, the areas it touches (its own and those of every link it is part of, in both directions). The edges of the pairs are cut at 2000 (`truncated`); `edge_count`, the counts and `tasks` cover all of them.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": ["kind", "rev", "digest", "edge_count", "truncated", "pairs", "tasks", "incomplete"],
+      "properties": {
+        "kind": {
+          "const": "tasks.links"
+        },
+        "rev": {
+          "$ref": "#/$defs/Rev"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "edge_count": { "type": "integer", "minimum": 0 },
+        "truncated": { "type": "boolean" },
+        "pairs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["a", "b", "count", "kinds", "edges"],
+            "properties": {
+              "a": { "type": "string" },
+              "b": { "type": "string" },
+              "count": { "type": "integer", "minimum": 1 },
+              "kinds": {
+                "type": "object",
+                "propertyNames": { "enum": ["blocked_by", "after", "refs", "plan"] },
+                "additionalProperties": { "type": "integer", "minimum": 1 }
+              },
+              "edges": { "type": "array", "items": { "$ref": "#/$defs/LinkEdge" } }
+            },
+            "additionalProperties": false
+          }
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "areas"],
+            "properties": {
+              "id": { "type": "string" },
+              "areas": { "type": "array", "items": { "type": "string" }, "minItems": 2 }
+            },
+            "additionalProperties": false
+          }
         },
         "incomplete": {
           "type": "array",
