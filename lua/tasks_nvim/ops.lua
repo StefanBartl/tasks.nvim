@@ -53,6 +53,7 @@ local contract = require("tasks_nvim.contract")
 local done_flow = require("tasks_nvim.done_flow")
 local edges = require("tasks_nvim.edges")
 local errors = require("tasks_nvim.errors")
+local contract_ops = require("lib.nvim.contract.ops")
 local fm = require("lib.nvim.markdown.frontmatter")
 local fsio = require("tasks_nvim.fsio")
 local index = require("tasks_nvim.index")
@@ -258,12 +259,9 @@ end
 
 -- ── what a front end may write ───────────────────────────────────────────────
 
----@param s any
----@param max integer
----@return boolean
-local function too_long(s, max)
-  return type(s) == "string" and vim.fn.strchars(s) > max
-end
+-- `has_control` and `too_long` are the contract's own (lib.nvim.contract.ops): a NUL byte, a raw C1 byte and invalid
+-- UTF-8 are refused there, and the echo of a refused value is printable. One rule for every front end, not a copy.
+local too_long = contract_ops.too_long
 
 ---A value over the limits the contract keeps, as a message; nil when it is fine.
 ---@param key string
@@ -290,25 +288,7 @@ local function over_limit(key, value)
   return nil
 end
 
----Whether a value carries a character that must not reach the vault from a front end: a control character (ESC and
----the rest of C0 but the tab, DEL, the 8-bit C1 range) or a Unicode line separator. Other tools print the files to a
----terminal and parse them; the editor's own commands clean what they print, a text editor does not.
----@param value any
----@return boolean
-local function has_control(value)
-  if type(value) == "string" then
-    return value:find("[%z\1-\8\11-\31\127]") ~= nil
-      or value:find("\194[\128-\159]") ~= nil
-      or value:find("\226\128[\168\169]") ~= nil
-  elseif type(value) == "table" and value ~= vim.NIL then
-    for _, v in ipairs(value) do
-      if has_control(v) then
-        return true
-      end
-    end
-  end
-  return false
-end
+local has_control = contract_ops.has_control
 
 ---Why a `refs` entry may not be written by a front end that is not the author, or nil: a plain relative path (with an
 ---optional line or range suffix), a `repo@commit` or an id. No `..`, no drive or network prefix, no absolute path,
