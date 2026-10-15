@@ -82,4 +82,14 @@ return function(H)
       and not after:find("dep-a", 1, true),
     "a shortened block list stays a block list:\n" .. after
   )
+
+  -- review of fa26a31: only blocked_by/after keep the list style; a scalar field the file holds as a list is repaired
+  local bad_path = root .. "/lib.nvim/ROADMAP/tasks/malformed.md"
+  H.write(bad_path, "---\ntitle: Malformed\nstatus:\n  - open\nsummary:\n  - old\n---\n\nBody.\n")
+  assert(index.write_area("lib.nvim", opts))
+  assert(mutate.set("lib.nvim/malformed", { status = "doing", summary = "new" }, o))
+  local fixed = H.read(bad_path)
+  ok(fixed:find("status: doing\n", 1, true), "status is written as a scalar again:\n" .. fixed)
+  ok(fixed:find("summary: new\n", 1, true), "so is the summary:\n" .. fixed)
+  ok(not fixed:find("  - doing", 1, true), "no list item for a scalar field")
 end

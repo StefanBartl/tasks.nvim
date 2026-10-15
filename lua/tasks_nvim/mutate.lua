@@ -612,7 +612,14 @@ local function keep_block_lists(text, pairs_)
   local out = {}
   for i, kv in ipairs(pairs_) do
     local e = parsed.by_key[kv[1]]
-    if type(kv[2]) == "string" and e and e.block then
+    -- only the id lists: a scalar field (status, summary, ...) that a file holds as a list is malformed and is
+    -- repaired by writing the scalar
+    if
+      (kv[1] == "blocked_by" or kv[1] == "after")
+      and type(kv[2]) == "string"
+      and e
+      and e.block
+    then
       out[i] = { kv[1], { kv[2] } }
     else
       out[i] = kv
