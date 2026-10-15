@@ -764,7 +764,7 @@ return function(H)
 
   -- ── an internal error names the file in the plugin, never where the plugin is installed ──
   do
-    local errors = require("tasks_nvim.errors")
+    local errors = require("lib.nvim.contract.errors")
     eq(
       errors.scrub("B:\\repos\\tasks.nvim/lua/tasks_nvim/edges.lua:116: attempt to index nil"),
       "tasks_nvim/edges.lua:116: attempt to index nil"

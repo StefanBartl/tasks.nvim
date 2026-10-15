@@ -52,12 +52,12 @@ local batch = require("tasks_nvim.batch")
 local contract = require("tasks_nvim.contract")
 local done_flow = require("tasks_nvim.done_flow")
 local edges = require("tasks_nvim.edges")
-local errors = require("tasks_nvim.errors")
+local errors = require("lib.nvim.contract.errors")
 local contract_ops = require("lib.nvim.contract.ops")
 local fm = require("lib.nvim.markdown.frontmatter")
 local fsio = require("tasks_nvim.fsio")
 local index = require("tasks_nvim.index")
-local json = require("tasks_nvim.json")
+local json = require("lib.nvim.json.canonical")
 local model = require("tasks_nvim.model")
 local moves = require("tasks_nvim.moves")
 local mutate = require("tasks_nvim.mutate")
@@ -341,7 +341,7 @@ end
 ---@param info? table
 ---@return table
 local function failure(ctx, err, info)
-  local e = vim.deepcopy(errors.classify(err, info))
+  local e = vim.deepcopy(errors.classify(err, info, { patterns = contract.ERROR_PATTERNS }))
   e.message = contract.redact(ctx.root, e.message)
   if e.details then
     e.details = json.object(e.details)

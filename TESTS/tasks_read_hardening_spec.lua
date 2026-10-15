@@ -14,7 +14,7 @@ return function(H)
   local vault = require("tasks_nvim.vault")
   local check = require("tasks_nvim.check")
   local contract = require("tasks_nvim.contract")
-  local json = require("tasks_nvim.json")
+  local json = require("lib.nvim.json.canonical")
   local plans_mod = require("tasks_nvim.plans")
   local uv = vim.uv or vim.loop
   local on_windows = require("lib.nvim.cross.platform.is_windows")()

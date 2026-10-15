@@ -1,8 +1,8 @@
--- TESTS/tasks_json_spec.lua -- tasks_nvim.json: the canonical encoder of the contract documents.
+-- TESTS/tasks_json_spec.lua -- lib.nvim.json.canonical (as the contract uses it): the canonical encoder of the contract documents.
 
 return function(H)
   local eq, ok, has, lacks = H.eq, H.ok, H.has, H.lacks
-  local json = require("tasks_nvim.json")
+  local json = require("lib.nvim.json.canonical")
 
   ---@param value any
   ---@return string|nil err
