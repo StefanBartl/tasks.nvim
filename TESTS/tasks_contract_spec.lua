@@ -569,7 +569,16 @@ return function(H)
       task("b/two", { plan = "a/p" }),
       task("c/three", {
         plan = "a/p",
-        refs = { "a@803de65", "b:anchor", "C:/x/y", "https://z:1/q", "lua/x.lua", "nope@abc" },
+        refs = {
+          "a@803de65",
+          "b:anchor",
+          "C:/x/y",
+          "https://z:1/q",
+          "lua/x.lua",
+          "nope@abc",
+          "b:C:/Users/x/secret.txt",
+          "a:lua/x.lua",
+        },
       }),
       task("a/four", { plan = "a/solo" }),
       task("a/five", { blocked_by = { "a/four", "gone/none" } }),
@@ -588,16 +597,28 @@ return function(H)
         "after:a/one>b:b/two",
         "plan:a/one>b:a/p",
         "plan:a/one>c:a/p",
-        "plan:b/two>a:a/p",
         "plan:b/two>c:a/p",
-        "plan:c/three>a:a/p",
-        "plan:c/three>b:a/p",
         "refs:c/three>a:a@803de65",
         "refs:c/three>b:b:anchor",
       },
-      "a name twice is one edge; a drive letter, a URL, a path, an unknown area and the own area are no refs; a plan in one area links nothing"
+      "a name twice is one edge; a drive letter, a URL, a path (also behind an area name), an unknown area and the own area are no refs; a plan in one area links nothing; a plan is one edge per pair of its areas"
     )
-    eq(r.edge_count, 9)
+    eq(r.edge_count, 6)
+    -- a plan with many members is one link per pair of areas, not one per member
+    do
+      local wide = links.compute({
+        task("a/m1", { plan = "a/wide" }),
+        task("a/m2", { plan = "a/wide" }),
+        task("a/m3", { plan = "a/wide" }),
+        task("b/n1", { plan = "a/wide" }),
+      }, { "a", "b" })
+      eq({ wide.edge_count, wide.pairs[1].count, wide.pairs[1].kinds }, { 1, 1, { plan = 1 } })
+      local member_ids = {}
+      for _, x in ipairs(wide.tasks) do
+        member_ids[#member_ids + 1] = x.id
+      end
+      eq(member_ids, { "a/m1", "a/m2", "a/m3", "b/n1" }, "every member still touches both areas")
+    end
     local reached = {}
     for _, x in ipairs(r.tasks) do
       reached[x.id] = table.concat(x.areas, ",")
@@ -618,7 +639,14 @@ return function(H)
     for _, p in ipairs(clipped.pairs) do
       kept = kept + #p.edges
     end
-    eq({ clipped.edge_count, kept, clipped.truncated }, { 9, 3, true })
+    eq({ clipped.edge_count, kept, clipped.truncated }, { 6, 3, true })
+    local left = {}
+    for _, p in ipairs(clipped.pairs) do
+      eq(#p.edges >= 1, true, "every pair keeps an edge: " .. p.a .. "/" .. p.b)
+      left[#left + 1] = p.edges[1].kind
+    end
+    table.sort(left)
+    eq(left, { "after", "refs", "refs" }, "the cut keeps a wait or a ref before a plan")
   end
 
   -- ── finished: the Backlogs, newest first, and what they add up to ──

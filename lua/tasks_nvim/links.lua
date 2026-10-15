@@ -53,7 +53,12 @@ local function area_of_ref(ref)
   if s:match("^%a:[/\\]") or s:match("^%a[%w+.-]*://") then
     return nil
   end
-  return s:match("^([%w_.-]+):[^/\\%s]")
+  -- an anchor is a word: `lib.nvim:C:/Users/x` or `lib.nvim:a/b` names a path, which says nothing about the repo
+  local name, rest = s:match("^([%w_.-]+):(.+)$")
+  if name and not rest:find("[/\\%s]") then
+    return name
+  end
+  return nil
 end
 
 ---@param list string[]|nil
@@ -128,15 +133,34 @@ function M.compute(open, area_names)
       table.insert(members[t.plan], t)
     end
   end
+  -- one edge per plan and pair of its areas (not one per member): the first member, by id, of the lower area
+  -- stands for the plan; every member still touches every area of the plan
   for plan_id, list in pairs(members) do
-    local areas = {}
+    table.sort(list, function(x, y)
+      return x.id < y.id
+    end)
+    local first, names = {}, {}
     for _, t in ipairs(list) do
-      areas[t.area] = true
+      if not first[t.area] then
+        first[t.area] = t
+        names[#names + 1] = t.area
+      end
     end
-    for _, t in ipairs(list) do
-      for area in pairs(areas) do
-        if area ~= t.area then
-          add({ from = t.id, from_area = t.area, to_area = area, kind = "plan", to = plan_id })
+    table.sort(names)
+    for i = 1, #names do
+      for j = i + 1, #names do
+        add({
+          from = first[names[i]].id,
+          from_area = names[i],
+          to_area = names[j],
+          kind = "plan",
+          to = plan_id,
+        })
+      end
+    end
+    if #names > 1 then
+      for _, t in ipairs(list) do
+        for _, area in ipairs(names) do
           touched[t.id][area] = true
         end
       end
@@ -158,8 +182,8 @@ function M.compute(open, area_names)
 
   ---@type table<string, Tasks.LinkPair>
   local pairs_by_key, order = {}, {}
-  local kept = 0
-  for _, e in ipairs(edges) do
+  local pair_of = {}
+  for i, e in ipairs(edges) do
     local a, b = e.from_area, e.to_area
     if b < a then
       a, b = b, a
@@ -173,9 +197,39 @@ function M.compute(open, area_names)
     end
     pair.count = pair.count + 1
     pair.kinds[e.kind] = (pair.kinds[e.kind] or 0) + 1
-    if kept < M.MAX_EDGES then
-      pair.edges[#pair.edges + 1] = e
+    pair_of[i] = pair
+  end
+
+  -- the cut keeps the waits before the refs before the plans, and every pair at least one edge
+  local rank = { blocked_by = 1, after = 2, refs = 3, plan = 4 }
+  local idx = {}
+  for i = 1, #edges do
+    idx[i] = i
+  end
+  table.sort(idx, function(x, y)
+    local rx, ry = rank[edges[x].kind], rank[edges[y].kind]
+    if rx ~= ry then
+      return rx < ry
+    end
+    return x < y
+  end)
+  local keep, kept, has = {}, 0, {}
+  for _, i in ipairs(idx) do
+    if not has[pair_of[i]] and kept < M.MAX_EDGES then
+      has[pair_of[i]] = true
+      keep[i] = true
       kept = kept + 1
+    end
+  end
+  for _, i in ipairs(idx) do
+    if not keep[i] and kept < M.MAX_EDGES then
+      keep[i] = true
+      kept = kept + 1
+    end
+  end
+  for i, e in ipairs(edges) do
+    if keep[i] then
+      table.insert(pair_of[i].edges, e)
     end
   end
   table.sort(order, function(x, y)
