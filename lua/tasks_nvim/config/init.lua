@@ -13,7 +13,7 @@ local M = {}
 ---@type Tasks.Opts
 local state = vim.deepcopy(DEFAULTS)
 
----@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"|"value"|"effort"|"lists"
+---@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"|"value"|"effort"|"lists"|"finished_window"
 
 ---@type table<string, Tasks.ConfigType|table<string, Tasks.ConfigType>>
 local SCHEMA = {
@@ -28,6 +28,7 @@ local SCHEMA = {
   lists = "lists",
   steps = { ask_finish = "boolean" },
   reminders = { on_start = "boolean" },
+  completion = { finished = "finished_window" },
   keys = { dashboard = "keymap", dashboard_input = "keymap", form = "keymap" },
 }
 
@@ -119,6 +120,14 @@ local function check(kind, value)
       end
     end
     return false, nil, "an effort (XS, S, M, L, XL or days like 0.5d)"
+  elseif kind == "finished_window" then
+    if type(value) == "boolean" then
+      return true, value, nil
+    end
+    if type(value) == "number" and value > 0 and value == math.floor(value) then
+      return true, value, nil
+    end
+    return false, nil, "true, false or the number of days to go back"
   elseif kind == "posint" then
     if type(value) == "number" and value > 0 and value == math.floor(value) then
       return true, value, nil

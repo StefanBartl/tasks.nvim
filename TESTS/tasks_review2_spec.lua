@@ -632,6 +632,46 @@ return function(H)
     end
   end
 
+  -- ── `completion.finished`: all, none, or the last N days ──
+  do
+    local routes = require("tasks_nvim.ui.routes")
+    local vault = require("tasks_nvim.vault")
+    local config = require("tasks_nvim.config")
+    local root2 = F.vault(H)
+    vault.set_root(root2)
+    local today = require("tasks_nvim.model").today()
+    local recent = require("tasks_nvim.model").add_days(today, -3)
+    H.write(
+      root2 .. "/lib.nvim/Backlog/TASKS/" .. recent .. "_recent-one.md",
+      F.text(F.meta("Recent one", "done"))
+    )
+    H.write(
+      root2 .. "/lib.nvim/Backlog/TASKS/2020-01-01_ancient-one.md",
+      F.text(F.meta("Ancient one", "done"))
+    )
+    H.write(
+      root2 .. "/lib.nvim/Backlog/TASKS/undated-one.md",
+      F.text(F.meta("Undated one", "done"))
+    )
+    local function offered(setting)
+      config.merge({ completion = { finished = setting } })
+      return routes.done_ids()
+    end
+    local all = offered(true)
+    ok(
+      vim.list_contains(all, "lib.nvim/ancient-one")
+        and vim.list_contains(all, "lib.nvim/recent-one")
+    )
+    eq(offered(false), {}, "false offers none")
+    local last = offered(30)
+    ok(vim.list_contains(last, "lib.nvim/recent-one"), "a task of the last 30 days is offered")
+    ok(not vim.list_contains(last, "lib.nvim/ancient-one"), "an old one is not")
+    ok(not vim.list_contains(last, "lib.nvim/undated-one"), "one without a day in the name is not")
+    ok(vim.list_contains(offered(2), "lib.nvim/recent-one") == false, "the limit is in days")
+    config.merge({ completion = { finished = true } })
+    vault.set_root(nil)
+  end
+
   -- ── the form's hint line names the keys that are in force ──
   do
     local ui_form = require("tasks_nvim.ui.form")

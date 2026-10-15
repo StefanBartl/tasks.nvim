@@ -129,6 +129,7 @@ require("tasks_nvim").setup({
   chain = { marker_docs = {} },                                                 -- documents with generated plan blocks
   steps = { ask_finish = false },                                               -- ask to finish when the last step is ticked
   reminders = { on_start = true },                                              -- one line at startup when a reminder is due
+  completion = { finished = true },                                             -- <Tab> offers finished tasks: true (all), false (none) or N (finished in the last N days)
   lists = {},                                                                   -- named lists, see below
   quick_wins = { min_value = 4, max_effort = "S" },                              -- what counts as a quick win (both written on the task)
 })
