@@ -181,7 +181,7 @@ function M.build(H)
   -- more finished tasks for `finished`: two areas, two months and weeks, a bucket each, no effort, no date in the name
   H.write(
     root .. "/lib.nvim/Backlog/TASKS/2025-12-30_shipped-bug.md",
-    "---\ntitle: Shipped bug\nstatus: done\nkind: bug\nprio: 1\neffort: 2d\ntags: [fix]\ndone_in: lib.nvim@def5678\ncreated: "
+    "---\ntitle: Shipped bug\nstatus: done\nkind: bug\nprio: 1\neffort: 2d\ntags: [fix]\nplan: lib.nvim/the-plan\nphase: build\ndone_in: lib.nvim@def5678\ncreated: "
       .. DATE
       .. "\nupdated: "
       .. DATE

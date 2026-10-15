@@ -646,6 +646,8 @@ export interface FinishedItem {
   effort_days?: number;
   value?: number;
   tags: string[];
+  plan?: string;
+  phase?: string;
   done_in?: string;
   file: string;
 }

@@ -572,6 +572,18 @@ return function(H)
   local fpage = call("finished", { limit = 1, offset = 1 })
   eq({ #fpage.items, fpage.total, fpage.next_offset, fpage.stats.effort_days }, { 1, 5, 2, 3 })
   eq(call("finished", { limit = 5 }).next_offset, nil, "no next page at the end")
+  local planned = call("finished", { plan = "lib.nvim/the-plan" })
+  eq(
+    vim.tbl_map(function(i)
+      return i.id
+    end, planned.items),
+    { "lib.nvim/shipped-bug" },
+    "a plan keeps the tasks that name it"
+  )
+  eq({ planned.items[1].plan, planned.items[1].phase }, { "lib.nvim/the-plan", "build" })
+  eq(planned.stats.effort_days, 2, "...and the figures follow")
+  eq(call("finished", { plan = "lib.nvim/none" }).total, 0)
+  golden("finished-plan")
   golden("finished")
   golden("finished-window")
   ---@param name string
