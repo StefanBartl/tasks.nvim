@@ -131,6 +131,9 @@ mutate(
 mutate("a list page without its total", "list-page", (d) => delete d.total);
 mutate("a check without its findings", "check", (d) => delete d.findings);
 mutate("a finished list without its stats", "finished", (d) => delete d.stats);
+mutate("a link of a kind nobody defined", "links", (d) => (d.pairs[0].edges[0].kind = "magic"));
+mutate("a pair of areas without its count", "links", (d) => delete d.pairs[0].count);
+mutate("a touched task with one area", "links", (d) => (d.tasks[0].areas = ["a"]));
 mutate("a finished task with a made-up day", "finished", (d) => (d.items[0].done = "yesterday"));
 mutate("a count row with a key nobody defined", "finished", (d) => (d.stats.by_area[0].colour = "red"));
 mutate("a finding with a severity nobody defined", "check", (d) => (d.findings[0].severity = "fatal"));
