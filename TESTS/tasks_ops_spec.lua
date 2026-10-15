@@ -286,6 +286,11 @@ return function(H)
     "c1\194\155csi",
     "line\226\128\168sep",
     "del\127",
+    -- the shared rule (lib.nvim.contract.ops) also refuses bytes that are no UTF-8: a raw C1 byte is a CSI to an
+    -- 8-bit terminal, an overlong form is a slash or an ESC the checks above do not see
+    "raw\155csi",
+    "overlong\192\175slash",
+    "latin1 \252ber",
   }) do
     eq(
       one({ { op = "set", id = "lib.nvim/gamma", patch = { summary = bad_text } } }).error.code,
