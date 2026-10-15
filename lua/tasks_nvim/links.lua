@@ -53,9 +53,9 @@ local function area_of_ref(ref)
   if s:match("^%a:[/\\]") or s:match("^%a[%w+.-]*://") then
     return nil
   end
-  -- an anchor is a word: `lib.nvim:C:/Users/x` or `lib.nvim:a/b` names a path, which says nothing about the repo
+  -- an anchor is a word that starts with a letter: `lib.nvim:C:/Users/x`, `lib.nvim:a/b`, `lib.nvim:42` and `lib.nvim:..` are no anchors
   local name, rest = s:match("^([%w_.-]+):(.+)$")
-  if name and not rest:find("[/\\%s]") then
+  if name and rest:match("^[%a_][%w_.-]*$") then
     return name
   end
   return nil

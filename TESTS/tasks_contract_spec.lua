@@ -578,6 +578,8 @@ return function(H)
           "nope@abc",
           "b:C:/Users/x/secret.txt",
           "a:lua/x.lua",
+          "b:42",
+          "b:..",
         },
       }),
       task("a/four", { plan = "a/solo" }),
