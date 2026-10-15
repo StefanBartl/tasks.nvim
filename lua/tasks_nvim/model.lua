@@ -464,6 +464,19 @@ function M.slug_of(path, location)
   return name
 end
 
+---The day a task was finished: the `YYYY-MM-DD_` prefix `done` gives the file in `Backlog/` (the folder's name for a
+---folder task). nil for a file without a prefix, or one that is not a real calendar day.
+---@param path string
+---@return string|nil date
+function M.done_date(path)
+  local name = fsio.norm(path):match("([^/]*)$") or path
+  local date = name:match("^(%d%d%d%d%-%d%d%-%d%d)_")
+  if date and M.is_date(date) then
+    return date
+  end
+  return nil
+end
+
 ---Interpret the text of a task file.
 ---
 ---`ctx.path` and `ctx.area` are required; `ctx.location` defaults to

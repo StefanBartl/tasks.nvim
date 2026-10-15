@@ -42,6 +42,12 @@ G.cases = {
   { name = "check", method = "check", request = '{"params":{"area":"lib.nvim"}}' },
   { name = "next", method = "next", request = '{"params":{"n":3}}' },
   { name = "areas", method = "areas" },
+  { name = "finished", method = "finished", request = '{"params":{"limit":3}}' },
+  {
+    name = "finished-window",
+    method = "finished",
+    request = '{"params":{"since":"2025-12-31","until":"2026-01-01"}}',
+  },
   { name = "error-unsupported-schema", method = "list", request = '{"schema":2}' },
   { name = "error-unknown-parameter", method = "list", request = '{"params":{"colour":"red"}}' },
   { name = "donepreview", method = "done_preview", request = '{"params":{"id":"lib.nvim/delta"}}' },

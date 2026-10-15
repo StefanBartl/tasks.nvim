@@ -178,6 +178,39 @@ function M.build(H)
       .. DATE
       .. "\n---\n\nFinished long ago.\n"
   )
+  -- more finished tasks for `finished`: two areas, two months and weeks, a bucket each, no effort, no date in the name
+  H.write(
+    root .. "/lib.nvim/Backlog/TASKS/2025-12-30_shipped-bug.md",
+    "---\ntitle: Shipped bug\nstatus: done\nkind: bug\nprio: 1\neffort: 2d\ntags: [fix]\ndone_in: lib.nvim@def5678\ncreated: "
+      .. DATE
+      .. "\nupdated: "
+      .. DATE
+      .. "\n---\n\nFixed.\n"
+  )
+  H.write(
+    root .. "/cascade.nvim/Backlog/FEATURES/2025-12-31_shipped-feature.md",
+    "---\ntitle: Shipped feature\nstatus: done\nkind: feature\nprio: 2\neffort: M\ncreated: "
+      .. DATE
+      .. "\nupdated: "
+      .. DATE
+      .. "\n---\n\nBuilt.\n"
+  )
+  H.write(
+    root .. "/cascade.nvim/Backlog/TASKS/2026-01-02_no-effort.md",
+    "---\ntitle: Done without an effort\nstatus: done\ncreated: "
+      .. DATE
+      .. "\nupdated: "
+      .. DATE
+      .. "\n---\n\nNo size.\n"
+  )
+  H.write(
+    root .. "/lib.nvim/Backlog/TASKS/undated-leftover.md",
+    "---\ntitle: Done, no date in the name\nstatus: done\nkind: task\ncreated: "
+      .. DATE
+      .. "\nupdated: "
+      .. DATE
+      .. "\n---\n\nMoved by hand.\n"
+  )
   return root
 end
 

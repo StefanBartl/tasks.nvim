@@ -1,0 +1,135 @@
+{
+  "digest": "sha256:021172b2e5d2b2b6",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "incomplete": [],
+  "items": [
+    {
+      "area": "cascade.nvim",
+      "done": "2026-01-02",
+      "file": "cascade.nvim/Backlog/TASKS/2026-01-02_no-effort.md",
+      "id": "cascade.nvim/no-effort",
+      "slug": "no-effort",
+      "tags": [],
+      "title": "Done without an effort"
+    },
+    {
+      "area": "lib.nvim",
+      "done": "2026-01-02",
+      "done_in": "lib.nvim@abc1234",
+      "file": "lib.nvim/Backlog/TASKS/2026-01-02_old-done.md",
+      "id": "lib.nvim/old-done",
+      "slug": "old-done",
+      "tags": [],
+      "title": "Old and done"
+    },
+    {
+      "area": "cascade.nvim",
+      "done": "2025-12-31",
+      "effort": "M",
+      "effort_days": 1,
+      "file": "cascade.nvim/Backlog/FEATURES/2025-12-31_shipped-feature.md",
+      "id": "cascade.nvim/shipped-feature",
+      "kind": "feature",
+      "prio": 2,
+      "slug": "shipped-feature",
+      "tags": [],
+      "title": "Shipped feature"
+    }
+  ],
+  "kind": "tasks.finished",
+  "limit": 3,
+  "next_offset": 3,
+  "offset": 0,
+  "plugin": "tasks.nvim",
+  "schema": 1,
+  "stats": {
+    "by_area": [
+      {
+        "area": "lib.nvim",
+        "count": 3,
+        "effort_days": 2
+      },
+      {
+        "area": "cascade.nvim",
+        "count": 2,
+        "effort_days": 1
+      }
+    ],
+    "by_kind": [
+      {
+        "count": 1,
+        "effort_days": 2,
+        "kind": "bug"
+      },
+      {
+        "count": 1,
+        "effort_days": 1,
+        "kind": "feature"
+      },
+      {
+        "count": 1,
+        "effort_days": 0,
+        "kind": "task"
+      },
+      {
+        "count": 2,
+        "effort_days": 0
+      }
+    ],
+    "by_month": [
+      {
+        "count": 2,
+        "effort_days": 3,
+        "month": "2025-12"
+      },
+      {
+        "count": 2,
+        "effort_days": 0,
+        "month": "2026-01"
+      },
+      {
+        "count": 1,
+        "effort_days": 0
+      }
+    ],
+    "by_prio": [
+      {
+        "count": 1,
+        "effort_days": 2,
+        "prio": 1
+      },
+      {
+        "count": 1,
+        "effort_days": 1,
+        "prio": 2
+      },
+      {
+        "count": 3,
+        "effort_days": 0
+      }
+    ],
+    "by_week": [
+      {
+        "count": 4,
+        "effort_days": 3,
+        "week": "2025-12-29"
+      },
+      {
+        "count": 1,
+        "effort_days": 0
+      }
+    ],
+    "effort_days": 3,
+    "without_effort": 3
+  },
+  "total": 5,
+  "undated": 1,
+  "vault": {
+    "id": "vault"
+  }
+}

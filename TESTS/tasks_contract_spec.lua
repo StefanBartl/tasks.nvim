@@ -519,7 +519,61 @@ return function(H)
   eq(by_name["lib.nvim"].by_status, { blocked = 1, decision = 1, doing = 1, open = 6, parked = 1 })
   golden("areas")
 
-  -- ── errors: a stable code, never a throw, never a path ──
+  -- ── finished: the Backlogs, newest first, and what they add up to ──
+  local fin = call("finished")
+  eq(fin.kind, "tasks.finished")
+  eq(
+    { fin.total, fin.undated },
+    { 5, 1 },
+    "five finished files, one of them without a date in its name"
+  )
+  eq(
+    vim.tbl_map(function(i)
+      return i.id
+    end, fin.items),
+    {
+      "cascade.nvim/no-effort",
+      "lib.nvim/old-done",
+      "cascade.nvim/shipped-feature",
+      "lib.nvim/shipped-bug",
+      "lib.nvim/undated-leftover",
+    },
+    "newest first, the same day by id, the undated last"
+  )
+  eq(fin.items[3].done, "2025-12-31", "the day is the date in the file name")
+  eq(fin.items[5].done, nil, "...and absent without one")
+  eq({ fin.items[4].effort, fin.items[4].effort_days, fin.items[4].kind }, { "2d", 2, "bug" })
+  eq(fin.items[1].effort_days, nil, "missing means unknown, never 0")
+  eq({ fin.stats.effort_days, fin.stats.without_effort }, { 3, 3 })
+  eq(
+    fin.stats.by_area[1],
+    { area = "lib.nvim", count = 3, effort_days = 2 },
+    "the busiest area first"
+  )
+  eq(
+    fin.stats.by_week[1],
+    { week = "2025-12-29", count = 4, effort_days = 3 },
+    "weeks start on Monday"
+  )
+  eq(fin.stats.by_month[1].month, "2025-12", "months are oldest first")
+  eq(
+    fin.stats.by_month[3],
+    { count = 1, effort_days = 0 },
+    "the undated task has a row without a month"
+  )
+  -- a window: both ends are included, an undated file is not in it but still counted as undated
+  local win = call("finished", { since = "2025-12-31", ["until"] = "2025-12-31" })
+  eq({ win.total, win.undated }, { 1, 1 })
+  eq(win.items[1].id, "cascade.nvim/shipped-feature")
+  eq(call("finished", { since = "2026-01-02" }).total, 2, "since is included")
+  eq(call("finished", { ["until"] = "2025-12-30" }).total, 1, "until is included")
+  eq(call("finished", { area = "cascade.nvim" }).total, 2, "one area")
+  -- a page: the figures cover all that match, not the page
+  local fpage = call("finished", { limit = 1, offset = 1 })
+  eq({ #fpage.items, fpage.total, fpage.next_offset, fpage.stats.effort_days }, { 1, 5, 2, 3 })
+  eq(call("finished", { limit = 5 }).next_offset, nil, "no next page at the end")
+  golden("finished")
+  golden("finished-window")
   ---@param name string
   ---@param request? string
   ---@param expected string
@@ -551,6 +605,16 @@ return function(H)
   refused("next", '{"params":{"actor":"robot"}}', "invalid_argument", "an unknown actor")
   refused("next", '{"params":{"n":99}}', "invalid_argument", "n out of range")
   refused("hello", '{"params":{"x":1}}', "invalid_argument", "hello takes no parameter")
+  refused("finished", '{"params":{"since":"2026-13-01"}}', "invalid_argument", "not a real day")
+  refused(
+    "finished",
+    '{"params":{"since":"2026-01-05","until":"2026-01-01"}}',
+    "invalid_argument",
+    "since after until"
+  )
+  refused("finished", '{"params":{"limit":0}}', "invalid_argument", "limit 0")
+  refused("finished", '{"params":{"area":"nope.nvim"}}', "not_found", "an unknown area")
+  refused("finished", '{"params":{"colour":"red"}}', "invalid_argument", "an unknown parameter")
   refused(
     "snapshot",
     string.rep(" ", 300 * 1024) .. "{}",

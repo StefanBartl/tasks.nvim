@@ -1,0 +1,74 @@
+{
+  "digest": "sha256:039a889d464be74b",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "incomplete": [],
+  "items": [
+    {
+      "area": "cascade.nvim",
+      "done": "2025-12-31",
+      "effort": "M",
+      "effort_days": 1,
+      "file": "cascade.nvim/Backlog/FEATURES/2025-12-31_shipped-feature.md",
+      "id": "cascade.nvim/shipped-feature",
+      "kind": "feature",
+      "prio": 2,
+      "slug": "shipped-feature",
+      "tags": [],
+      "title": "Shipped feature"
+    }
+  ],
+  "kind": "tasks.finished",
+  "limit": 100,
+  "offset": 0,
+  "plugin": "tasks.nvim",
+  "schema": 1,
+  "stats": {
+    "by_area": [
+      {
+        "area": "cascade.nvim",
+        "count": 1,
+        "effort_days": 1
+      }
+    ],
+    "by_kind": [
+      {
+        "count": 1,
+        "effort_days": 1,
+        "kind": "feature"
+      }
+    ],
+    "by_month": [
+      {
+        "count": 1,
+        "effort_days": 1,
+        "month": "2025-12"
+      }
+    ],
+    "by_prio": [
+      {
+        "count": 1,
+        "effort_days": 1,
+        "prio": 2
+      }
+    ],
+    "by_week": [
+      {
+        "count": 1,
+        "effort_days": 1,
+        "week": "2025-12-29"
+      }
+    ],
+    "effort_days": 1,
+    "without_effort": 0
+  },
+  "total": 1,
+  "undated": 1,
+  "vault": {
+    "id": "vault"
+  }
+}

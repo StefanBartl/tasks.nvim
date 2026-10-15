@@ -1,6 +1,6 @@
 {
   "areas": 1,
-  "digest": "sha256:7de9441672ce8877",
+  "digest": "sha256:dbfb2d089bd88836",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -80,7 +80,7 @@
   "plugin": "tasks.nvim",
   "rev": "rev:6a1aa5",
   "schema": 1,
-  "tasks": 13,
+  "tasks": 15,
   "total": 8,
   "truncated": false,
   "vault": {
