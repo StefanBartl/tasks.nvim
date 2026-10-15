@@ -1447,15 +1447,14 @@ function M.areas(opts)
   return seal(doc, nil), nil
 end
 
----The Monday of the week a day falls in (`YYYY-MM-DD`).
+---The Monday of the week a day falls in (`YYYY-MM-DD`). Plain day arithmetic (`os.time` has no answer for a year the
+---platform cannot represent, and one such file name must not fail the whole document).
 ---@param date string  # a valid day
 ---@return string
 local function week_start(date)
-  local y, m, d = date:match("^(%d%d%d%d)-(%d%d)-(%d%d)$")
-  -- noon: a change of the clock cannot move the day
-  local t = os.time({ year = tonumber(y), month = tonumber(m), day = tonumber(d), hour = 12 }) --[[@as integer]]
-  local wday = os.date("*t", t).wday -- 1 is Sunday
-  return os.date("%Y-%m-%d", t - ((wday + 5) % 7) * 86400) --[[@as string]]
+  -- 1970-01-05 was a Monday
+  local since_monday = model.days_between("1970-01-05", date) % 7
+  return model.add_days(date, -since_monday) or date
 end
 
 ---A sum of days, to the hundredth.
