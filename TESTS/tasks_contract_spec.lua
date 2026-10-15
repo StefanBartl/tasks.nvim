@@ -519,6 +519,108 @@ return function(H)
   eq(by_name["lib.nvim"].by_status, { blocked = 1, decision = 1, doing = 1, open = 6, parked = 1 })
   golden("areas")
 
+  -- ── links: where the areas hang together ──
+  local lk = call("links")
+  eq(lk.kind, "tasks.links")
+  eq(#lk.pairs, 1, "one pair of areas in the fixture")
+  eq({ lk.pairs[1].a, lk.pairs[1].b }, { "cascade.nvim", "lib.nvim" })
+  local kinds = {}
+  for _, e in ipairs(lk.pairs[1].edges) do
+    kinds[#kinds + 1] = e.kind .. ":" .. e.from .. ">" .. e.to_area .. ":" .. (e.to or e.ref)
+  end
+  table.sort(kinds)
+  eq(
+    kinds,
+    {
+      "blocked_by:cascade.nvim/iota>lib.nvim:lib.nvim/alpha",
+      "refs:cascade.nvim/theta>lib.nvim:lib.nvim@abc1234",
+    },
+    "a wait and a ref that names a repo (the path ref lua/x.lua is none; the plan has tasks in one area only)"
+  )
+  eq(lk.pairs[1].kinds, { blocked_by = 1, refs = 1 })
+  eq(lk.edge_count, 2)
+  local touched = {}
+  for _, task in ipairs(lk.tasks) do
+    touched[task.id] = table.concat(task.areas, ",")
+  end
+  eq(
+    touched["lib.nvim/alpha"],
+    "cascade.nvim,lib.nvim",
+    "the task that is waited for touches the other area too"
+  )
+  eq(touched["cascade.nvim/theta"], "cascade.nvim,lib.nvim")
+  eq(touched["lib.nvim/beta"], nil, "a task that touches one area is not listed")
+  eq(lk.rev, call("snapshot").rev, "the same state as the snapshot")
+  golden("links")
+
+  -- links.compute on its own: the kinds the fixture has no case for, and the edges of the input
+  do
+    local links = require("tasks_nvim.links")
+    local function task(id, extra)
+      local area = id:match("^([^/]+)/")
+      return vim.tbl_extend(
+        "force",
+        { id = id, area = area, blocked_by = {}, after = {}, refs = {} },
+        extra or {}
+      )
+    end
+    local open = {
+      task("a/one", { plan = "a/p", after = { "b/two", "b/two" } }),
+      task("b/two", { plan = "a/p" }),
+      task("c/three", {
+        plan = "a/p",
+        refs = { "a@803de65", "b:anchor", "C:/x/y", "https://z:1/q", "lua/x.lua", "nope@abc" },
+      }),
+      task("a/four", { plan = "a/solo" }),
+      task("a/five", { blocked_by = { "a/four", "gone/none" } }),
+    }
+    local r = links.compute(open, { "a", "b", "c" })
+    local seen = {}
+    for _, p in ipairs(r.pairs) do
+      for _, e in ipairs(p.edges) do
+        seen[#seen + 1] = e.kind .. ":" .. e.from .. ">" .. e.to_area .. ":" .. (e.to or e.ref)
+      end
+    end
+    table.sort(seen)
+    eq(
+      seen,
+      {
+        "after:a/one>b:b/two",
+        "plan:a/one>b:a/p",
+        "plan:a/one>c:a/p",
+        "plan:b/two>a:a/p",
+        "plan:b/two>c:a/p",
+        "plan:c/three>a:a/p",
+        "plan:c/three>b:a/p",
+        "refs:c/three>a:a@803de65",
+        "refs:c/three>b:b:anchor",
+      },
+      "a name twice is one edge; a drive letter, a URL, a path, an unknown area and the own area are no refs; a plan in one area links nothing"
+    )
+    eq(r.edge_count, 9)
+    local reached = {}
+    for _, x in ipairs(r.tasks) do
+      reached[x.id] = table.concat(x.areas, ",")
+    end
+    eq(reached["b/two"], "a,b,c", "a task in a plan touches every area of the plan")
+    eq(reached["a/four"], nil)
+    eq(
+      reached["a/five"],
+      nil,
+      "a wait inside one area and for a task that is not there links nothing"
+    )
+    -- the cut: the counts cover everything, the edges of the pairs stop
+    local real = links.MAX_EDGES
+    links.MAX_EDGES = 3
+    local clipped = links.compute(open, { "a", "b", "c" })
+    links.MAX_EDGES = real
+    local kept = 0
+    for _, p in ipairs(clipped.pairs) do
+      kept = kept + #p.edges
+    end
+    eq({ clipped.edge_count, kept, clipped.truncated }, { 9, 3, true })
+  end
+
   -- ── finished: the Backlogs, newest first, and what they add up to ──
   local fin = call("finished")
   eq(fin.kind, "tasks.finished")

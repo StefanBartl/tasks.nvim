@@ -6,7 +6,7 @@
 --- (`tasks_nvim.json`). The contract is versioned (`schema: 1`), only ever grows inside a version, and is described by
 --- the JSON Schemas in `schemas/tasks-export/1/`. The Markdown files stay the single source of truth.
 ---
---- Documents (`kind`): `tasks.hello`, `tasks.snapshot`, `tasks.list`, `tasks.task`, `tasks.next`, `tasks.areas`, `tasks.finished`,
+--- Documents (`kind`): `tasks.hello`, `tasks.snapshot`, `tasks.list`, `tasks.task`, `tasks.next`, `tasks.areas`, `tasks.finished`, `tasks.links`,
 --- `tasks.error`. Every one starts with the same head (`schema`, `plugin`, `kind`, `generated_at`, `vault.id`,
 --- `engine`); a document that comes from a scan also carries `rev` (what the vault looked like) and `digest` (the hash
 --- of the content: without `generated_at` and `engine`, so two runs on an unchanged vault have the same digest).
@@ -28,6 +28,7 @@ local error_codes = require("tasks_nvim.errors")
 local estimate = require("tasks_nvim.estimate")
 local fsio = require("tasks_nvim.fsio")
 local json = require("tasks_nvim.json")
+local links = require("tasks_nvim.links")
 local model = require("tasks_nvim.model")
 local next_pick = require("tasks_nvim.next_pick")
 local plan = require("tasks_nvim.plan")
@@ -63,6 +64,7 @@ M.CAPABILITIES = {
   "finished",
   "hello",
   "if_match",
+  "links",
   "list",
   "move_area",
   "move_area_preview",
@@ -1665,6 +1667,59 @@ function M.finished(params, opts)
   })
   doc.incomplete = incomplete
   return seal(doc, nil), nil
+end
+
+---Where the areas hang together: the links between the open tasks of different areas (`blocked_by`, `after`, a ref that
+---names another area, a plan whose open tasks lie in several areas), by pair of areas with the edges, and for every
+---task that touches two or more areas the areas it touches. The same `rev` as the snapshot of the same vault.
+---@param opts? { root?: string, view?: Tasks.ContractView }
+---@return table|nil doc
+---@return Tasks.ContractError|string|nil err
+function M.links(opts)
+  local view, err = opts and opts.view or nil, nil
+  if not view then
+    view, err = M.view(opts)
+  end
+  if not view then
+    return nil, err
+  end
+  local names = vim.tbl_map(function(a)
+    return a.name
+  end, vault.areas(view.root))
+  local result = links.compute(view.open, names)
+  local entries = vim.tbl_map(function(t)
+    return { id = t.id, etag = t.etag or etag_of(t.path) }
+  end, view.open)
+  local doc = M.head("tasks.links", view.root)
+  doc.edge_count = result.edge_count
+  doc.truncated = result.truncated
+  doc.pairs = vim.tbl_map(function(p)
+    local kinds = {}
+    for kind, n in pairs(p.kinds) do
+      kinds[kind] = n
+    end
+    return json.object({
+      a = p.a,
+      b = p.b,
+      count = p.count,
+      kinds = json.object(kinds),
+      edges = vim.tbl_map(function(e)
+        return json.object({
+          from = e.from,
+          from_area = e.from_area,
+          to_area = e.to_area,
+          kind = e.kind,
+          to = e.to,
+          ref = e.ref and clip(e.ref, M.LIMITS.title) or nil,
+        })
+      end, p.edges),
+    })
+  end, result.pairs)
+  doc.tasks = vim.tbl_map(function(t)
+    return json.object({ id = t.id, areas = t.areas })
+  end, result.tasks)
+  doc.incomplete = view.errors
+  return seal(doc, rev_of(view, entries)), nil
 end
 
 ---What finishing a task would do, written down: the target, the README row, the steps, the plan it closes, the

@@ -46,7 +46,7 @@
     "listed": 14,
     "unlisted": 2
   },
-  "digest": "sha256:f78ebd66c9d4e746",
+  "digest": "sha256:deba01cbf3673c21",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -160,7 +160,7 @@
       "title": "Old and done"
     }
   ],
-  "rev": "rev:6a1aa5",
+  "rev": "rev:a9077a",
   "schema": 1,
   "tasks": [
     {
@@ -403,7 +403,7 @@
       ],
       "category": [],
       "created": "2026-01-01",
-      "etag": "sha256:75c1ec6cbcc23dad",
+      "etag": "sha256:d905b59b07b1ea58",
       "file": "cascade.nvim/ROADMAP/tasks/theta.md",
       "folder": false,
       "group": "blocked|-",
@@ -416,7 +416,10 @@
         "stage": 0,
         "state": "freed"
       },
-      "refs": [],
+      "refs": [
+        "lib.nvim@abc1234",
+        "lua/x.lua"
+      ],
       "slug": "theta",
       "status": "blocked",
       "summary": "A summary line for theta.",

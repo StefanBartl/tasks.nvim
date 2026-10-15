@@ -157,7 +157,7 @@ function M.build(H)
     root,
     "cascade.nvim",
     "theta",
-    { { "blocked_by", "[lib.nvim/old-done]" } },
+    { { "blocked_by", "[lib.nvim/old-done]" }, { "refs", "[lib.nvim@abc1234, lua/x.lua]" } },
     "blocked",
     "Theta was blocked by a finished task"
   )

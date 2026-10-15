@@ -42,6 +42,7 @@ G.cases = {
   { name = "check", method = "check", request = '{"params":{"area":"lib.nvim"}}' },
   { name = "next", method = "next", request = '{"params":{"n":3}}' },
   { name = "areas", method = "areas" },
+  { name = "links", method = "links" },
   { name = "finished", method = "finished", request = '{"params":{"limit":3}}' },
   {
     name = "finished-plan",
