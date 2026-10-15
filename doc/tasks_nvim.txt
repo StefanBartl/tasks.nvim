@@ -49,6 +49,7 @@ blockers, plan or estimate is valid and stays visible everywhere.
     chain = { marker_docs = {} },
     steps = { ask_finish = false },
     reminders = { on_start = true },
+    completion = { finished = true },   -- true, false or N days
     quick_wins = { min_value = 4, max_effort = "S" },
     lists = {},
   })

@@ -24,6 +24,9 @@
 ---@class Tasks.RemindersConfig
 ---@field on_start boolean  One line at startup when reminders (`remind:`) are due (a moment later, once per session, only with a UI; `false` turns it off).
 
+---@class Tasks.CompletionConfig
+---@field finished boolean|integer  Which finished tasks `<Tab>` offers for `:Tasks open` and `preview`: `true` all of them, `false` none, a number only those finished in the last N days (a task of any age can still be typed in full).
+
 ---@class Tasks.QuickWinsConfig
 ---@field min_value integer   A task is a quick win with at least this value (1-5) ...
 ---@field max_effort string   ... and at most this effort (`XS`..`XL` or days like `0.5d`); both must be written on the task.
@@ -56,6 +59,7 @@
 ---@field lists table<string, Tasks.ListDef>  Named lists (a filter combination plus a sort order): `{ ["my-list"] = { effort = "<=S", value = ">=4", sort = "roi" } }`. See `tasks_nvim.lists`.
 ---@field steps Tasks.StepsConfig
 ---@field reminders Tasks.RemindersConfig
+---@field completion Tasks.CompletionConfig
 ---@field keys Tasks.KeysConfig
 
 ---@type Tasks.Opts
@@ -71,6 +75,7 @@ return {
   lists = {},
   steps = { ask_finish = false },
   reminders = { on_start = true },
+  completion = { finished = true },
   keys = {
     dashboard = {
       status = "s",

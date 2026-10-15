@@ -42,7 +42,7 @@ local COMPLETE_TTL = 3
 ---96 ms, too slow for every `<Tab>`), their sorted ids and tags, and the ids of the finished ones.
 ---@type { at: integer, root: string|nil, open: Tasks.Task[]|nil, ids: string[]|nil, tags: string[]|nil, plan_ids: string[]|nil, plans_root: string|nil, plans_at: integer|nil }
 local list_cache = { at = 0 }
----@type { at: integer, root: string|nil, ids: string[]|nil }
+---@type { at: integer, root: string|nil, ids: string[]|nil, setting: boolean|integer|nil }
 local done_cache = { at = 0 }
 
 ---@return table
@@ -145,29 +145,38 @@ end
 ---@return string[]
 local function done_ids()
   local root = vault.root()
+  -- `completion.finished`: all (true), none (false) or the last N days
+  local setting = require("tasks_nvim.config").get().completion.finished
+  if setting == false then
+    return {}
+  end
   if
     done_cache.ids
     and done_cache.root == root
+    and done_cache.setting == setting
     and now_ms() - done_cache.at < COMPLETE_TTL * 1000
   then
     return done_cache.ids
   end
   local ids = {}
+  local oldest = type(setting) == "number" and model.add_days(model.today(), -setting) or ""
   if root then
     -- From the file names: `scan.backlog` reads and parses every finished task, which a <Tab> must not do (a thousand
     -- files cost a second each time the cache runs out). `scan.find_done` matches by slug too, so these are the ids
     -- `open`/`done`/`preview` accept; a Backlog document that is no task has no valid slug and is not offered.
     for _, a in ipairs(vault.areas(root)) do
       local ok, slugs = pcall(scan.backlog_slugs, a.name, { root = root })
-      for slug in pairs(ok and slugs or {}) do
-        if vault.valid_slug(slug) then
+      for slug, path in pairs(ok and slugs or {}) do
+        -- with a number of days only the dated files of that time (the day is in the file name; nothing is read)
+        local date = type(setting) == "number" and model.done_date(path) or nil
+        if vault.valid_slug(slug) and (type(setting) ~= "number" or (date and date >= oldest)) then
           ids[#ids + 1] = a.name .. "/" .. slug
         end
       end
     end
   end
   table.sort(ids)
-  done_cache = { at = now_ms(), root = root, ids = ids }
+  done_cache = { at = now_ms(), root = root, ids = ids, setting = setting }
   return ids
 end
 
