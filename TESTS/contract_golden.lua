@@ -44,6 +44,11 @@ G.cases = {
   { name = "areas", method = "areas" },
   { name = "finished", method = "finished", request = '{"params":{"limit":3}}' },
   {
+    name = "finished-plan",
+    method = "finished",
+    request = '{"params":{"plan":"lib.nvim/the-plan"}}',
+  },
+  {
     name = "finished-window",
     method = "finished",
     request = '{"params":{"since":"2025-12-31","until":"2026-01-01"}}',

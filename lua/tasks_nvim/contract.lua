@@ -1515,8 +1515,9 @@ end
 ---The finished tasks of the Backlogs and what they add up to. `since` and `until` (both days, both included) narrow
 ---it by the day `done` ran (the date in the file name); a task whose file has no such date is counted under
 ---`undated` and is only in the figures when no window is asked for. Every figure covers all the tasks that match, the
----page (`items`, newest first) only what `limit` and `offset` ask for. The area is the one the file is in now.
----@param params? { area?: string, since?: string, until?: string, limit?: integer, offset?: integer }
+---page (`items`, newest first) only what `limit` and `offset` ask for. The area is the one the file is in now. `plan` (a
+---plan id) keeps the tasks that name that plan.
+---@param params? { area?: string, plan?: string, since?: string, until?: string, limit?: integer, offset?: integer }
 ---@param opts? { root?: string }
 ---@return table|nil doc
 ---@return Tasks.ContractError|string|nil err
@@ -1587,7 +1588,8 @@ function M.finished(params, opts)
       if date == nil then
         undated = undated + 1
       end
-      local inside = (date ~= nil or not windowed)
+      local inside = (params.plan == nil or t.plan == params.plan)
+        and (date ~= nil or not windowed)
         and (params.since == nil or (date ~= nil and date >= params.since))
         and (params["until"] == nil or (date ~= nil and date <= params["until"]))
       if inside then
@@ -1628,6 +1630,8 @@ function M.finished(params, opts)
       effort_days = d,
       value = t.value,
       tags = vim.list_slice(t.tags or {}, 1),
+      plan = t.plan,
+      phase = t.phase,
       done_in = t.done_in,
       file = relative(root, t.path) or vim.fs.basename(t.path),
     })

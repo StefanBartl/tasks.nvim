@@ -1,0 +1,79 @@
+{
+  "digest": "sha256:7444c435dcc5b1ce",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "incomplete": [],
+  "items": [
+    {
+      "area": "lib.nvim",
+      "done": "2025-12-30",
+      "done_in": "lib.nvim@def5678",
+      "effort": "2d",
+      "effort_days": 2,
+      "file": "lib.nvim/Backlog/TASKS/2025-12-30_shipped-bug.md",
+      "id": "lib.nvim/shipped-bug",
+      "kind": "bug",
+      "phase": "build",
+      "plan": "lib.nvim/the-plan",
+      "prio": 1,
+      "slug": "shipped-bug",
+      "tags": [
+        "fix"
+      ],
+      "title": "Shipped bug"
+    }
+  ],
+  "kind": "tasks.finished",
+  "limit": 100,
+  "offset": 0,
+  "plugin": "tasks.nvim",
+  "schema": 1,
+  "stats": {
+    "by_area": [
+      {
+        "area": "lib.nvim",
+        "count": 1,
+        "effort_days": 2
+      }
+    ],
+    "by_kind": [
+      {
+        "count": 1,
+        "effort_days": 2,
+        "kind": "bug"
+      }
+    ],
+    "by_month": [
+      {
+        "count": 1,
+        "effort_days": 2,
+        "month": "2025-12"
+      }
+    ],
+    "by_prio": [
+      {
+        "count": 1,
+        "effort_days": 2,
+        "prio": 1
+      }
+    ],
+    "by_week": [
+      {
+        "count": 1,
+        "effort_days": 2,
+        "week": "2025-12-29"
+      }
+    ],
+    "effort_days": 2,
+    "without_effort": 0
+  },
+  "total": 1,
+  "undated": 1,
+  "vault": {
+    "id": "vault"
+  }
+}

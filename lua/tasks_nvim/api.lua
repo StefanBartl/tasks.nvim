@@ -99,6 +99,7 @@ M.METHODS = {
   finished = {
     params = {
       area = "string",
+      plan = "string",
       since = "string",
       ["until"] = "string",
       limit = "integer",

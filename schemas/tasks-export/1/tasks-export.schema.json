@@ -1679,6 +1679,8 @@
         "effort_days": { "type": "number", "minimum": 0 },
         "value": { "type": "integer", "minimum": 1 },
         "tags": { "type": "array", "items": { "type": "string" } },
+        "plan": { "type": "string" },
+        "phase": { "type": "string" },
         "done_in": { "type": "string" },
         "file": { "type": "string" }
       },
