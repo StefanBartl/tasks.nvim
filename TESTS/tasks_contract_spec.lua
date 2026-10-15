@@ -584,6 +584,25 @@ return function(H)
   eq(planned.stats.effort_days, 2, "...and the figures follow")
   eq(call("finished", { plan = "lib.nvim/none" }).total, 0)
   golden("finished-plan")
+  -- a day the platform's clock cannot represent is a day like any other (it once failed the whole document)
+  do
+    local far = fixture.build(H)
+    local head = "---" .. "\n" .. "title: Very old\nstatus: done\n---\n"
+    H.write(far .. "/lib.nvim/Backlog/TASKS/1900-01-01_very-old.md", head)
+    H.write(far .. "/lib.nvim/Backlog/TASKS/9999-12-31_very-far.md", head)
+    local text = api.call("finished", nil, { root = far })
+    local doc = vim.json.decode(text)
+    eq(doc.kind, "tasks.finished", "no internal error for a year os.time cannot do")
+    local weeks = {}
+    for _, row in ipairs(doc.stats.by_week) do
+      weeks[#weeks + 1] = row.week
+    end
+    ok(
+      vim.list_contains(weeks, "1900-01-01"),
+      "1900-01-01 was a Monday: " .. table.concat(weeks, ",")
+    )
+    ok(vim.list_contains(weeks, "9999-12-27"))
+  end
   golden("finished")
   golden("finished-window")
   ---@param name string
