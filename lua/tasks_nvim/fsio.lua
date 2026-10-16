@@ -376,14 +376,11 @@ function M.doc_path(path)
 end
 
 ---The error `create_exclusive` and `copy` answer when the target was already there. Compare through
----`is_exists`, not against the word: the word is an implementation detail of this module.
-M.EXISTS = "exists"
+---`is_exists`, not against the word: it is `lib.nvim.fs.create_exclusive`'s.
+M.EXISTS = require("lib.nvim.fs.create_exclusive").EXISTS
 
----@param err any
----@return boolean
-function M.is_exists(err)
-  return err == M.EXISTS
-end
+---@type fun(err: any): boolean
+M.is_exists = require("lib.nvim.fs.create_exclusive").is_exists
 
 ---Create `path` with `content`, failing with `"exists"` when the file is
 ---already there. The existence test and the creation are one syscall.
