@@ -74,7 +74,7 @@ How it is meant to be used, scenario by scenario: [docs/WORKFLOWS.md](docs/WORKF
 | | |
 | --- | --- |
 | Neovim | 0.10+ |
-| [lib.nvim](https://github.com/StefanBartl/lib.nvim) | required (files, frontmatter, checkpoints, the command composer) |
+| [lib.nvim](https://github.com/StefanBartl/lib.nvim) | required (files, frontmatter, checkpoints, the command composer, the shared contract modules `lib.nvim.contract.*`); commit `6f30218` or newer |
 | [snacks.nvim](https://github.com/folke/snacks.nvim) | optional: the interactive dashboard |
 | [mdview.nvim](https://github.com/StefanBartl/mdview.nvim) | optional: browser preview |
 | [ui.nvim](https://github.com/StefanBartl/ui.nvim) | optional: themed confirmation dialogs |

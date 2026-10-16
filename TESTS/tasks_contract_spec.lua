@@ -754,6 +754,13 @@ return function(H)
   refused("list", "{nope", "invalid_argument", "bad JSON")
   refused("list", "[1,2]", "invalid_argument", "a request that is a list")
   refused("list", '{"schema":2}', "unsupported_schema", "a higher schema")
+  refused(
+    "list",
+    '{"schema":2,"bogus":1}',
+    "unsupported_schema",
+    "a higher schema is judged before an unknown field"
+  )
+  refused("list", '{"schema":1.5}', "invalid_argument", "a schema with a fraction is no schema")
   refused("list", '{"schema":0}', "invalid_argument", "schema 0")
   refused("list", '{"extra":1}', "invalid_argument", "an unknown request field")
   refused("list", '{"params":{"colour":"red"}}', "invalid_argument", "an unknown parameter")

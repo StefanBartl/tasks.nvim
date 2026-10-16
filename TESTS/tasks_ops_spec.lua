@@ -1016,4 +1016,24 @@ return function(H)
   local idx = require("tasks_nvim.index").write_area("lib.nvim", { root = root, check = true })
   eq(idx.action, "unchanged", "the overview of the area matches the files")
   ok(fsio.is_file(root .. "/lib.nvim/ROADMAP/TASKS.md"))
+
+  -- ── an index that cannot be written does not add a field to the document ───
+  do
+    local index = require("tasks_nvim.index")
+    local real = index.write_area
+    index.write_area = function()
+      error(root .. "/lib.nvim/ROADMAP/TASKS.md: disk on fire")
+    end
+    local pcalled, got = pcall(ops, { { op = "new", area = "lib.nvim", title = "Index probe" } })
+    index.write_area = real
+    ok(pcalled, "an index that raises does not take the door down")
+    eq(got.kind, "tasks.result", "the answer is still a result")
+    eq(got.finish_error, nil, "tasks-ops/1 has no finish_error")
+    eq(got.results[1].ok, true, vim.inspect(got.results[1]))
+    eq(got.results[1].index.action, "error", "the index failure is told on the entry")
+    ok(
+      not tostring(got.results[1].index.error):find(root, 1, true),
+      "and names no path of this machine"
+    )
+  end
 end
