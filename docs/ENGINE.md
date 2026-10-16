@@ -101,9 +101,13 @@ TESTS/              specs (run with scripts/test.sh, i.e. testing.nvim)
 ### Categories
 
 `category: [security, docs]` (optional, flat list) names the concern a task serves:
-`bug`, `security`, `performance`, `docs`, `ruleset` (`model.CATEGORIES`; `ruleset` = the task
+`bug`, `security`, `performance`, `docs`, `ruleset`, `ux`, `bindings`, `refactor`, `tests`, `ci`
+(`model.CATEGORIES`, the one list the `:Tasks new` form, `new --category`, `set category=`,
+`check`, `--help` and the `hello` enums read; `ruleset` = the task
 brings code in line with a rule set (for example the ones `rules.nvim` loads), optional free
-field `rules: [LLS-45]` names the rule ids). An unknown value is `unknown-category`. The
+field `rules: [LLS-45]` names the rule ids; `ux` = something the user sees or does, such as a
+new user-facing feature; `bindings` = keymaps, commands, shortcuts; `refactor`, `tests`, `ci` =
+internal work on the code, the test suite, the build pipeline). An unknown value is `unknown-category`. The
 *effective* categories (`model.categories`, what `--category=` filters on) are the written
 list, plus `bug` for every `kind: bug`, plus every tag spelled like a category -- so tasks
 written before the field existed are filterable without touching them. Categories narrow a

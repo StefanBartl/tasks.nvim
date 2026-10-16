@@ -28,7 +28,7 @@ lowercase word `all` is the keyword; `ALL` with capitals is the area of that nam
 | `--status=a,b` | one or more of `doing decision blocked open parked` |
 | `--prio=1,2` / `--prio=<=2` | exact prios, or "at most" |
 | `--kind=a,b` | `feature task bug idea research` |
-| `--category=a,b` | any of `bug security performance docs ruleset` (`bug` also finds every `kind: bug`; a tag spelled like a category counts) |
+| `--category=a,b` | any of `bug security performance docs ruleset ux bindings refactor tests ci` (`bug` also finds every `kind: bug`; a tag spelled like a category counts) |
 | `--effort=S,M` / `--effort=<=M` | the written effort (`XS S M L XL`, or days like `0.5d`; sizes are case-insensitive), or "this or smaller" (`<=S`, `<=M`, `<=1d`; sizes and days share one scale, a task without effort never matches) |
 | `--severity=a,b` | any of `low medium high critical` (the optional `severity` of a bug / security task; a task without one never matches) |
 | `--value=4,5` / `--value=>=4` | the written `value` (1-5, the expected benefit), or "this or more"; a task without a value never matches |

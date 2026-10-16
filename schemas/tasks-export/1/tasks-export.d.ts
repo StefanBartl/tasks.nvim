@@ -176,7 +176,8 @@ export type Kind = "feature" | "task" | "bug" | "idea" | "research";
 export type Effort = string;
 export type Actor = "cdx" | "me" | "pair";
 export type Severity = "low" | "medium" | "high" | "critical";
-export type Category = "bug" | "security" | "performance" | "docs" | "ruleset";
+export type Category =
+  "bug" | "security" | "performance" | "docs" | "ruleset" | "ux" | "bindings" | "refactor" | "tests" | "ci";
 /**
  * tasks.list: one page of tasks in plan order.
  */

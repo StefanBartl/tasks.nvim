@@ -36,9 +36,23 @@ M.OPEN_STATUSES = { "doing", "decision", "blocked", "open", "parked" }
 M.KINDS = { "feature", "task", "bug", "idea", "research" }
 
 ---Concerns a task can serve (concept section 12.1). Independent of `kind`:
----`kind: bug` implies `bug`, a tag of the same name counts as well.
+---`kind: bug` implies `bug`, a tag of the same name counts as well. The one list the form, `new --category`,
+---`set category=`, `check` and the `hello` enums read. New words go at the end: the order is the output order of
+---`model.categories`. `ux` = what the user sees or does (a new user-facing feature), `bindings` = keymaps,
+---commands, shortcuts; `refactor`, `tests`, `ci` = internal work on the code, the test suite, the pipeline.
 ---@type string[]
-M.CATEGORIES = { "bug", "security", "performance", "docs", "ruleset" }
+M.CATEGORIES = {
+  "bug",
+  "security",
+  "performance",
+  "docs",
+  "ruleset",
+  "ux",
+  "bindings",
+  "refactor",
+  "tests",
+  "ci",
+}
 
 ---Severity of a bug or security task, worst last. Optional, see `model.categories`.
 ---@type string[]

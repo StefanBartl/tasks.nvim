@@ -68,7 +68,7 @@
       "enum": ["low", "medium", "high", "critical"]
     },
     "Category": {
-      "enum": ["bug", "security", "performance", "docs", "ruleset"]
+      "enum": ["bug", "security", "performance", "docs", "ruleset", "ux", "bindings", "refactor", "tests", "ci"]
     },
     "Effort": {
       "description": "A size (XS to XL) or a duration in days (`3d`, `0.5d`). `effort_days` is always the figure.",
