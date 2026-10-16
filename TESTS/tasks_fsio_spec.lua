@@ -171,4 +171,39 @@ return function(H)
   end)
   eq(seen, { foreign = true, nested = true }, "a foreign coroutine asked the disk")
   vim.fn.delete(late)
+
+  -- ── copy: the "target exists" answer is copy's own, not the token of lib.nvim's create_exclusive ──
+  do
+    local src = dir .. "/copy-src.txt"
+    local dst = dir .. "/copy-dst.txt"
+    H.write(src, "source")
+    local first, first_err = fsio.copy(src, dst)
+    eq({ first, first_err }, { true, nil }, "a copy to a free target works")
+    local second, second_err = fsio.copy(src, dst)
+    eq(second, false, "a second copy to the same target fails")
+    ok(fsio.is_copy_exists(second_err), "and says the target exists")
+    eq(second_err, fsio.COPY_EXISTS)
+    eq(H.read(dst), "source", "the target is left as it was")
+
+    -- The token of create_exclusive changes (a lib.nvim of the future): copy must not follow it.
+    local module = "lib.nvim.fs.create_exclusive"
+    local real_lib, real_fsio = package.loaded[module], package.loaded["tasks_nvim.fsio"]
+    package.loaded[module] = setmetatable({
+      EXISTS = "lib-token",
+      is_exists = function(err)
+        return err == "lib-token"
+      end,
+    }, {
+      __call = function(_, ...)
+        return real_lib(...)
+      end,
+    })
+    package.loaded["tasks_nvim.fsio"] = nil
+    local fresh = require("tasks_nvim.fsio")
+    local copied, copy_err = fresh.copy(src, dst)
+    package.loaded[module], package.loaded["tasks_nvim.fsio"] = real_lib, real_fsio
+    eq(copied, false)
+    ok(fresh.is_copy_exists(copy_err), "copy answers its own token")
+    ok(not fresh.is_exists(copy_err), "which is not the lib token")
+  end
 end

@@ -375,8 +375,8 @@ function M.doc_path(path)
   return M.norm(vim.fn.fnamemodify(expanded, ":p"))
 end
 
----The error `create_exclusive` and `copy` answer when the target was already there. Compare through
----`is_exists`, not against the word: it is `lib.nvim.fs.create_exclusive`'s.
+---The error `create_exclusive` answers when the target was already there. Compare through `is_exists`, not against
+---the word: it is `lib.nvim.fs.create_exclusive`'s token. `copy` has its own (`COPY_EXISTS`).
 M.EXISTS = require("lib.nvim.fs.create_exclusive").EXISTS
 
 ---@type fun(err: any): boolean
@@ -444,11 +444,22 @@ function M.rename(from, to)
   return true, nil
 end
 
+---The error `copy` answers when the target was already there. This module's own word, not `create_exclusive`'s
+---token (`EXISTS`): the two operations come from different places and may differ one day. Compare through
+---`is_copy_exists`.
+M.COPY_EXISTS = "exists"
+
+---@param err any
+---@return boolean
+function M.is_copy_exists(err)
+  return err == M.COPY_EXISTS
+end
+
 ---Copy a file, failing when the target exists. Creates the parent folder.
 ---@param from string
 ---@param to string
 ---@return boolean ok
----@return string|nil err  `"exists"` when the target was already there
+---@return string|nil err  `COPY_EXISTS` when the target was already there
 function M.copy(from, to)
   drop_cache()
   local ok, perr = ensure_parent(to)
@@ -458,7 +469,7 @@ function M.copy(from, to)
   local copied, err = uv.fs_copyfile(from, to, { excl = true })
   if not copied then
     if tostring(err):match("^EEXIST") then
-      return false, M.EXISTS
+      return false, M.COPY_EXISTS
     end
     return false, tostring(err)
   end
