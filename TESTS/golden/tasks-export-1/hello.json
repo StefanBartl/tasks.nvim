@@ -43,7 +43,12 @@
       "security",
       "performance",
       "docs",
-      "ruleset"
+      "ruleset",
+      "ux",
+      "bindings",
+      "refactor",
+      "tests",
+      "ci"
     ],
     "effort": [
       "XS",

@@ -40,7 +40,18 @@ return function(H)
   end
 
   -- ── categories: model ───────────────────────────────────────────────────
-  eq(model.CATEGORIES, { "bug", "security", "performance", "docs", "ruleset" })
+  eq(model.CATEGORIES, {
+    "bug",
+    "security",
+    "performance",
+    "docs",
+    "ruleset",
+    "ux",
+    "bindings",
+    "refactor",
+    "tests",
+    "ci",
+  })
   ok(model.is_category("security"))
   ok(not model.is_category("Security"))
   ok(not model.is_category(nil))
@@ -60,6 +71,29 @@ return function(H)
   local bad = parse(F.meta("T", "open", { { "category", "[secuity]" } }))
   ok(not bad.valid, "an unknown category is an error")
   eq(bad.error_codes[1], "unknown-category")
+
+  -- a user-facing feature (a keymap, a new view) has a category to tick: form, check and --help agree
+  local feat =
+    parse(F.meta("T", "open", { { "kind", "feature" }, { "category", "[ux, bindings]" } }))
+  ok(feat.valid, "ux and bindings are categories")
+  eq(model.categories(feat), { "ux", "bindings" })
+  local internal = parse(F.meta("T", "open", { { "category", "[refactor, tests, ci]" } }))
+  ok(internal.valid, "refactor, tests and ci are categories")
+  local form_values
+  for _, field in ipairs(require("tasks_nvim.form").fields()) do
+    if field.name == "category" then
+      form_values = field.values
+    end
+  end
+  eq(form_values, model.CATEGORIES, "the :Tasks new form offers every category")
+  local help = {}
+  require("tasks_nvim.cli").run({ "--help" }, {
+    out = function(s)
+      help[#help + 1] = s
+    end,
+    err = function() end,
+  })
+  has(table.concat(help), "categories: " .. table.concat(model.CATEGORIES, " ") .. ";")
 
   -- implied categories: kind bug, and a tag spelled like a category
   eq(model.categories({ kind = "bug", tags = {} }), { "bug" })

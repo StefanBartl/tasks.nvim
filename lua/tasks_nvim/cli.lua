@@ -63,7 +63,7 @@ commands:
        [--stale=<days>|refs] [--stale-refs] [--blocked] [--reminders] [--ready|--waiting] [--unestimated] [--quick-win]
        [--sort=default|prio-effort|severity|frecency|roi] [--format=tsv|ids|json] [--done]   open tasks, sorted; one line each
        (--format=json: the tasks.list document in plan order, with [--limit=1..100] [--offset=N]; --done: the finished tasks)
-       (categories: bug security performance docs ruleset; --category=bug also finds kind=bug;
+       (categories: @CATEGORIES@; --category=bug also finds kind=bug;
         --sort=prio-effort: small first within a prio; --sort=severity: critical first;
         --sort=roi: most value per effort first, tasks without value or effort last;
         --actor=me also finds status=decision and the tag needs-user; none = nobody classified it;
@@ -121,6 +121,10 @@ commands:
 global options: --vault=<dir> (default: $TASKS_VAULT; no built-in default path)
                 --today=YYYY-MM-DD (for reproducible runs); --no-index on new/set/done
 ]]
+-- The category words come from the model, so --help, `new --category`, `set` and `check` never disagree.
+USAGE = USAGE:gsub("@CATEGORIES@", function()
+  return table.concat(model.CATEGORIES, " ")
+end)
 
 ---@class Tasks.CliSpec
 ---@field value string[]   # Options that need `=value`.

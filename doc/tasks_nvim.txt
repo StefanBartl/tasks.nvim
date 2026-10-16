@@ -181,6 +181,7 @@ cancel (asks when text was typed), `g?` help.
   effort: S             # XS S M L XL, or 0.5d, 3d
   tags: [ui]
   category: [bug]       # bug security performance docs ruleset
+                        # ux bindings refactor tests ci
   blocked_by: [other-area/other-task]
   refs: [lua/foo/init.lua]
   created: 2026-10-05
