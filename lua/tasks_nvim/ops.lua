@@ -983,7 +983,12 @@ door = contract_ops.make({
     table.sort(areas)
     local by_area = {}
     for _, area in ipairs(areas) do
-      local res, ierr = index.write_area(area, { root = ctx.root })
+      -- a raise is told like any other failure of the write: the hook of the door must not raise (the door would put a
+      -- `finish_error` into the document, a field tasks-ops/1 does not have)
+      local called, res, ierr = pcall(index.write_area, area, { root = ctx.root })
+      if not called then
+        res, ierr = nil, res
+      end
       by_area[area] = res and { action = res.action }
         or { action = "error", error = contract.redact(ctx.root, tostring(ierr)) }
     end

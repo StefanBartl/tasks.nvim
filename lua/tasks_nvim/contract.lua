@@ -1668,7 +1668,7 @@ end
 M.error_doc = builder.error_doc
 
 ---The canonical bytes of a document; one bigger than the limit is an error, never a cut-off document.
----@type fun(doc: table, opts?: Tasks.JsonOpts): string|nil, Tasks.ContractError|nil
+---@type fun(doc: table, opts?: { indent?: integer }): string|nil, Tasks.ContractError|nil
 M.encode = builder.encode
 
 ---The document builder (head, seal, encode, error_doc) of this contract.

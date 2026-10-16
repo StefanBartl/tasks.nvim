@@ -259,7 +259,7 @@ A `tasks.error` document: `code`, `message`, `retryable` and, when there is more
 | `conflict` | the file is not the version the caller saw (`if_match`, `expect`, a stale `confirm`, a list that moved on); `details` says what was found |
 | `exists` | the slug that was asked for is taken |
 | `forbidden` | a task file that is a link is not written through |
-| `unsupported_schema` | the request asks for a higher `schema` than this engine speaks |
+| `unsupported_schema` | the request asks for a higher `schema` than this engine speaks (judged first: a request of a newer schema may carry fields this engine does not know, and that is version skew, not a typo) |
 | `payload_too_large` | a request over 256 KiB, a document over 8 MiB, more than 100 operations, a value over the limits |
 | `locked` | another writer holds the file right now (`retryable: true`) |
 | `lock_stuck` | a lock nobody will release (older than the takeover age and not deletable, or a folder where the lock file should be): the message names the lock to remove by hand |
