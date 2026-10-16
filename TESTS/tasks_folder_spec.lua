@@ -94,6 +94,17 @@ return function(H)
     err = function() end,
   })
   has(table.concat(help), "categories: " .. table.concat(model.CATEGORIES, " ") .. ";")
+  local list_desc
+  for _, route in ipairs(require("tasks_nvim.ui.routes").routes({ flat = true })) do
+    if table.concat(route.path, " ") == "list" then
+      list_desc = route.desc
+    end
+  end
+  has(
+    list_desc,
+    "--category=" .. table.concat(model.CATEGORIES, "|") .. " ",
+    ":Tasks list names every category"
+  )
 
   -- implied categories: kind bug, and a tag spelled like a category
   eq(model.categories({ kind = "bug", tags = {} }), { "bug" })
