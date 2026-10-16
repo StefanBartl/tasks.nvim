@@ -231,30 +231,13 @@ end
 ---@field dry boolean
 ---@field touched table<string, boolean>   # Areas whose index must be written.
 
----The entry of an operation that did not happen.
----@param ctx Tasks.OpsCtx
----@param err any
----@param info? table
----@return table
-local function failure(ctx, err, info)
-  return door.failure(ctx.root, err, info)
-end
-
----@param code string
----@param message string
----@param details? table
----@return table
-local function refuse(code, message, details)
-  return door.refuse(code, message, details)
-end
-
 ---A failure from `mutate` whose reason has no code: its validation messages are all about the request.
 ---@param ctx Tasks.OpsCtx
 ---@param err any
 ---@param info? table
 ---@return table
 local function mutate_failure(ctx, err, info)
-  local entry = failure(ctx, err, info)
+  local entry = door.failure(ctx.root, err, info)
   if entry.error.code == "internal" then
     entry.error.code = "invalid_argument"
   end
@@ -303,11 +286,11 @@ end
 local function do_set(op, ctx)
   local id = op.id
   if id == nil or op.patch == nil then
-    return refuse("invalid_argument", "set needs id and patch")
+    return door.refuse("invalid_argument", "set needs id and patch")
   end
   local pairs_, perr = mutate.check_patch(op.patch)
   if not pairs_ then
-    return refuse("invalid_argument", tostring(perr))
+    return door.refuse("invalid_argument", tostring(perr))
   end
   local task, ferr = scan.find(id, { root = ctx.root })
   if not task then
@@ -315,17 +298,17 @@ local function do_set(op, ctx)
     local only_remind = next(op.patch) == "remind" and next(op.patch, "remind") == nil
     task = only_remind and scan.find_done(id, { root = ctx.root }) or nil
     if not task then
-      return failure(ctx, ferr)
+      return door.failure(ctx.root, ferr)
     end
   end
   for _, kv in ipairs(pairs_) do
     -- first the characters, then the length: `strchars` cannot take a NUL byte
     if has_control(kv[2]) then
-      return refuse("invalid_argument", kv[1] .. " contains a control character")
+      return door.refuse("invalid_argument", kv[1] .. " contains a control character")
     end
     local over = over_limit(kv[1], kv[2])
     if over then
-      return refuse("payload_too_large", over)
+      return door.refuse("payload_too_large", over)
     end
     if kv[1] == "refs" and kv[2] ~= vim.NIL then
       local known = {}
@@ -335,7 +318,7 @@ local function do_set(op, ctx)
       for _, ref in ipairs(kv[2]) do
         local why = not known[ref] and bad_ref(ref)
         if why then
-          return refuse("invalid_argument", ("refs: '%s' has %s"):format(clip(ref), why))
+          return door.refuse("invalid_argument", ("refs: '%s' has %s"):format(clip(ref), why))
         end
       end
     end
@@ -344,7 +327,7 @@ local function do_set(op, ctx)
   if op.expect ~= nil then
     local key = op.expect.key
     if type(key) ~= "string" or not vim.tbl_contains(mutate.SETTABLE, key) then
-      return refuse("invalid_argument", "expect.key must be one of the keys set can change")
+      return door.refuse("invalid_argument", "expect.key must be one of the keys set can change")
     end
     local value = op.expect.value
     expect = { key = key, value = value ~= vim.NIL and value or nil }
@@ -353,10 +336,10 @@ local function do_set(op, ctx)
   if next(proposal) ~= nil then
     local problems, eerr = edges.validate(task.id, proposal, { root = ctx.root })
     if not problems then
-      return failure(ctx, eerr)
+      return door.failure(ctx.root, eerr)
     end
     if #problems > 0 then
-      return refuse("invalid_argument", problems[1].message, { problems = problems })
+      return door.refuse("invalid_argument", problems[1].message, { problems = problems })
     end
   end
   local r, err, info = mutate.set(id, op.patch, {
@@ -417,7 +400,7 @@ end
 ---@return table entry
 local function do_tick_step(op, ctx)
   if op.id == nil or op.n == nil then
-    return refuse("invalid_argument", "tick_step needs id and n")
+    return door.refuse("invalid_argument", "tick_step needs id and n")
   end
   local done = op.done ~= false
   local r, err, info = mutate.edit_text(op.id, function(text)
@@ -454,7 +437,7 @@ end
 ---@return table entry
 local function do_reopen(op, ctx)
   if op.id == nil then
-    return refuse("invalid_argument", "reopen needs id")
+    return door.refuse("invalid_argument", "reopen needs id")
   end
   local r, err, info = mutate.reopen(op.id, {
     root = ctx.root,
@@ -492,12 +475,12 @@ end
 ---@return table entry
 local function do_append_note(op, ctx)
   if op.id == nil or op.text == nil then
-    return refuse("invalid_argument", "append_note needs id and text")
+    return door.refuse("invalid_argument", "append_note needs id and text")
   end
   -- the steps module refuses what is not one line; the rest of what a front end may not write is judged here, as for
   -- every other text (the 8-bit controls and the Unicode line separators end a line in other tools)
   if has_control(op.text) then
-    return refuse("invalid_argument", "text contains a control character")
+    return door.refuse("invalid_argument", "text contains a control character")
   end
   local r, err, info = mutate.edit_text(op.id, function(text)
     return steps.add_note(text, op.text, ctx.today)
@@ -519,13 +502,16 @@ end
 ---@return table entry
 local function do_set_body(op, ctx)
   if op.id == nil or op.body == nil then
-    return refuse("invalid_argument", "set_body needs id and body")
+    return door.refuse("invalid_argument", "set_body needs id and body")
   end
   if has_control(op.body) then
-    return refuse("invalid_argument", "body contains a control character")
+    return door.refuse("invalid_argument", "body contains a control character")
   end
   if too_long(op.body, M.MAX_SET_BODY) then
-    return refuse("payload_too_large", ("body is longer than %d characters"):format(M.MAX_SET_BODY))
+    return door.refuse(
+      "payload_too_large",
+      ("body is longer than %d characters"):format(M.MAX_SET_BODY)
+    )
   end
   local r, err, info = mutate.edit_text(op.id, function(text)
     local parsed = fm.parse(text)
@@ -575,12 +561,12 @@ end
 ---@return table entry
 local function do_new(op, ctx)
   if op.area == nil or op.title == nil then
-    return refuse("invalid_argument", "new needs area and title")
+    return door.refuse("invalid_argument", "new needs area and title")
   end
   local fields = {}
   for key, value in pairs(op.fields or {}) do
     if not NEW_FIELDS[key] then
-      return refuse(
+      return door.refuse(
         "invalid_argument",
         ("fields: unknown field '%s' (fields: %s)"):format(tostring(key), sorted_names(NEW_FIELDS))
       )
@@ -591,18 +577,18 @@ local function do_new(op, ctx)
   end
   -- first the characters, then the length: `strchars` cannot take a NUL byte
   if has_control(op.area) then
-    return refuse("invalid_argument", "area contains a control character")
+    return door.refuse("invalid_argument", "area contains a control character")
   end
   if has_control(op.title) then
-    return refuse("invalid_argument", "title contains a control character")
+    return door.refuse("invalid_argument", "title contains a control character")
   end
   for key, value in pairs(fields) do
     if has_control(value) then
-      return refuse("invalid_argument", key .. " contains a control character")
+      return door.refuse("invalid_argument", key .. " contains a control character")
     end
   end
   if op.body ~= nil and has_control(op.body) then
-    return refuse("invalid_argument", "body contains a control character")
+    return door.refuse("invalid_argument", "body contains a control character")
   end
   local over = over_limit("title", op.title)
   if too_long(op.body, M.MAX_BODY) then
@@ -612,13 +598,13 @@ local function do_new(op, ctx)
     over = over or over_limit(key, value)
   end
   if over then
-    return refuse("payload_too_large", over)
+    return door.refuse("payload_too_large", over)
   end
   if type(fields.refs) == "table" then
     for _, ref in ipairs(fields.refs) do
       local why = type(ref) == "string" and bad_ref(ref)
       if why then
-        return refuse("invalid_argument", ("refs: '%s' has %s"):format(clip(ref), why))
+        return door.refuse("invalid_argument", ("refs: '%s' has %s"):format(clip(ref), why))
       end
     end
   end
@@ -655,7 +641,7 @@ end
 ---@return table entry
 local function do_reorder(op, ctx)
   if op.id == nil then
-    return refuse("invalid_argument", "reorder needs id")
+    return door.refuse("invalid_argument", "reorder needs id")
   end
   local r, err, info = batch.reorder(op.id, {
     after = op.after,
@@ -664,7 +650,7 @@ local function do_reorder(op, ctx)
     if_match = op.if_match,
   }, { root = ctx.root, today = ctx.today, index = false, dry_run = ctx.dry })
   if not r then
-    return failure(ctx, err, info)
+    return door.failure(ctx.root, err, info)
   end
   local entry = {
     ok = true,
@@ -712,12 +698,12 @@ end
 ---@return table entry
 local function do_done(op, ctx)
   if op.id == nil then
-    return refuse("invalid_argument", "done needs id")
+    return door.refuse("invalid_argument", "done needs id")
   end
   if ctx.dry then
     local pv, err, info = done_flow.preview(op.id, { root = ctx.root, today = ctx.today })
     if not pv then
-      return failure(ctx, err, info)
+      return door.failure(ctx.root, err, info)
     end
     return {
       ok = true,
@@ -729,22 +715,22 @@ local function do_done(op, ctx)
     }
   end
   if op.confirm == nil then
-    return refuse(
+    return door.refuse(
       "invalid_argument",
       "done needs the confirm token of done_preview for the version of the task that was shown"
     )
   end
   local etag = mutate.confirm_etag(op.id, op.confirm)
   if not etag then
-    return refuse("invalid_argument", "the confirm token is not one for " .. op.id)
+    return door.refuse("invalid_argument", "the confirm token is not one for " .. op.id)
   end
   if has_control(op.done_in) then
-    return refuse("invalid_argument", "done_in contains a control character")
+    return door.refuse("invalid_argument", "done_in contains a control character")
   end
   if op.remind ~= nil then
     local _, rerr = model.resolve_remind(op.remind, ctx.today)
     if rerr then
-      return refuse("invalid_argument", rerr)
+      return door.refuse("invalid_argument", rerr)
     end
   end
   local flow, err, info = done_flow.run(op.id, {
@@ -757,7 +743,7 @@ local function do_done(op, ctx)
     pick_next = false,
   })
   if not flow then
-    return failure(ctx, err, info)
+    return door.failure(ctx.root, err, info)
   end
   local done = flow.done
   local area = done.area
@@ -790,7 +776,7 @@ end
 ---@return table entry
 local function do_move_area(op, ctx)
   if op.id == nil or op.to_area == nil then
-    return refuse("invalid_argument", "move_area needs id and to_area")
+    return door.refuse("invalid_argument", "move_area needs id and to_area")
   end
   if not ctx.dry then
     local r, err, info = moves.move(op.id, op.to_area, {
@@ -834,7 +820,7 @@ local function do_move_area(op, ctx)
   end
   local report, err, info = moves.preview(op.id, op.to_area, { root = ctx.root })
   if not report then
-    return failure(ctx, err, info)
+    return door.failure(ctx.root, err, info)
   end
   local conflicts = {}
   for _, c in ipairs(report.conflicts) do
@@ -871,7 +857,7 @@ end
 ---@return table entry
 local function do_plan_new(op, ctx)
   if op.area == nil or op.title == nil then
-    return refuse("invalid_argument", "plan_new needs area and title")
+    return door.refuse("invalid_argument", "plan_new needs area and title")
   end
   for _, key in ipairs({
     "area",
@@ -885,7 +871,7 @@ local function do_plan_new(op, ctx)
     "phases",
   }) do
     if has_control(op[key]) then
-      return refuse("invalid_argument", key .. " contains a control character")
+      return door.refuse("invalid_argument", key .. " contains a control character")
     end
   end
   local over = over_limit("title", op.title)
@@ -896,10 +882,10 @@ local function do_plan_new(op, ctx)
     or (op.areas and over_limit("areas", op.areas))
     or (op.phases and over_limit("phases", op.phases))
   if over then
-    return refuse("payload_too_large", over)
+    return door.refuse("payload_too_large", over)
   end
   if type(op.summary) == "string" and op.summary:find("[\r\n]") then
-    return refuse("invalid_argument", "summary must be one line")
+    return door.refuse("invalid_argument", "summary must be one line")
   end
   local r, err, info = require("tasks_nvim.plans").new(op.area, {
     root = ctx.root,
