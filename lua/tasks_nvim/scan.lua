@@ -23,6 +23,7 @@ local scan_cached = require("lib.nvim.fs.scan_cached")
 local fsio = require("tasks_nvim.fsio")
 local model = require("tasks_nvim.model")
 local vault = require("tasks_nvim.vault")
+local wikilinks = require("tasks_nvim.wikilinks")
 
 local M = {}
 
@@ -30,6 +31,22 @@ local M = {}
 ---@field root? string                 # Vault root (default: `vault.root()`).
 ---@field ttl_seconds? integer         # Use the in-memory TTL cache for the directory walk.
 ---@field refresh? boolean             # With `ttl_seconds`: force a fresh walk.
+---@field link_resolver? Tasks.LinkResolver  # Settles bare `[[slug]]` wikilinks; one is made per call when absent (pass one to share its index over several calls).
+
+---Settle the bare-slug wikilinks of `tasks` (`tasks_nvim.wikilinks.resolve`) against the vault `root`. The vault's
+---folders are listed only when one of the tasks has such a link.
+---@param tasks Tasks.Task[]
+---@param root string
+---@param opts? Tasks.ScanOpts
+---@return Tasks.Task[]
+local function linked(tasks, root, opts)
+  for _, t in ipairs(tasks) do
+    if t.wikilinks then
+      return wikilinks.resolve(tasks, (opts and opts.link_resolver) or wikilinks.resolver(root))
+    end
+  end
+  return tasks
+end
 
 ---Markdown files below `dir`, sorted. A missing directory is an empty result,
 ---not an error: an area without tasks has no `tasks/` folder.
@@ -154,7 +171,7 @@ function M.area(area, opts)
       folder = entry.folder,
     })
   end
-  return tasks, errors
+  return linked(tasks, root, opts), errors
 end
 
 ---Every area's `ROADMAP/tasks/`, areas in name order.
@@ -168,8 +185,13 @@ function M.all(opts)
     return nil, err or "vault not found"
   end
   local all, all_errors = {}, {}
+  local area_opts = vim.tbl_extend(
+    "force",
+    opts,
+    { root = root, link_resolver = opts.link_resolver or wikilinks.resolver(root) }
+  )
   for _, area in ipairs(vault.areas(root)) do
-    local tasks, errors = M.area(area.name, vim.tbl_extend("force", opts, { root = root }))
+    local tasks, errors = M.area(area.name, area_opts)
     for _, t in ipairs(tasks or {}) do
       all[#all + 1] = t
     end
@@ -242,7 +264,7 @@ function M.backlog(area, opts)
       end
     end
   end
-  return tasks, all_errors
+  return linked(tasks, root, opts), all_errors
 end
 
 ---Every slug already used by a file below `<area>/Backlog/` (date prefix
@@ -345,11 +367,11 @@ function M.find(id, opts)
   if not path then
     return nil, folder --[[@as string]]
   end
-  return model.from_file(
+  local task = model.from_file(
     path,
     { area = area, location = "roadmap", slug = slug, folder = folder == true }
-  ),
-    nil
+  )
+  return linked({ task }, root, opts)[1], nil
 end
 
 -- What the last look at a finished file found: `path -> { sec, nsec, size, marked }`. A finished file hardly ever
@@ -458,7 +480,7 @@ function M.open_reminders(opts)
       end
     end
   end
-  return out, nil, errors
+  return linked(out, root, opts), nil, errors
 end
 
 ---The finished tasks that carry a `remind:` line, one area (`opts.area`) or all of them. The files are not parsed to
@@ -502,7 +524,7 @@ function M.backlog_reminders(opts)
       end
     end
   end
-  return out, nil, errors
+  return linked(out, root, opts), nil, errors
 end
 
 ---The finished task `<area>/<slug>` from `Backlog/`, whatever its date prefix.
@@ -522,11 +544,12 @@ function M.find_done(id, opts)
     local dir = vault.backlog_dir(root, area, bucket)
     for _, entry in ipairs(classify(dir, markdown_files(dir, opts or {}, root))) do
       if model.slug_of(entry.path, "backlog") == slug then
-        return model.from_file(entry.path, {
+        local task = model.from_file(entry.path, {
           area = area,
           location = "backlog",
           folder = entry.folder,
         })
+        return linked({ task }, root, opts)[1]
       end
     end
   end

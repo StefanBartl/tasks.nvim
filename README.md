@@ -1,5 +1,5 @@
 > **Alpha, not released yet.** The engine, the `:Tasks` command, the dashboard, the form and the headless CLI are
-> built and covered by specs (70 spec files). Developed and tested on Windows; the CI runs the specs on Linux, Windows
+> built and covered by specs (71 spec files). Developed and tested on Windows; the CI runs the specs on Linux, Windows
 > and macOS and is green on all three.
 > Pin a commit if you depend on this.
 
@@ -179,7 +179,7 @@ the file `done` says so and moves the task anyway.
 | [docs/BINDINGS.md](docs/BINDINGS.md) | commands, dashboard and form keys, autocommands |
 | [docs/ENGINE.md](docs/ENGINE.md) | file format, rules, checks, the CLI, limits |
 | [docs/CONTRACT.md](docs/CONTRACT.md) | the machine contract `tasks-export/1`: documents, rules, errors, how to write a reader |
-| [docs/OBSIDIAN.md](docs/OBSIDIAN.md) | the vault in Obsidian: what it sees, a Bases view and a Dataview query, rules for editing there |
+| [docs/OBSIDIAN.md](docs/OBSIDIAN.md) | the vault in Obsidian: what it sees, a Bases view and a Dataview query, rules for editing there, wikilinks between tasks |
 | `:help tasks_nvim` | the same in short |
 
 ## Tests

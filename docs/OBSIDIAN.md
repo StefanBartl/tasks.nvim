@@ -14,6 +14,7 @@ the CLI.**
 - [A Bases view: open tasks by priority](#a-bases-view-open-tasks-by-priority)
 - [A Dataview query](#a-dataview-query)
 - [Rules for editing in Obsidian](#rules-for-editing-in-obsidian)
+- [Wikilinks between tasks](#wikilinks-between-tasks)
 - [What is not there yet](#what-is-not-there-yet)
 
 ## Open the vault
@@ -50,7 +51,7 @@ inline (`tags: [obsidian, docs]`); Obsidian's Properties editor writes them as Y
 **Links of the index.** `ROADMAP/TASKS.md` links each task as a relative Markdown link, `[title](tasks/<slug>.md)`.
 Obsidian resolves relative Markdown links against the folder of the note, so every row opens its task, and the
 task shows the index under **Backlinks**. A task id (`<area>/<slug>`) in `blocked_by` or `after` is plain text,
-not a link (see [What is not there yet](#what-is-not-there-yet)).
+not a link; written as a wikilink (`"[[<slug>]]"`) it is one (see [Wikilinks between tasks](#wikilinks-between-tasks)).
 
 ## A Bases view: open tasks by priority
 
@@ -173,11 +174,38 @@ append its own markers (`✅ 2026-10-17`) when you tick one there. Either set a 
 format (a note of lists of cards with `kanban-plugin` frontmatter) and does not read task files as cards. A board
 of the open tasks by status is the board of the `tasks.nvim` app, or a Bases table grouped by `status`.
 
+## Wikilinks between tasks
+
+`blocked_by`, `after` and `plan` take Obsidian wikilinks as well as ids, so the graph and the backlinks show which task
+waits on which. Write them in quotes, as the Properties editor does (`blocked_by: "[[x]]"` unquoted is a nested YAML
+list and the file is `frontmatter-invalid`):
+
+```yaml
+blocked_by:
+  - "[[fs-watch-meldet-fehler]]"                 # the one task of that slug, in any area
+  - "[[lib.nvim/frontmatter-block-lists|Lists]]" # an id, with an alias
+after: "[[lib.nvim/ROADMAP/tasks/old-task]]"      # the vault path (what Obsidian writes when a name is not unique)
+plan: "[[desktop-ui]]"                            # a plan file
+```
+
+- **Read**: every form is the id it names; a heading (`#...`) and an alias (`|...`) are ignored, `.md` and the date
+  prefix of a finished file (`2026-10-01_<slug>`) too. `plan`, `next`, `estimate`, `list --ready` and the generated
+  index are exactly what plain ids give.
+- **A bare `[[<slug>]]`** must name one task or plan of the whole vault. A slug used in several areas is
+  `wikilink-ambiguous` in `check` (the candidates are named), one that exists nowhere `wikilink-dangling`; the task
+  then waits as on a blocker that does not exist. Give such a link the area (`[[<area>/<slug>]]`) or the path. A new
+  task of the same slug in another area makes an old `[[<slug>]]` ambiguous: `check` says so.
+- **Write**: `setup({ links = "wikilink" })` (headless CLI: `TASKS_LINKS=wikilink`) makes `:Tasks set`, `new`, the
+  dashboard's assign (`P`) and a move to another area write new references as `"[[<slug>]]"`, or, when the slug is
+  in several areas, as the vault path with the id as alias (`"[[<area>/ROADMAP/tasks/<slug>|<area>/<slug>]]"`), which
+  Obsidian resolves too. The default `plain` writes ids. A reference a file already holds keeps its form in both
+  modes, and a value you type as a wikilink is written as typed.
+- **Finishing** moves the file to `Backlog/` under a date prefix: Obsidian then shows `[[<slug>]]` to the finished
+  task as unresolved, `tasks.nvim` still reads it as the finished id. Wikilinks in `refs` (file paths) and in the
+  generated index are not part of this.
+
 ## What is not there yet
 
-- **Wikilinks in `blocked_by`, `after` and `plan`** (`[[area/slug]]`) are planned, so that Obsidian's graph and
-  backlinks show the dependencies between tasks. Until then these fields hold plain ids, and a `[[...]]` value there
-  is not understood as an id.
 - **YAML block lists** in the frontmatter are read and kept since `lib.nvim@9b7a7f3`; older versions of `lib.nvim`
   report such a file as `frontmatter-invalid`. Update `lib.nvim` if `check` does that after an edit in Obsidian.
 - Opening a task in Obsidian from Neovim (`obsidian://open`) is not part of `tasks.nvim`.

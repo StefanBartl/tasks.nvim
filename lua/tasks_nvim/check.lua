@@ -29,6 +29,9 @@
 ---    plan does not list, a target that exists nowhere; a broken plan file is reported with its own codes
 ---    (`plan-bad-status`, `plan-bad-area`, `plan-bad-target`, `plan-bad-gate`, ...)
 ---  - `bad-after`, `bad-order`, `after-self`, `after-dangling` (errors): the soft edge `after` and the sort hint `order`
+---  - `wikilink-dangling`, `wikilink-ambiguous` (errors): a bare `[[slug]]` in `blocked_by`, `after` or `plan` names no
+---    task or plan, or one in several areas (the candidates are named); a wikilink that resolves is checked as its id
+---    with the codes above
 ---  - `bad-value`, `bad-actor`: `value` is not 1..5, `actor` is not cdx, me or pair
 ---  - `actor-cdx-waits-on-me` (warning): a task written `actor: cdx` waits on an open task that only the human
 ---    can do (`model.actor` = `me`): the AI queue holds work that cannot start
@@ -49,6 +52,7 @@ local plans = require("tasks_nvim.plans")
 local index = require("tasks_nvim.index")
 local scan = require("tasks_nvim.scan")
 local vault = require("tasks_nvim.vault")
+local wikilinks = require("tasks_nvim.wikilinks")
 
 local M = {}
 
@@ -317,7 +321,8 @@ function M.run(opts)
   if not root then
     return nil, rerr
   end
-  local scan_opts = { root = root }
+  -- one index of the vault's slugs for every bare `[[slug]]` wikilink of this run, not one per area
+  local scan_opts = { root = root, link_resolver = wikilinks.resolver(root) }
   -- every finished-id question of this run: one listing per area's Backlog, not a walk per id
   local is_finished = scan.finished_lookup(scan_opts)
 
@@ -401,6 +406,15 @@ function M.run(opts)
       end
       for _, h in ipairs(t.hints or {}) do
         add(findings, "warn", h.code, t, h.msg)
+      end
+      for _, p in ipairs(t.link_problems or {}) do
+        local msg = #p.candidates == 0 and ("%s %s names no task or plan"):format(p.field, p.raw)
+          or ("%s %s names several tasks, write one of them: %s"):format(
+            p.field,
+            p.raw,
+            table.concat(p.candidates, ", ")
+          )
+        add(findings, "error", p.code, t, msg)
       end
       if t.status == "done" then
         add(

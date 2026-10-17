@@ -50,6 +50,7 @@
 ---@class Tasks.Opts
 ---@field vault string|nil          Vault folder (one folder per area). `nil`: `$TASKS_VAULT` is read.
 ---@field extra_areas string[]      Folders that are areas although they hold neither `ROADMAP/` nor `Backlog/`.
+---@field links "plain"|"wikilink"   How `set`, `new`, the dashboard and the moves write a task or plan reference (`blocked_by`, `after`, `plan`): `plain` ids (`<area>/<slug>`) or Obsidian wikilinks (`"[[<slug>]]"`, the vault path with the id as alias when the slug is in several areas). A value a file already holds keeps its form; both are always read. The headless CLI has no `setup`: `$TASKS_LINKS=wikilink` switches it there.
 ---@field dashboard Tasks.DashboardConfig
 ---@field staleness Tasks.StalenessConfig
 ---@field ci Tasks.CiConfig
@@ -66,6 +67,7 @@
 return {
   vault = nil,
   extra_areas = {},
+  links = "plain",
   dashboard = { watch = true, debounce_ms = 250, backend = "auto" },
   staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },
   ci = { lint_timeout_ms = 120000, trust_vault_lint = false },

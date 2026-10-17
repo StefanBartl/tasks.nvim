@@ -169,7 +169,8 @@ Without `--check`: (re)writes `ROADMAP/TASKS.md` of the area (all areas without 
 argument or with `--all`), only where the content changed, and removes a stale one when
 no task is open any more. With `--check`: writes nothing and runs the rule check of the
 engine -- missing or invalid frontmatter, unknown status/kind/prio/effort, dangling
-`blocked_by`, a stale or missing `TASKS.md`, a `done` task in `ROADMAP/`, an open one in
+`blocked_by`, a `[[slug]]` wikilink that names no task (`wikilink-dangling`) or one in several areas
+(`wikilink-ambiguous`, with the candidates), a stale or missing `TASKS.md`, a `done` task in `ROADMAP/`, an open one in
 `Backlog/`, ... -- and reports the findings (a notification, or a scratch buffer when
 there are more than ten). Errors are `ERROR` level, warnings `WARN`.
 
@@ -267,6 +268,18 @@ continues the value before it); an empty value removes the key (`kind=`). `statu
 refused: finishing moves the file, see `task done`. A *finished* task takes `remind=` only (a date, or `+7d` / `+2w` from today;
 an empty value takes the reminder away) and nothing else: the startup line names the finished tasks whose reminder is due, so
 there is a way to clear it. A buffer showing the file is reloaded when it has no unsaved changes.
+
+`blocked_by`, `after` and `plan` take ids and Obsidian wikilinks alike (`blocked_by=lib.nvim/a,[[b]]`,
+`plan=[[lib.nvim/big|Big]]`): `[[<area>/<slug>]]`, with an alias or a heading, the vault path of the file
+(`[[<area>/ROADMAP/tasks/<slug>]]`), and a bare `[[<slug>]]` when exactly one task or plan of the vault has that slug
+(several: refused with the candidates, `wikilink-ambiguous`; none: `wikilink-dangling`). A comma inside `[[...]]` does
+not split. What is written: an id the file already names keeps its form, a value you give as a wikilink is written as
+you gave it, and any other id in the form `setup({ links })` asks for -- `plain` (the default) writes `lib.nvim/a`,
+`wikilink` writes `"[[a]]"` when the slug is unique in the vault and `"[[lib.nvim/ROADMAP/tasks/a|lib.nvim/a]]"` (the
+path, which Obsidian resolves, with the id as alias) when it is not. The same rule holds for `:Tasks new` (`after=`,
+`plan=`), the dashboard's assign (`P`), a move to another area (a bare `[[slug]]` still fits and is kept, an
+`[[old-area/slug]]` is rewritten) and `done --unblock` (it only sets the status: no reference is rewritten). The
+headless CLI has no `setup`: `TASKS_LINKS=wikilink` switches it there.
 
 ### `:Tasks attach <id> <file> [name=<file name>]` / `task folderize <id>`
 

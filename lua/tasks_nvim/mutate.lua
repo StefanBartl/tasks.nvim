@@ -31,6 +31,7 @@ local model = require("tasks_nvim.model")
 local scan = require("tasks_nvim.scan")
 local steps = require("tasks_nvim.steps")
 local vault = require("tasks_nvim.vault")
+local wikilinks = require("tasks_nvim.wikilinks")
 
 local M = {}
 
@@ -355,22 +356,64 @@ local function string_list(value, what, strict)
   return out, nil
 end
 
+---The resolver of bare `[[slug]]` wikilinks for a patch: the caller's (`opts.link_resolver`), else one over the vault
+---`opts` names (nil without a vault: such a link is then refused with a reason).
+---@param opts? table
+---@return Tasks.LinkResolver|nil
+local function link_resolver(opts)
+  if opts and opts.link_resolver then
+    return opts.link_resolver
+  end
+  local root = vault.root(opts)
+  return root and wikilinks.resolver(root) or nil
+end
+
+---A list of task ids. An item may be an id or an Obsidian wikilink (`tasks_nvim.wikilinks`); a wikilink is read as
+---the id it names and remembered in `typed` (id -> the link as given), so it is written the way it was typed.
 ---@param value any
+---@param what? string
+---@param resolver? Tasks.LinkResolver
 ---@return string[]|nil ids
----@return string|nil err
-local function id_list(value, what)
+---@return string|table<string, string> err_or_typed  # the message, or `typed` when the list is good
+local function id_list(value, what, resolver)
   what = what or "blocked_by"
+  if type(value) == "string" and value:find("[[", 1, true) then
+    value = wikilinks.split(value)
+  end
   local list, err = string_list(value, what)
   if not list then
-    return nil, err
+    return nil, err --[[@as string]]
   end
-  for _, id in ipairs(list) do
-    local _, slug, id_err = vault.parse_id(id)
-    if id_err or not slug then
-      return nil, what .. ": " .. (id_err or ("expected <area>/<slug>, got " .. id))
+  local typed = {}
+  for i, raw in ipairs(list) do
+    local id, id_err = wikilinks.typed_id(raw, what, resolver)
+    if not id then
+      return nil, id_err --[[@as string]]
     end
+    if wikilinks.is_wikilink(raw) and typed[id] == nil then
+      typed[id] = raw
+    end
+    list[i] = id
   end
-  return list, nil
+  return list, typed
+end
+
+---A `plan:` value: a plan id or a wikilink to one (see `id_list`).
+---@param value any
+---@param resolver? Tasks.LinkResolver
+---@return string|nil id
+---@return string|table<string, string> err_or_typed
+local function plan_ref(value, resolver)
+  local text = vim.trim(tostring(value))
+  local q = text:sub(1, 1)
+  if (q == '"' or q == "'") and #text >= 2 and text:sub(-1) == q then
+    text = vim.trim(text:sub(2, -2))
+  end
+  local id, err = wikilinks.typed_id(text, "plan", resolver)
+  if not id then
+    return nil, err --[[@as string]]
+  end
+  return id, wikilinks.is_wikilink(text) and { [id] = text } or {}
 end
 
 ---A list of categories (`model.CATEGORIES`), each checked.
@@ -422,13 +465,22 @@ local SETTABLE = {
 M.SETTABLE = SETTABLE
 
 ---Check and normalise a `set` patch into an ordered list of `{ key, value }`.
----A value of `REMOVE` deletes the key (not for `title` and `status`).
+---A value of `REMOVE` deletes the key (not for `title` and `status`). `blocked_by`, `after` and `plan` come out as
+---ids (a wikilink is resolved, a bare `[[slug]]` against the vault of `opts`); `result.typed[key]` names the ids that
+---were given as wikilinks (id -> the link), for the writer.
 ---@param patch table<string, any>
----@param opts? { allow_unknown?: boolean }
+---@param opts? { allow_unknown?: boolean, root?: string, link_resolver?: Tasks.LinkResolver }
 ---@return table[]|nil pairs
 ---@return string|nil err
 local function normalize_patch(patch, opts)
-  local result = {}
+  local result = { typed = {} }
+  local resolver_memo
+  local function resolver()
+    if resolver_memo == nil then
+      resolver_memo = link_resolver(opts) or false
+    end
+    return resolver_memo or nil
+  end
   local known = {}
   for _, key in ipairs(SETTABLE) do
     known[key] = true
@@ -558,10 +610,17 @@ local function normalize_patch(patch, opts)
         result[#result + 1] = { key, list }
       end
     elseif key == "blocked_by" or key == "after" then
-      local ids, err = id_list(value, key)
-      if not ids then
-        return nil, err
+      local needs = type(value) == "string" and value:find("[[", 1, true)
+      if type(value) == "table" then
+        for _, item in ipairs(value) do
+          needs = needs or (type(item) == "string" and item:find("[[", 1, true))
+        end
       end
+      local ids, typed = id_list(value, key, needs and resolver() or nil)
+      if not ids then
+        return nil, typed --[[@as string]]
+      end
+      result.typed[key] = typed
       if #ids == 0 then
         result[#result + 1] = { key, M.REMOVE }
       elseif #ids == 1 then
@@ -570,11 +629,13 @@ local function normalize_patch(patch, opts)
         result[#result + 1] = { key, ids }
       end
     elseif key == "plan" then
-      local _, plan_slug, plan_err = vault.parse_id(tostring(value))
-      if plan_err or not plan_slug then
-        return nil, "plan: " .. (plan_err or ("expected <area>/<slug>, got " .. tostring(value)))
+      local needs = tostring(value):find("[[", 1, true)
+      local id, typed = plan_ref(value, needs and resolver() or nil)
+      if not id then
+        return nil, typed --[[@as string]]
       end
-      result[#result + 1] = { key, vim.trim(tostring(value)) }
+      result.typed[key] = typed
+      result[#result + 1] = { key, id }
     elseif key == "phase" then
       if not vault.valid_slug(vim.trim(tostring(value))) then
         return nil, "phase must be a kebab-case word, got '" .. tostring(value) .. "'"
@@ -628,9 +689,43 @@ local function keep_block_lists(text, pairs_)
   return out
 end
 
+---The references of `pairs_` (`blocked_by`, `after`, `plan`, as ids) in the form they are written: an id the file
+---(`text`) already names keeps its form there, one given as a wikilink (`typed`) keeps that, any other is written in
+---`mode` (`tasks_nvim.wikilinks.forms`). A plain-id file in `plain` mode is not touched at all.
+---@param text string
+---@param pairs_ table[]
+---@param typed table<string, table<string, string>>
+---@param mode "plain"|"wikilink"
+---@param resolver? Tasks.LinkResolver
+---@return table[]
+local function link_forms(text, pairs_, typed, mode, resolver)
+  local parsed = fm.parse(text)
+  local meta = parsed and parsed.meta or {}
+  local out = {}
+  for i, kv in ipairs(pairs_) do
+    local key, value = kv[1], kv[2]
+    if (key == "blocked_by" or key == "after" or key == "plan") and value ~= M.REMOVE then
+      local form = wikilinks.forms(meta[key], mode, resolver, typed[key])
+      if type(value) == "table" then
+        local list = {}
+        for j, id in ipairs(value) do
+          list[j] = form(id)
+        end
+        out[i] = { key, list }
+      else
+        out[i] = { key, form(value) }
+      end
+    else
+      out[i] = kv
+    end
+  end
+  return out
+end
+
 ---Whether `patch` would be accepted by `set`, and in what shape: the validation without a task and without a write.
+---A bare `[[slug]]` wikilink is resolved against the vault of `opts` (`root`, else the configured one).
 ---@param patch table<string, any>
----@param opts? { allow_unknown?: boolean }
+---@param opts? { allow_unknown?: boolean, root?: string, link_resolver?: Tasks.LinkResolver }
 ---@return table[]|nil pairs  # ordered `{ key, value }`, `REMOVE` for a key to delete
 ---@return string|nil err
 function M.check_patch(patch, opts)
@@ -703,11 +798,18 @@ function M.new(area, opts)
         table.concat(model.ACTORS, ", ")
       )
   end
+  -- `after` and `plan` as ids (wikilinks resolved), written in the form `links` asks for (see `set`)
+  local resolver = opts.link_resolver or wikilinks.resolver(root)
+  local mode = wikilinks.mode(opts)
   local after
   if opts.after ~= nil then
-    local ids, aerr = id_list(opts.after, "after")
+    local ids, typed = id_list(opts.after, "after", resolver)
     if not ids then
-      return nil, aerr
+      return nil, typed --[[@as string]]
+    end
+    local form = wikilinks.forms(nil, mode, resolver, typed --[[@as table<string, string>]])
+    for i, id in ipairs(ids) do
+      ids[i] = form(id)
     end
     after = #ids > 0 and ids or nil
   end
@@ -719,11 +821,13 @@ function M.new(area, opts)
         "order must be a number (2.5 slots a task between 2 and 3), got " .. tostring(opts.order)
     end
   end
+  local plan
   if opts.plan ~= nil then
-    local _, plan_slug, plan_err = vault.parse_id(tostring(opts.plan))
-    if plan_err or not plan_slug then
-      return nil, "plan: " .. (plan_err or ("expected <area>/<slug>, got " .. tostring(opts.plan)))
+    local id, typed = plan_ref(opts.plan, resolver)
+    if not id then
+      return nil, typed --[[@as string]]
     end
+    plan = wikilinks.forms(nil, mode, resolver, typed --[[@as table<string, string>]])(id)
   end
   if opts.phase ~= nil and not vault.valid_slug(tostring(opts.phase)) then
     return nil, "phase must be a kebab-case word, got '" .. tostring(opts.phase) .. "'"
@@ -807,7 +911,7 @@ function M.new(area, opts)
       actor = opts.actor,
       after = after,
       order = order,
-      plan = opts.plan,
+      plan = plan,
       phase = opts.phase,
       tags = tags,
       category = category,
@@ -924,6 +1028,13 @@ local function precondition(task, text, opts)
       slug = task.slug,
       folder = task.folder,
     })
+    if current.wikilinks then
+      -- a `plan: "[[slug]]"` is compared as the id the caller was shown, not as the unresolved link
+      local resolver = link_resolver(opts)
+      if resolver then
+        wikilinks.resolve({ current }, resolver)
+      end
+    end
     local actual = current[ex.key]
     if tostring(actual) ~= tostring(ex.value) then
       return ("%s changed since the list was read (%s is now %s, not %s); press r to rescan"):format(
@@ -948,7 +1059,11 @@ end
 ---other keys of the file are never touched, so a change of another key made meanwhile is kept.
 ---@param id string
 ---@param patch table<string, any>
----@param opts? { root?: string, today?: string, index?: boolean, allow_unknown?: boolean, if_match?: string, expect?: { key: string, value: any }, dry_run?: boolean }
+---
+---`blocked_by`, `after` and `plan` take ids and wikilinks (`tasks_nvim.wikilinks`). What is written: an id the file
+---already names keeps its form, a value given as a wikilink is written as given, any other id in the form
+---`opts.links` / `setup({ links })` / `$TASKS_LINKS` asks for (`plain` ids by default).
+---@param opts? { root?: string, today?: string, index?: boolean, allow_unknown?: boolean, if_match?: string, expect?: { key: string, value: any }, dry_run?: boolean, links?: "plain"|"wikilink", link_resolver?: Tasks.LinkResolver }
 ---@return { id: string, path: string, changed: boolean, etag_before?: string, etag_after?: string, before?: table<string, any>, index?: Tasks.IndexResult, index_err?: string }|nil result
 ---@return string|nil err
 ---@return table|nil info  # `{ code = "conflict"|"locked"|"lock_stuck"|"forbidden"|"io", ... }` when there is a reason to name
@@ -976,9 +1091,18 @@ function M.set(id, patch, opts)
   if not model.is_date(today) then
     return nil, "today is not a date (YYYY-MM-DD): " .. tostring(today)
   end
-  local pairs_, perr = normalize_patch(patch, opts)
+  -- one index of the vault's slugs for the wikilinks of the patch and of the file (built only when one is bare)
+  local resolver = opts.link_resolver or wikilinks.resolver(root)
+  local pairs_, perr =
+    normalize_patch(patch, vim.tbl_extend("force", opts, { link_resolver = resolver }))
   if not pairs_ then
     return nil, perr
+  end
+  local mode = wikilinks.mode(opts)
+  ---@param cur string
+  ---@return table[]
+  local function written(cur)
+    return keep_block_lists(cur, link_forms(cur, pairs_, pairs_.typed, mode, resolver))
   end
 
   -- A link in the vault is a way out of it: `fm.update` would write through it into a file outside the vault.
@@ -999,7 +1123,7 @@ function M.set(id, patch, opts)
   if cerr then
     return nil, cerr, cinfo
   end
-  local probe, uerr = fm.update_text(text, keep_block_lists(text, pairs_))
+  local probe, uerr = fm.update_text(text, written(text))
   if not probe then
     return nil, "cannot update " .. task.path .. ": " .. tostring(uerr)
   end
@@ -1051,7 +1175,7 @@ function M.set(id, patch, opts)
       }),
       keys
     )
-    local wrote, wr_err = fm.update(task.path, keep_block_lists(cur, pairs_))
+    local wrote, wr_err = fm.update(task.path, written(cur))
     if not wrote then
       return nil, wr_err
     end

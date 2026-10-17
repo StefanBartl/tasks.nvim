@@ -21,6 +21,7 @@ local fm = require("lib.nvim.markdown.frontmatter")
 local fsio = require("tasks_nvim.fsio")
 local steps = require("tasks_nvim.steps")
 local vault = require("tasks_nvim.vault")
+local wikilinks = require("tasks_nvim.wikilinks")
 
 local M = {}
 
@@ -696,21 +697,34 @@ function M.parse_text(text, ctx)
       end
     end
 
-    task.blocked_by = as_list(meta.blocked_by, "blocked_by", bad)
-    for _, ref in ipairs(task.blocked_by) do
-      local _, ref_slug, id_err = vault.parse_id(ref)
-      if id_err or not ref_slug then
-        bad("bad-blocked-by", "blocked_by: " .. (id_err or ("expected <area>/<slug>, got " .. ref)))
+    -- A reference is an id or an Obsidian wikilink (`tasks_nvim.wikilinks`): `[[<area>/<slug>]]` is the id here, a
+    -- bare `[[<slug>]]` needs the vault and is left for `scan` to settle (`task.wikilinks`).
+    ---@type { field: string, index?: integer, slug: string, raw: string }[]
+    local pending = {}
+    ---@param field "blocked_by"|"after"
+    ---@param code string
+    ---@return string[]
+    local function references(field, code)
+      local list = as_list(meta[field], field, bad)
+      for i, ref in ipairs(list) do
+        local form, value = wikilinks.read(ref)
+        if form == "id" then
+          list[i] = value
+        elseif form == "slug" then
+          pending[#pending + 1] = { field = field, index = i, slug = value, raw = ref }
+        elseif form == "bad" then
+          bad(code, field .. ": " .. value)
+        else
+          local _, ref_slug, id_err = vault.parse_id(ref)
+          if id_err or not ref_slug then
+            bad(code, field .. ": " .. (id_err or ("expected <area>/<slug>, got " .. ref)))
+          end
+        end
       end
+      return list
     end
-
-    task.after = as_list(meta.after, "after", bad)
-    for _, ref in ipairs(task.after) do
-      local _, ref_slug, id_err = vault.parse_id(ref)
-      if id_err or not ref_slug then
-        bad("bad-after", "after: " .. (id_err or ("expected <area>/<slug>, got " .. ref)))
-      end
-    end
+    task.blocked_by = references("blocked_by", "bad-blocked-by")
+    task.after = references("after", "bad-after")
     if meta.order ~= nil then
       local n = tonumber(meta.order)
       if n and n == n and n > -math.huge and n < math.huge then
@@ -726,13 +740,23 @@ function M.parse_text(text, ctx)
 
     local plan_ref = as_text(meta.plan, "plan", bad)
     if plan_ref then
-      local _, plan_slug, plan_err = vault.parse_id(plan_ref)
-      if plan_err or not plan_slug then
-        bad("bad-plan", "plan: " .. (plan_err or ("expected <area>/<slug>, got " .. plan_ref)))
+      local form, value = wikilinks.read(plan_ref)
+      if form == "id" then
+        task.plan = value
+      elseif form == "slug" then
+        pending[#pending + 1] = { field = "plan", slug = value, raw = plan_ref }
+      elseif form == "bad" then
+        bad("bad-plan", "plan: " .. value)
       else
-        task.plan = plan_ref
+        local _, plan_slug, plan_err = vault.parse_id(plan_ref)
+        if plan_err or not plan_slug then
+          bad("bad-plan", "plan: " .. (plan_err or ("expected <area>/<slug>, got " .. plan_ref)))
+        else
+          task.plan = plan_ref
+        end
       end
     end
+    task.wikilinks = #pending > 0 and pending or nil
     local phase = as_text(meta.phase, "phase", bad)
     if phase then
       if vault.valid_slug(phase) then
