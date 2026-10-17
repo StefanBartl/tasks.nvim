@@ -682,6 +682,35 @@ return function(H)
   eq(target_plan.ok, true)
   local plan_file = root .. "/" .. target_plan.file
   has(H.read(plan_file), "target: lib.nvim/alpha")
+  -- a task that names it in after and refs, so every kind of reference a check can find is there
+  local follower_path = root .. "/lib.nvim/ROADMAP/tasks/follower.md"
+  F.task(
+    H,
+    root,
+    "lib.nvim",
+    "follower",
+    F.meta("Follower", "open", { { "after", "[lib.nvim/alpha]" }, { "refs", "[lib.nvim/alpha]" } })
+  )
+
+  ---The findings of `check` that say a reference points nowhere.
+  ---@return string[]  # `<code> <id>`, sorted
+  local function dangling()
+    local res = assert(require("tasks_nvim.check").run({ root = root }))
+    local out = {}
+    for _, f in ipairs(res.findings) do
+      if
+        f.code == "blocked-by-dangling"
+        or f.code == "after-dangling"
+        or f.code == "plan-target-unknown"
+      then
+        out[#out + 1] = f.code .. " " .. tostring(f.id)
+      end
+    end
+    table.sort(out)
+    return out
+  end
+  eq(dangling(), {}, "nothing dangles before the move")
+
   local with_plan = one({ { op = "move_area", id = "lib.nvim/alpha", to_area = "cascade.nvim" } })
   eq(with_plan.outcome, "moved")
   has(H.read(plan_file), "target: cascade.nvim/alpha")
@@ -694,8 +723,14 @@ return function(H)
     ),
     true
   )
+  eq(find("lib.nvim/follower").after, { "cascade.nvim/alpha" })
+  eq(find("lib.nvim/follower").refs, { "cascade.nvim/alpha" })
+  -- acceptance of the move (stage 2): after it, check finds no reference that points nowhere
+  eq(dangling(), {}, "check finds nothing dangling after the move")
   one({ with_plan.inverse })
   has(H.read(plan_file), "target: lib.nvim/alpha")
+  eq(dangling(), {}, "nor after the move back")
+  os.remove(follower_path)
 
   -- a folder task moves as a whole, with what lies beside its file
   local folder_dir = root .. "/lib.nvim/ROADMAP/tasks/folio"
@@ -723,6 +758,83 @@ return function(H)
     eq(everything(), state_before, "a failed move leaves every byte as it was")
     eq(find("lib.nvim/alpha").area, "lib.nvim")
     eq(find("lib.nvim/beta").blocked_by, { "lib.nvim/alpha" })
+  end
+
+  -- a step after the file moved fails and the rollback cannot put the file back: the answer says
+  -- `rollback incomplete` and names the path, and the text stays where it is (the new file holds it)
+  do
+    local lock = root .. "/lib.nvim/ROADMAP/tasks/.beta.md.lock"
+    local alpha_path = find("lib.nvim/alpha").path
+    local alpha_text = H.read(alpha_path)
+    local real_create = fsio.create_exclusive
+    vim.fn.mkdir(lock, "p")
+    fsio.create_exclusive = function(path, content)
+      if vim.fs.normalize(path) == vim.fs.normalize(alpha_path) then
+        return false, "stubbed restore failure"
+      end
+      return real_create(path, content)
+    end
+    local okc, failed =
+      pcall(one, { { op = "move_area", id = "lib.nvim/alpha", to_area = "cascade.nvim" } })
+    fsio.create_exclusive = real_create
+    vim.fn.delete(lock, "d")
+    ok(okc, tostring(failed))
+    eq(failed.ok, false)
+    eq(failed.error.code, "lock_stuck", "the reason of the failing step keeps its code")
+    has(failed.error.message, "rollback incomplete")
+    has(
+      failed.error.message,
+      "lib.nvim/ROADMAP/tasks/alpha.md",
+      "the path that could not be restored"
+    )
+    has(
+      failed.error.message,
+      "cascade.nvim/ROADMAP/tasks/alpha.md",
+      "and the file that holds the text"
+    )
+    local stranded = root .. "/cascade.nvim/ROADMAP/tasks/alpha.md"
+    has(H.read(stranded), "title: Alpha", "the text is not lost")
+    -- put the vault back by hand for the specs that follow
+    H.write(alpha_path, alpha_text)
+    os.remove(stranded)
+    eq(find("lib.nvim/alpha").area, "lib.nvim")
+  end
+
+  -- the same for a folder task: the folder moved, writing its file failed, and the folder cannot be
+  -- moved back; the answer names it
+  do
+    local folio_dir = root .. "/lib.nvim/ROADMAP/tasks/folio"
+    local dst_dir = root .. "/cascade.nvim/ROADMAP/tasks/folio"
+    local real_rename, real_write = fsio.rename, fsio.write_atomic
+    fsio.write_atomic = function(path, content)
+      if vim.fs.normalize(path) == vim.fs.normalize(dst_dir .. "/folio.md") then
+        return false, "stubbed write failure"
+      end
+      return real_write(path, content)
+    end
+    fsio.rename = function(from, to)
+      if vim.fs.normalize(from) == vim.fs.normalize(dst_dir) then
+        return false, "stubbed rename-back failure"
+      end
+      return real_rename(from, to)
+    end
+    local okc, failed =
+      pcall(one, { { op = "move_area", id = "lib.nvim/folio", to_area = "cascade.nvim" } })
+    fsio.rename, fsio.write_atomic = real_rename, real_write
+    ok(okc, tostring(failed))
+    eq(failed.ok, false)
+    has(failed.error.message, "stubbed write failure")
+    has(failed.error.message, "rollback incomplete")
+    has(
+      failed.error.message,
+      "cascade.nvim/ROADMAP/tasks/folio",
+      "the folder that could not be moved back"
+    )
+    eq(H.read(dst_dir .. "/asset.txt"), "beside the task", "the folder keeps what lay in it")
+    -- put the vault back by hand
+    ok(real_rename(dst_dir, folio_dir))
+    H.write(folio_dir .. "/folio.md", F.text(F.meta("Folio", "open")))
+    eq(find("lib.nvim/folio").area, "lib.nvim")
   end
 
   -- ── a dry run writes nothing and says what it would do ──────────────────────
