@@ -1,5 +1,5 @@
 ---@module 'tasks_nvim.wikilinks'
----@brief Obsidian wikilinks in `blocked_by`, `after` and `plan`: read them as task ids, write ids as wikilinks on request.
+---@brief Obsidian wikilinks in `blocked_by`, `after`, `plan` and a plan file's `target`: read them as task ids, write ids as wikilinks on request.
 ---@description
 --- A reference to a task or a plan is a plain id (`<area>/<slug>`) or, as Obsidian writes it, a wikilink in quotes:
 ---
@@ -292,7 +292,7 @@ end
 
 ---@class Tasks.LinkProblem
 ---@field code "wikilink-dangling"|"wikilink-ambiguous"
----@field field string           # `blocked_by`, `after` or `plan`
+---@field field string           # `blocked_by`, `after` or `plan` (a task's), `target` (a plan file's)
 ---@field raw string             # the value as written
 ---@field candidates string[]    # the ids the slug names (empty for a dangling one)
 

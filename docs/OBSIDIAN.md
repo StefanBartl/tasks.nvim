@@ -200,6 +200,10 @@ plan: "[[desktop-ui]]"                            # a plan file
   in several areas, as the vault path with the id as alias (`"[[<area>/ROADMAP/tasks/<slug>|<area>/<slug>]]"`), which
   Obsidian resolves too. The default `plain` writes ids. A reference a file already holds keeps its form in both
   modes, and a value you type as a wikilink is written as typed.
+- **Plan files**: the `target` of a plan file (`target: "[[<slug>]]"`) takes the same forms and is read as its id
+  (`check`: `wikilink-dangling` / `wikilink-ambiguous` there too). `plan-new --target=[[<slug>]]` writes it as typed,
+  an id follows `links`; a move rewrites a target that named the old id and keeps a bare `[[<slug>]]`, and `new`
+  names a plan whose `[[<slug>]]` target the new slug makes ambiguous.
 - **Finishing** moves the file to `Backlog/` under a date prefix: Obsidian then shows `[[<slug>]]` to the finished
   task as unresolved, `tasks.nvim` still reads it as the finished id. Wikilinks in `refs` (file paths) and in the
   generated index are not part of this.

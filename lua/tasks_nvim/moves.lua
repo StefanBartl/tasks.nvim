@@ -24,6 +24,7 @@ local mutate = require("tasks_nvim.mutate")
 local plans = require("tasks_nvim.plans")
 local scan = require("tasks_nvim.scan")
 local vault = require("tasks_nvim.vault")
+local wikilinks = require("tasks_nvim.wikilinks")
 
 local M = {}
 
@@ -340,9 +341,17 @@ function M.move(id, to_area, opts)
         end
       end
     end
+    -- the target in the form it has (a bare `[[slug]]` still names the moved task and stays; an id or an
+    -- `[[<area>/<slug>]]` names the old one and is written anew, in the form `links` asks for), like `set` does
+    local resolver = wikilinks.resolver(root)
+    local mode = wikilinks.mode()
     for _, file in ipairs(plan_files) do
       local wrote, werr = fsio.with_lock(file.path, function()
-        return fm.update(file.path, { { "target", report.new_id }, { "updated", today } })
+        local text = fsio.read(file.path)
+        local parsed = text and fm.parse(text)
+        local current = parsed and parsed.meta and parsed.meta.target
+        local value = wikilinks.forms(current, mode, resolver)(report.new_id)
+        return fm.update(file.path, { { "target", value }, { "updated", today } })
       end)
       if not wrote then
         return nil, "cannot rewrite " .. file.path .. ": " .. tostring(werr)

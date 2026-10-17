@@ -29,8 +29,8 @@
 ---    plan does not list, a target that exists nowhere; a broken plan file is reported with its own codes
 ---    (`plan-bad-status`, `plan-bad-area`, `plan-bad-target`, `plan-bad-gate`, ...)
 ---  - `bad-after`, `bad-order`, `after-self`, `after-dangling` (errors): the soft edge `after` and the sort hint `order`
----  - `wikilink-dangling`, `wikilink-ambiguous` (errors): a bare `[[slug]]` in `blocked_by`, `after` or `plan` names no
----    task or plan, or one in several areas (the candidates are named); a wikilink that resolves is checked as its id
+---  - `wikilink-dangling`, `wikilink-ambiguous` (errors): a bare `[[slug]]` in `blocked_by`, `after` or `plan` (or
+---    in the `target` of a plan file) names no task or plan, or one in several areas (the candidates are named); a wikilink that resolves is checked as its id
 ---    with the codes above
 ---  - `bad-value`, `bad-actor`: `value` is not 1..5, `actor` is not cdx, me or pair
 ---  - `actor-cdx-waits-on-me` (warning): a task written `actor: cdx` waits on an open task that only the human
@@ -238,6 +238,20 @@ local function plan_findings(findings, open_ids, names, scan_opts, is_finished)
   end
 end
 
+---The message of a bare `[[slug]]` reference that names no id or several (a task's or a plan file's).
+---@param p Tasks.LinkProblem
+---@return string
+local function link_problem_message(p)
+  if #p.candidates == 0 then
+    return ("%s %s names no task or plan"):format(p.field, p.raw)
+  end
+  return ("%s %s names several tasks, write one of them: %s"):format(
+    p.field,
+    p.raw,
+    table.concat(p.candidates, ", ")
+  )
+end
+
 ---Plan files and the tasks that name them (`plan:`, `phase:`), reported for the checked areas. A task that names a
 ---plan nobody wrote is an error (a typo); a task outside the plan's `areas`, a stage the plan does not list and a
 ---target that exists nowhere are warnings.
@@ -258,6 +272,9 @@ local function plan_file_findings(findings, open_ids, names, scan_opts, is_finis
     if checked[file.area] then
       for i, msg in ipairs(file.errors) do
         add(findings, "error", file.error_codes[i] or "frontmatter-invalid", file, msg)
+      end
+      for _, p in ipairs(file.link_problems or {}) do
+        add(findings, "error", p.code, file, link_problem_message(p))
       end
       if file.target and not open_ids[file.target] and not is_finished(file.target) then
         add(
@@ -408,13 +425,7 @@ function M.run(opts)
         add(findings, "warn", h.code, t, h.msg)
       end
       for _, p in ipairs(t.link_problems or {}) do
-        local msg = #p.candidates == 0 and ("%s %s names no task or plan"):format(p.field, p.raw)
-          or ("%s %s names several tasks, write one of them: %s"):format(
-            p.field,
-            p.raw,
-            table.concat(p.candidates, ", ")
-          )
-        add(findings, "error", p.code, t, msg)
+        add(findings, "error", p.code, t, link_problem_message(p))
       end
       if t.status == "done" then
         add(

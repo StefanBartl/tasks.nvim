@@ -269,7 +269,7 @@ finished task with the same id under another date, is refused.
 | `index-stale`, `index-error` | `ROADMAP/TASKS.md` is missing, outdated or left over / could not be checked |
 | `bad-blocked-by`, `blocked-by-self`, `blocked-by-dangling` | the blocker is malformed, the task itself, or exists nowhere |
 | `blocked-by-done` (warning) | the blocker is already finished |
-| `wikilink-dangling`, `wikilink-ambiguous` | a bare `[[slug]]` in `blocked_by`, `after` or `plan` names no task or plan, or one in several areas (the candidates are named); a wikilink that names one id is checked as that id with the codes of the field |
+| `wikilink-dangling`, `wikilink-ambiguous` | a bare `[[slug]]` in `blocked_by`, `after` or `plan` (or a plan file's `target`) names no task or plan, or one in several areas (the candidates are named); a wikilink that names one id is checked as that id with the codes of the field |
 | `done-in-roadmap` | `status: done` in `ROADMAP/tasks/` |
 | `open-in-backlog` | a task file in `Backlog/` whose status is not `done` |
 | `duplicate-id` | an open and a finished task share an id |

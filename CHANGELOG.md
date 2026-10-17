@@ -7,6 +7,14 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Plan files: `target` takes Obsidian wikilinks like `blocked_by` / `after` / `plan` of a task (`"[[<slug>]]"`,
+  `"[[<area>/<slug>|Alias]]"`, the vault path): read as its id (`plans.parse` with `ctx.link_resolver`; `area`, `all`,
+  `find` pass one over the vault), a bare slug of no or several ids is `wikilink-dangling` / `wikilink-ambiguous` in
+  `check` (`plan.link_problems`). `plan-new --target=` resolves a wikilink and writes it as typed, an id in the form
+  `links` asks for; a move rewrites a target that named the old id through `wikilinks.forms` (a bare `[[<slug>]]`
+  that still fits is kept); `new` names plans whose `[[<slug>]]` target the new slug makes ambiguous. Spec:
+  `tasks_wikilinks_spec`.
+
 - `new` warns when the new slug makes existing bare `[[slug]]` wikilinks ambiguous: the slug named exactly one task of
   another area before, and the tasks whose `blocked_by` / `after` / `plan` name it as `[[slug]]` are named at once -
   the new task too, when its own link to the twin was written as `[[slug]]` (CLI: a `warn:` line on stderr; `:Tasks new` and the form: a warning). `mutate.new` returns them as `ambiguous`
