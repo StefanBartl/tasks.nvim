@@ -1,5 +1,5 @@
 > **Alpha, not released yet.** The engine, the `:Tasks` command, the dashboard, the form and the headless CLI are
-> built and covered by specs (71 spec files). Developed and tested on Windows; the CI runs the specs on Linux, Windows
+> built and covered by specs (72 spec files). Developed and tested on Windows; the CI runs the specs on Linux, Windows
 > and macOS and is green on all three.
 > Pin a commit if you depend on this.
 

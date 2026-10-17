@@ -109,7 +109,7 @@ A wrong key or value is ignored with a message and listed in
   :Tasks list [{area}|all] [filters] [--sort=] [--to=] [--format=] [--force]
       Open tasks: a dashboard, or a table to a buffer, the clipboard, the
       quickfix list, a file, a browser preview. An existing file is only
-      overwritten with `--force`.
+      overwritten after a yes in a dialog; `--force` skips the question.
       Filters: --status= --prio= --effort= --kind= --category= --severity=
                --value=4,5|>=4 --actor=cdx|me|pair|none
                --tag= --stale=<days>|refs --blocked --reminders
