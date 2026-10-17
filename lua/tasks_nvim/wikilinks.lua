@@ -335,7 +335,7 @@ end
 ---frontmatter (`task.meta`), so it does not matter whether the scan could resolve the link. Sorted, each id once.
 ---@param tasks Tasks.Task[]
 ---@param slug string
----@param skip? string  # an id to leave out (the task that was just created)
+---@param skip? string  # an id to leave out
 ---@return string[]
 function M.slug_referrers(tasks, slug, skip)
   local out, seen = {}, {}

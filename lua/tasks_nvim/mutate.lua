@@ -738,7 +738,8 @@ end
 -- ── new ──────────────────────────────────────────────────────────────────────
 
 ---The bare `[[slug]]` links the new task `id` made ambiguous: when its slug named exactly one other id before, every
----task that names that slug as `[[slug]]` pointed there and is `wikilink-ambiguous` now. Nil when there is none (the
+---task that names that slug as `[[slug]]` pointed there and is `wikilink-ambiguous` now (the new task itself
+---included). Nil when there is none (the
 ---slug is new to the vault, or it was in several areas already and those links were ambiguous before).
 ---@param root string
 ---@param resolver Tasks.LinkResolver
@@ -756,8 +757,10 @@ local function new_ambiguity(root, resolver, id, slug)
   if #others ~= 1 then
     return nil
   end
-  local tasks = scan.all({ root = root })
-  local referrers = wikilinks.slug_referrers(tasks or {}, slug, id)
+  -- the new task counts too: a link it was given while the slug still named one id (`after = <the twin>` in
+  -- `wikilink` mode is written as `[[slug]]`) is ambiguous now like any other
+  local tasks = scan.all({ root = root, link_resolver = resolver })
+  local referrers = wikilinks.slug_referrers(tasks or {}, slug)
   if #referrers == 0 then
     return nil
   end
