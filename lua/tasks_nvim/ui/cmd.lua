@@ -1188,6 +1188,9 @@ function M.task_new_form(given)
           if res.index_err then
             notify.warn("task created, but the index was not updated: " .. res.index_err)
           end
+          if res.ambiguous then
+            notify.warn(require("tasks_nvim.wikilinks").ambiguity_message(res.ambiguous))
+          end
           notify.info(("created %s"):format(res.id))
           open_file(res.path)
           if with_assets then
@@ -1328,6 +1331,9 @@ function M.task_new(ctx)
     end
     if res.index_err then
       notify.warn("task created, but the index was not updated: " .. res.index_err)
+    end
+    if res.ambiguous then
+      notify.warn(require("tasks_nvim.wikilinks").ambiguity_message(res.ambiguous))
     end
     notify.info(("created %s"):format(res.id))
     open_file(res.path)

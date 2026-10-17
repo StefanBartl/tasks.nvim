@@ -1151,6 +1151,9 @@ function commands.new(ctx)
     return 1
   end
   ctx.say(("created\t%s\t%s"):format(res.id, res.path))
+  if res.ambiguous then
+    ctx.warn("warn: " .. require("tasks_nvim.wikilinks").ambiguity_message(res.ambiguous))
+  end
   report_index(ctx, res)
   return 0
 end

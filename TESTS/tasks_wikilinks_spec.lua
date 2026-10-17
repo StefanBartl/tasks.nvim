@@ -412,6 +412,51 @@ return function(H)
   }))
   has(H.read(made_ids.path), "after: [lib.nvim/dep-a]\nplan: lib.nvim/big\n", "new: plain ids")
 
+  -- ── new: a slug another area has turns the bare [[slug]] links into ambiguous ones, named at once ─
+  eq(made_ids.ambiguous, nil, "a slug new to the vault makes nothing ambiguous")
+  local twin = assert(mutate.new("cascade.nvim", {
+    root = wiki_root,
+    today = F.TODAY,
+    title = "Another dep-a",
+    slug = "dep-a",
+    index = false,
+  }))
+  eq(twin.ambiguous, {
+    slug = "dep-a",
+    ids = { "cascade.nvim/dep-a", "lib.nvim/dep-a" },
+    tasks = { "lib.nvim/linked", "lib.nvim/made", "lib.nvim/made-plain" },
+  }, "new names the tasks whose [[dep-a]] is ambiguous now")
+  local amb_check = assert(check.run({ root = wiki_root }))
+  local amb_paths = {}
+  for _, f in ipairs(amb_check.findings) do
+    if f.code == "wikilink-ambiguous" then
+      amb_paths[#amb_paths + 1] = vim.fs.basename(f.path)
+    end
+  end
+  table.sort(amb_paths)
+  eq(amb_paths, { "linked.md", "made-plain.md", "made.md" }, "the same tasks check reports")
+  vim.fn.delete(twin.path)
+  local cli_new =
+    run(wiki_root, { "new", "cascade.nvim", "Another dep-a", "--slug=dep-a", "--no-index" })
+  eq(cli_new.code, 0, cli_new.err)
+  has(
+    cli_new.err,
+    "warn: [[dep-a]] now names cascade.nvim/dep-a and lib.nvim/dep-a: wikilink-ambiguous in lib.nvim/linked, lib.nvim/made, lib.nvim/made-plain",
+    "CLI: the warning names them"
+  )
+  -- a slug another area has, but no task names it as [[slug]]: nothing to say
+  F.task(H, wiki_root, "lib.nvim", "third-home", F.meta("Third home", "open"))
+  local third = assert(mutate.new("cascade.nvim", {
+    root = wiki_root,
+    today = F.TODAY,
+    title = "Third home",
+    index = false,
+  }))
+  eq(third.ambiguous, nil, "no task names [[third-home]]: nothing to warn about")
+  vim.fn.delete(third.path)
+  vim.fn.delete(wiki_root .. "/lib.nvim/ROADMAP/tasks/third-home.md")
+  vim.fn.delete(wiki_root .. "/cascade.nvim/ROADMAP/tasks/dep-a.md")
+
   -- ── move: a bare [[slug]] still names the moved task, an [[area/slug]] is rewritten ─
   F.task(H, wiki_root, "lib.nvim", "mover", F.meta("Mover", "open"))
   local fan1 = F.task(

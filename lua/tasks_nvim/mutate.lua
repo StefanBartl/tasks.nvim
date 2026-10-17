@@ -737,15 +737,45 @@ end
 
 -- ── new ──────────────────────────────────────────────────────────────────────
 
+---The bare `[[slug]]` links the new task `id` made ambiguous: when its slug named exactly one other id before, every
+---task that names that slug as `[[slug]]` pointed there and is `wikilink-ambiguous` now. Nil when there is none (the
+---slug is new to the vault, or it was in several areas already and those links were ambiguous before).
+---@param root string
+---@param resolver Tasks.LinkResolver
+---@param id string
+---@param slug string
+---@return Tasks.NewAmbiguity|nil
+local function new_ambiguity(root, resolver, id, slug)
+  -- the index may have been built before or after the file was created: leave the new id out either way
+  local others = {}
+  for _, other in ipairs(resolver.candidates(slug)) do
+    if other ~= id then
+      others[#others + 1] = other
+    end
+  end
+  if #others ~= 1 then
+    return nil
+  end
+  local tasks = scan.all({ root = root })
+  local referrers = wikilinks.slug_referrers(tasks or {}, slug, id)
+  if #referrers == 0 then
+    return nil
+  end
+  local ids = { others[1], id }
+  table.sort(ids)
+  return { slug = slug, ids = ids, tasks = referrers }
+end
+
 ---Create a task file under `<area>/ROADMAP/tasks/`.
 ---
 ---The slug comes from the title (`opts.slug` overrides it); a taken slug gets
 ---`-2`, `-3`, ... unless it was given explicitly, which is then an error.
 ---`status` defaults to `open`, `kind` to `task`; `prio`, `effort`, `tags` and
----`summary` are written only when given.
+---`summary` are written only when given. When the slug is one another area already has, the tasks whose bare
+---`[[slug]]` named that one are ambiguous now: `ambiguous` names them (`new_ambiguity`).
 ---@param area string
 ---@param opts Tasks.NewOpts
----@return { id: string, area: string, slug: string, path: string, folder: boolean, index?: Tasks.IndexResult, index_err?: string }|nil result
+---@return { id: string, area: string, slug: string, path: string, folder: boolean, index?: Tasks.IndexResult, index_err?: string, ambiguous?: Tasks.NewAmbiguity }|nil result
 ---@return string|nil err
 function M.new(area, opts)
   opts = opts or {}
@@ -964,6 +994,7 @@ function M.new(area, opts)
           path = path,
           folder = opts.folder == true,
         }
+        result.ambiguous = new_ambiguity(root, resolver, result.id, slug)
         if opts.index ~= false then
           result.index, result.index_err = index.write_area(area, { root = root })
         end
