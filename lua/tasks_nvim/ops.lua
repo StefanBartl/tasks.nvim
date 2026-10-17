@@ -307,7 +307,7 @@ local function do_set(op, ctx)
   if id == nil or op.patch == nil then
     return refuse("invalid_argument", "set needs id and patch")
   end
-  local pairs_, perr = mutate.check_patch(op.patch)
+  local pairs_, perr = mutate.check_patch(op.patch, { root = ctx.root })
   if not pairs_ then
     return refuse("invalid_argument", tostring(perr))
   end

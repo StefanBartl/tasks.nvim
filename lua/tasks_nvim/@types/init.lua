@@ -30,11 +30,13 @@
 ---@field severity? string             # `low|medium|high|critical`, as written (meant for bug/security tasks; may be an unknown word, see `errors`).
 ---@field created? string             # `YYYY-MM-DD`
 ---@field updated? string             # `YYYY-MM-DD`
----@field blocked_by string[]         # Task ids (hard edges: the task cannot begin before they are finished).
----@field after string[]              # Task ids (soft edges: "should come after", never an error).
+---@field blocked_by string[]         # Task ids (hard edges: the task cannot begin before they are finished). A wikilink is its id; a bare `[[slug]]` that names no single id stays as written (see `link_problems`).
+---@field after string[]              # Task ids (soft edges: "should come after", never an error), read like `blocked_by`.
 ---@field order? number               # Sort hint inside a stage (a fraction like 2.5 slots a task in between).
----@field plan? string                # The plan file (`<area>/<slug>`) this task belongs to.
+---@field plan? string                # The plan file (`<area>/<slug>`) this task belongs to (a wikilink read as its id).
 ---@field phase? string               # The stage of that plan (a kebab-case word).
+---@field wikilinks? { field: string, index?: integer, slug: string, raw: string }[]  # Bare `[[slug]]` references `parse_text` could not settle without the vault; `scan` resolves them (`tasks_nvim.wikilinks.resolve`) and clears the field.
+---@field link_problems? Tasks.LinkProblem[]  # The bare `[[slug]]` references that name no id or several (`check`: `wikilink-dangling`, `wikilink-ambiguous`).
 ---@field refs string[]
 ---@field plan_steps? Tasks.StepsSummary  # The optional `## Plan` section: steps, how many are ticked (nil without the section).
 ---@field done_in? string
@@ -106,7 +108,9 @@
 ---@field value? integer|string       # 1..5, the expected benefit.
 ---@field after? string[]|string     # Task ids that should come first (soft).
 ---@field order? number|string        # Sort hint inside a stage.
----@field plan? string                # The plan (`<area>/<slug>`) the task belongs to.
+---@field plan? string                # The plan (`<area>/<slug>`, or a wikilink to it) the task belongs to.
+---@field links? "plain"|"wikilink"    # How `after` and `plan` are written (default: `setup({ links })` / `$TASKS_LINKS`, else `plain`).
+---@field link_resolver? Tasks.LinkResolver
 ---@field phase? string               # The stage of that plan.
 ---@field actor? string               # `cdx`, `me` or `pair`.
 ---@field folder? boolean             # Create a folder task (`<slug>/<slug>.md`) so assets can be attached.

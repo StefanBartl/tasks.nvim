@@ -42,6 +42,7 @@ blockers, plan or estimate is valid and stays visible everywhere.
   require("tasks_nvim").setup({
     vault = "~/vault",
     extra_areas = { "ALL" },
+    links = "plain",                    -- "plain" | "wikilink"
     dashboard = { watch = true, debounce_ms = 250, backend = "auto" },
     staleness = { git_timeout_ms = 20000, budget_ms = 30000, repo_bases = {} },
     ci = { lint_timeout_ms = 120000 },
@@ -60,6 +61,13 @@ blockers, plan or estimate is valid and stays visible everywhere.
   extra_areas              Folders that are areas although they hold neither
                            `ROADMAP/` nor `Backlog/`. The headless CLI reads
                            `$TASKS_EXTRA_AREAS` (comma separated) for the same.
+  links                    How `set`, `new`, the dashboard's assign and a move
+                           write a reference in `blocked_by`, `after` and `plan`:
+                           "plain" ids (default) or Obsidian wikilinks ("wikilink":
+                           `"[[slug]]"`, the vault path with the id as alias when
+                           the slug is in several areas). A value the file holds
+                           keeps its form, both forms are always read. The
+                           headless CLI reads `$TASKS_LINKS`. |tasks_nvim-wikilinks|
   dashboard.watch          Refresh the dashboard when task files change.
   dashboard.debounce_ms    Quiet period before a refresh (default 250).
   dashboard.backend        Picker of `:Tasks list`: "snacks", "kit" (lib.nvim, no snacks;
@@ -193,6 +201,14 @@ cancel (asks when text was typed), `g?` help.
 
 Only `title` and `status` are required. Unknown keys are kept when a file is
 rewritten. Full reference: docs/ENGINE.md.
+
+                                                          *tasks_nvim-wikilinks*
+`blocked_by`, `after` and `plan` also take Obsidian wikilinks, in quotes as
+Obsidian writes them: `"[[area/slug]]"`, `"[[area/slug|Alias]]"`, the vault
+path (`"[[area/ROADMAP/tasks/slug]]"`) and `"[[slug]]"` when exactly one task
+or plan of the vault has that slug. `check` reports a slug that names nothing
+(`wikilink-dangling`) or several tasks (`wikilink-ambiguous`, with the
+candidates). The plan, `next`, `estimate` and the index see the id.
 
 ==============================================================================
 7. HEADLESS CLI                                                 *tasks_nvim-cli*

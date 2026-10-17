@@ -13,12 +13,13 @@ local M = {}
 ---@type Tasks.Opts
 local state = vim.deepcopy(DEFAULTS)
 
----@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"|"value"|"effort"|"lists"|"finished_window"
+---@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"|"value"|"effort"|"lists"|"finished_window"|"links"
 
 ---@type table<string, Tasks.ConfigType|table<string, Tasks.ConfigType>>
 local SCHEMA = {
   vault = "string",
   extra_areas = "string_list",
+  links = "links",
   dashboard = { watch = "boolean", debounce_ms = "posint", backend = "backend" },
   staleness = { git_timeout_ms = "posint", budget_ms = "posint", repo_bases = "string_list" },
   ci = { lint_timeout_ms = "posint", trust_vault_lint = "boolean" },
@@ -100,6 +101,11 @@ local function check(kind, value)
       return true, value, nil
     end
     return false, nil, 'one of "auto", "snacks", "kit", "select"'
+  elseif kind == "links" then
+    if value == "plain" or value == "wikilink" then
+      return true, value, nil
+    end
+    return false, nil, 'one of "plain", "wikilink"'
   elseif kind == "lists" then
     -- Only the shape here; every list is checked, and named in its complaint, by `tasks_nvim.lists`.
     if type(value) == "table" and (next(value) == nil or not vim.islist(value)) then
