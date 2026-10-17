@@ -208,7 +208,8 @@ Obsidian writes them: `"[[area/slug]]"`, `"[[area/slug|Alias]]"`, the vault
 path (`"[[area/ROADMAP/tasks/slug]]"`) and `"[[slug]]"` when exactly one task
 or plan of the vault has that slug. `check` reports a slug that names nothing
 (`wikilink-dangling`) or several tasks (`wikilink-ambiguous`, with the
-candidates). The plan, `next`, `estimate` and the index see the id.
+candidates). The plan, `next`, `estimate` and the index see the id. The
+`target` of a plan file takes the same forms (`plan-new --target=[[slug]]`).
 
 ==============================================================================
 7. HEADLESS CLI                                                 *tasks_nvim-cli*

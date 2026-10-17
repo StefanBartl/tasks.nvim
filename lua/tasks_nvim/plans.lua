@@ -21,6 +21,7 @@ local fsio = require("tasks_nvim.fsio")
 local model = require("tasks_nvim.model")
 local scan = require("tasks_nvim.scan")
 local vault = require("tasks_nvim.vault")
+local wikilinks = require("tasks_nvim.wikilinks")
 
 local M = {}
 
@@ -36,7 +37,9 @@ M.STATUSES = { "planning", "doing", "parked", "done" }
 ---@field title string
 ---@field status? string
 ---@field areas string[]
----@field target? string
+---@field target? string             # The task id; a wikilink in the file (`[[<slug>]]`, `[[<area>/<slug>]]`, a vault path) is read as its id.
+---@field target_raw? string         # `target` as the file writes it (an id or a wikilink).
+---@field link_problems? Tasks.LinkProblem[]  # A bare `[[slug]]` target that names no id or several (`check`: `wikilink-dangling`, `wikilink-ambiguous`); `target` is nil then.
 ---@field phase_order string[]
 ---@field gate? string                # `hard` or nil.
 ---@field created? string
@@ -52,9 +55,10 @@ function M.is_status(s)
   return vim.tbl_contains(M.STATUSES, s)
 end
 
----Read one plan file's text. Always returns a plan; a broken file carries `errors` (`valid = false`).
+---Read one plan file's text. Always returns a plan; a broken file carries `errors` (`valid = false`). A bare
+---`[[slug]]` target is settled by `ctx.link_resolver` (without one it names nothing: `wikilink-dangling`).
 ---@param text string
----@param ctx { path: string, area: string, slug?: string, location?: "roadmap"|"backlog" }
+---@param ctx { path: string, area: string, slug?: string, location?: "roadmap"|"backlog", link_resolver?: Tasks.LinkResolver }
 ---@return Tasks.PlanFile
 function M.parse(text, ctx)
   local slug = ctx.slug or model.slug_of(ctx.path, ctx.location or "roadmap")
@@ -114,11 +118,32 @@ function M.parse(text, ctx)
     end
     local target = model.field_text(meta.target, "target", bad)
     if target then
-      local _, tslug, terr = vault.parse_id(target)
-      if terr or not tslug then
-        bad("plan-bad-target", "target: " .. (terr or ("expected <area>/<slug>, got " .. target)))
+      plan.target_raw = vim.trim(target)
+      -- an id or an Obsidian wikilink (`tasks_nvim.wikilinks`), read like `blocked_by` / `after` / `plan` of a task
+      local kind, value = wikilinks.read(vim.trim(target))
+      if kind == "bad" then
+        bad("plan-bad-target", "target: " .. value)
+      elseif kind == "slug" then
+        local ids = ctx.link_resolver and ctx.link_resolver.candidates(value) or {}
+        if #ids == 1 then
+          plan.target = ids[1]
+        else
+          plan.link_problems = {
+            {
+              code = #ids == 0 and "wikilink-dangling" or "wikilink-ambiguous",
+              field = "target",
+              raw = vim.trim(target),
+              candidates = vim.list_slice(ids, 1),
+            },
+          }
+        end
       else
-        plan.target = target
+        local _, tslug, terr = vault.parse_id(value)
+        if terr or not tslug then
+          bad("plan-bad-target", "target: " .. (terr or ("expected <area>/<slug>, got " .. value)))
+        else
+          plan.target = value
+        end
       end
     end
     plan.phase_order = model.field_list(meta.phase_order, "phase_order", bad)
@@ -153,7 +178,7 @@ end
 
 ---Read a plan file from disk.
 ---@param path string
----@param ctx { area: string, slug?: string, location?: "roadmap"|"backlog" }
+---@param ctx { area: string, slug?: string, location?: "roadmap"|"backlog", link_resolver?: Tasks.LinkResolver }
 ---@return Tasks.PlanFile
 function M.from_file(path, ctx)
   local text, err = fsio.read(path)
@@ -167,9 +192,10 @@ function M.from_file(path, ctx)
   return M.parse(text, vim.tbl_extend("force", { path = path }, ctx))
 end
 
----The open plans of an area (`ROADMAP/plans/*.md`), by slug.
+---The open plans of an area (`ROADMAP/plans/*.md`), by slug. A bare `[[slug]]` target is settled over the vault
+---(`opts.link_resolver`, else one made here; its index is built only when a target needs it).
 ---@param area string
----@param opts? { root?: string }
+---@param opts? { root?: string, link_resolver?: Tasks.LinkResolver }
 ---@return Tasks.PlanFile[]|nil plans
 ---@return string[]|string|nil errors
 function M.area(area, opts)
@@ -191,9 +217,10 @@ function M.area(area, opts)
     return out, { escape }
   end
   local errors = {}
+  local resolver = opts.link_resolver or wikilinks.resolver(root)
   for name, kind in vim.fs.dir(dir) do
     if kind == "file" and name:match("%.md$") then
-      out[#out + 1] = M.from_file(dir .. "/" .. name, { area = area })
+      out[#out + 1] = M.from_file(dir .. "/" .. name, { area = area, link_resolver = resolver })
     end
   end
   table.sort(out, function(a, b)
@@ -203,7 +230,7 @@ function M.area(area, opts)
 end
 
 ---Every open plan of the vault.
----@param opts? { root?: string }
+---@param opts? { root?: string, link_resolver?: Tasks.LinkResolver }
 ---@return Tasks.PlanFile[]|nil plans
 ---@return string|nil err
 function M.all(opts)
@@ -213,8 +240,9 @@ function M.all(opts)
     return nil, err
   end
   local out = {}
+  local resolver = opts.link_resolver or wikilinks.resolver(root)
   for _, a in ipairs(vault.areas(root)) do
-    local plans = M.area(a.name, { root = root })
+    local plans = M.area(a.name, { root = root, link_resolver = resolver })
     for _, plan in ipairs(plans or {}) do
       out[#out + 1] = plan
     end
@@ -224,7 +252,7 @@ end
 
 ---An open plan by id.
 ---@param id string
----@param opts? { root?: string }
+---@param opts? { root?: string, link_resolver?: Tasks.LinkResolver }
 ---@return Tasks.PlanFile|nil plan
 ---@return string|nil err
 function M.find(id, opts)
@@ -246,7 +274,12 @@ function M.find(id, opts)
   if not fsio.is_file(path) then
     return nil, "no such open plan: " .. id
   end
-  return M.from_file(path, { area = area, slug = slug }), nil
+  return M.from_file(path, {
+    area = area,
+    slug = slug,
+    link_resolver = opts.link_resolver or wikilinks.resolver(root),
+  }),
+    nil
 end
 
 ---The open tasks that belong to a plan (`plan: <id>`).
@@ -315,7 +348,9 @@ M.MAX_SLUG = 200
 ---@field root? string
 ---@field title string
 ---@field areas? string[]|string
----@field target? string
+---@field target? string          # A task id or a wikilink to it (`[[<slug>]]`, `[[<area>/<slug>]]`, a vault path).
+---@field links? "plain"|"wikilink" # How an id `target` is written (default: `setup({ links })`, `$TASKS_LINKS`).
+---@field link_resolver? Tasks.LinkResolver
 ---@field phases? string[]|string
 ---@field gate? string
 ---@field status? string
@@ -384,11 +419,18 @@ function M.new(area, opts)
       return nil, "phases: '" .. p .. "' is no kebab-case word"
     end
   end
+  -- the target as an id (a wikilink resolved), written as typed when it was a wikilink, else in the form `links`
+  -- asks for (`tasks_nvim.wikilinks.render`), like `plan` / `after` of `new`
+  local target_text
   if opts.target ~= nil then
-    local _, tslug, terr = vault.parse_id(opts.target)
-    if terr or not tslug then
-      return nil, "target: " .. (terr or ("expected <area>/<slug>, got " .. tostring(opts.target)))
+    local raw = vim.trim(tostring(opts.target))
+    local resolver = opts.link_resolver or wikilinks.resolver(root)
+    local tid, terr = wikilinks.typed_id(raw, "target", resolver)
+    if not tid then
+      return nil, terr
     end
+    target_text = wikilinks.is_wikilink(raw) and raw
+      or wikilinks.render(tid, wikilinks.mode(opts), resolver)
   end
   if opts.gate ~= nil and opts.gate ~= "hard" then
     return nil, "gate must be `hard` or absent"
@@ -409,8 +451,8 @@ function M.new(area, opts)
   if #areas > 0 then
     pairs_[#pairs_ + 1] = { "areas", areas }
   end
-  if opts.target then
-    pairs_[#pairs_ + 1] = { "target", opts.target }
+  if target_text then
+    pairs_[#pairs_ + 1] = { "target", target_text }
   end
   if #phases > 0 then
     pairs_[#pairs_ + 1] = { "phase_order", phases }

@@ -536,4 +536,127 @@ return function(H)
   has(text, "status: open\n", "and set to open")
   has(text, 'blocked_by: "[[dep-b]]"\n', "its wikilink is not rewritten")
   lacks(text, "cascade.nvim/dep-b", "no id was written")
+
+  -- ── plan files: `target` as a wikilink, read, written and moved like `plan` of a task ─
+  local plans = require("tasks_nvim.plans")
+  F.task(H, wiki_root, "lib.nvim", "goal", F.meta("Goal", "open"))
+  assert(index.write_area("lib.nvim", { root = wiki_root }))
+  ---@param slug string
+  ---@param target string
+  ---@return string path
+  local function plan_file(slug, target)
+    local p = wiki_root .. "/lib.nvim/ROADMAP/plans/" .. slug .. ".md"
+    H.write(
+      p,
+      "---\ntitle: " .. slug .. "\nstatus: planning\ntarget: " .. target .. "\n---\n\nGoal.\n"
+    )
+    return p
+  end
+  local pt_slug = plan_file("pt-slug", '"[[goal]]"')
+  local pt_id = plan_file("pt-id", '"[[lib.nvim/goal|Goal]]"')
+  local pt_path = plan_file("pt-path", '"[[lib.nvim/ROADMAP/tasks/goal]]"')
+  local pt_none = plan_file("pt-none", '"[[no-goal]]"')
+  local pt_bad = plan_file("pt-bad", '"[[a/b/c]]"')
+  for _, slug in ipairs({ "pt-slug", "pt-id", "pt-path" }) do
+    local file = assert(plans.find("lib.nvim/" .. slug, { root = wiki_root }))
+    eq(file.target, "lib.nvim/goal", slug .. ": the target is its id")
+    ok(file.valid, slug .. ": a wikilink is a valid target: " .. vim.inspect(file.errors))
+  end
+  local none_file = assert(plans.find("lib.nvim/pt-none", { root = wiki_root }))
+  eq(none_file.target, nil, "a dangling [[slug]] names no target")
+  local shown = run(wiki_root, { "plan", "--plan=lib.nvim/pt-slug" })
+  eq(shown.code, 0, shown.err)
+  has(shown.out, "Done when: lib.nvim/goal", "the plan view names the id")
+  local pt_check = assert(check.run({ root = wiki_root }))
+  local pt_found = {}
+  for _, f in ipairs(pt_check.findings) do
+    local base = vim.fs.basename(f.path or "")
+    if base:match("^pt%-") then
+      pt_found[#pt_found + 1] = base .. " | " .. f.code .. " | " .. f.message
+    end
+  end
+  table.sort(pt_found)
+  eq(pt_found, {
+    "pt-bad.md | plan-bad-target | target: wikilink names no task (expected [[<area>/<slug>]] or [[<slug>]]): [[a/b/c]]",
+    "pt-none.md | wikilink-dangling | target [[no-goal]] names no task or plan",
+  }, "check: the resolved targets are fine, a dangling one and a malformed one are named")
+  vim.fn.delete(pt_none)
+  vim.fn.delete(pt_bad)
+
+  -- a task of the same slug in another area makes the plan's [[goal]] ambiguous: `new` names the plan
+  local goal_twin = assert(mutate.new("cascade.nvim", {
+    root = wiki_root,
+    today = F.TODAY,
+    title = "Goal too",
+    slug = "goal",
+    index = false,
+  }))
+  eq(goal_twin.ambiguous, {
+    slug = "goal",
+    ids = { "cascade.nvim/goal", "lib.nvim/goal" },
+    tasks = { "lib.nvim/pt-slug" },
+  }, "new names the plan whose target [[goal]] is ambiguous now")
+  local amb_file = assert(plans.find("lib.nvim/pt-slug", { root = wiki_root }))
+  eq(amb_file.link_problems and amb_file.link_problems[1].code, "wikilink-ambiguous")
+  vim.fn.delete(goal_twin.path)
+
+  -- plan-new: a typed wikilink is written as typed and resolved; an id follows `links`; a dangling one is refused
+  local typed_plan = assert(
+    plans.new(
+      "lib.nvim",
+      { root = wiki_root, today = F.TODAY, title = "Typed", target = "[[goal]]" }
+    )
+  )
+  has(H.read(typed_plan.path), 'target: "[[goal]]"\n', "plan-new: the link as typed")
+  eq(assert(plans.find(typed_plan.id, { root = wiki_root })).target, "lib.nvim/goal")
+  local wiki_plan = assert(plans.new("lib.nvim", {
+    root = wiki_root,
+    today = F.TODAY,
+    title = "Wiki",
+    target = "lib.nvim/goal",
+    links = "wikilink",
+  }))
+  has(H.read(wiki_plan.path), 'target: "[[goal]]"\n', "plan-new: wikilink mode writes [[slug]]")
+  local plain_plan = assert(
+    plans.new(
+      "lib.nvim",
+      { root = wiki_root, today = F.TODAY, title = "Plain", target = "lib.nvim/goal" }
+    )
+  )
+  has(H.read(plain_plan.path), "target: lib.nvim/goal\n", "plan-new: plain mode writes the id")
+  local no_plan, no_err = plans.new(
+    "lib.nvim",
+    { root = wiki_root, today = F.TODAY, title = "Nope", target = "[[no-goal]]" }
+  )
+  eq(no_plan, nil, "a dangling target is refused")
+  has(no_err, "wikilink-dangling")
+  local cli_plan = run(wiki_root, { "plan-new", "lib.nvim", "Cli target", "--target=[[goal]]" })
+  eq(cli_plan.code, 0, cli_plan.err)
+  has(
+    H.read(wiki_root .. "/lib.nvim/ROADMAP/plans/cli-target.md"),
+    'target: "[[goal]]"\n',
+    "CLI plan-new"
+  )
+  for _, p in ipairs({ typed_plan.path, wiki_plan.path, plain_plan.path }) do
+    vim.fn.delete(p)
+  end
+  vim.fn.delete(wiki_root .. "/lib.nvim/ROADMAP/plans/cli-target.md")
+
+  -- move: the bare [[goal]] still names the moved task and is kept, the old id's forms are rewritten
+  local goal_moved = assert(require("tasks_nvim.moves").move("lib.nvim/goal", "cascade.nvim", {
+    root = wiki_root,
+    today = F.TODAY,
+    checkpoint_dir = H.tmpdir() .. "/checkpoints",
+  }))
+  eq(goal_moved.new_id, "cascade.nvim/goal")
+  has(H.read(pt_slug), 'target: "[[goal]]"\n', "move: the bare link is kept")
+  has(H.read(pt_id), "target: cascade.nvim/goal\n", "move: [[area/slug]] is rewritten (plain mode)")
+  has(H.read(pt_path), "target: cascade.nvim/goal\n", "move: the vault path is rewritten")
+  for _, slug in ipairs({ "pt-slug", "pt-id", "pt-path" }) do
+    eq(
+      assert(plans.find("lib.nvim/" .. slug, { root = wiki_root })).target,
+      "cascade.nvim/goal",
+      slug .. " names the moved task"
+    )
+  end
 end
