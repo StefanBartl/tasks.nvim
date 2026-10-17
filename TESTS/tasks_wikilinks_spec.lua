@@ -436,6 +436,23 @@ return function(H)
   table.sort(amb_paths)
   eq(amb_paths, { "linked.md", "made-plain.md", "made.md" }, "the same tasks check reports")
   vim.fn.delete(twin.path)
+  -- the new task's own [[dep-a]] (written while the slug still named lib.nvim/dep-a only) is ambiguous as well
+  local self_twin = assert(mutate.new("cascade.nvim", {
+    root = wiki_root,
+    today = F.TODAY,
+    title = "Another dep-a",
+    slug = "dep-a",
+    after = "lib.nvim/dep-a",
+    links = "wikilink",
+    index = false,
+  }))
+  has(H.read(self_twin.path), 'after: ["[[dep-a]]"]\n', "the new task links its twin as [[dep-a]]")
+  eq(
+    self_twin.ambiguous and self_twin.ambiguous.tasks,
+    { "cascade.nvim/dep-a", "lib.nvim/linked", "lib.nvim/made", "lib.nvim/made-plain" },
+    "new names its own [[dep-a]] as well"
+  )
+  vim.fn.delete(self_twin.path)
   local cli_new =
     run(wiki_root, { "new", "cascade.nvim", "Another dep-a", "--slug=dep-a", "--no-index" })
   eq(cli_new.code, 0, cli_new.err)
