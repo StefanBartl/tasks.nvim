@@ -8,12 +8,14 @@
 ---    `Backlog/<bucket>/YYYY-MM-DD_<slug>`), with or without `.md`: the id of that file;
 ---  - `"[[<slug>]]"` (Obsidian's "shortest path"): the one task or plan of that slug over every area. It needs the
 ---    vault, so a file is read without it (`read` answers `slug`) and `resolve` settles it after the scan; a slug that
----    names nothing (`wikilink-dangling`) or several ids (`wikilink-ambiguous`, with the candidates) stays unresolved.
+---    names nothing (`wikilink-dangling`) or several ids (`wikilink-ambiguous`, with the candidates) stays unresolved
+---    (as written in `blocked_by` / `after`; an unresolved `plan` is no plan).
 ---
---- The written form is a switch (`setup({ links = "plain" | "wikilink" })`, `$TASKS_LINKS` for the headless CLI):
---- `plain` (the default) writes ids, `wikilink` writes `[[<slug>]]` when that slug is unique in the vault and
---- otherwise the vault path of the file with the id as alias (`[[<area>/ROADMAP/tasks/<slug>|<area>/<slug>]]`), which
---- Obsidian resolves too. A value the file already holds keeps its form (`forms`).
+--- The written form is a switch (`setup({ links = "plain" | "wikilink" })`, `$TASKS_LINKS` for the headless CLI and
+--- wherever `setup()` names no `links`): `plain` (the default) writes ids, `wikilink` writes the file name
+--- (`[[<slug>]]`, for a finished task `[[YYYY-MM-DD_<slug>]]`) when that slug is unique in the vault and otherwise
+--- the vault path of the file with the id as alias (`[[<area>/ROADMAP/tasks/<slug>|<area>/<slug>]]`), which Obsidian
+--- resolves too. A value the file already holds keeps its form (`forms`).
 ---
 --- Not its job: the frontmatter syntax (`lib.nvim.markdown.frontmatter` quotes `[[...]]`), what an id means (`check`,
 --- `plan`).
@@ -121,13 +123,10 @@ end
 ---@return string[]
 function M.split(s)
   s = trim(s)
-  -- `[a, b]` / `["[[x]]", y]` / `[[[x]], y]`: the outer brackets of a list; `[[x]], y` has none
+  -- `[a, b]` / `["[[x]]", y]` / `[[[x]], y]` / `[[[x]]]`: the outer brackets of a list. `[[x]], y` and `[[x]]` alone
+  -- have none: a text that starts with exactly two `[` starts with a link, and its last `]` belongs to a link too
   if s:sub(1, 1) == "[" and (s:sub(2, 2) ~= "[" or s:sub(3, 3) == "[") and s:sub(-1) == "]" then
-    local body = s:sub(2, -2)
-    -- `[[x]]` alone keeps its brackets: the last `]` belongs to the link, not to a list
-    if not (s:sub(2, 2) == "[" and not M.is_wikilink(trim(body))) then
-      s = body
-    end
+    s = s:sub(2, -2)
   end
   local out, buf = {}, {}
   local i, n = 1, #s
@@ -297,8 +296,9 @@ end
 ---@field candidates string[]    # the ids the slug names (empty for a dangling one)
 
 ---Settle the bare-slug wikilinks `model.parse_text` left (`task.wikilinks`): a slug of exactly one id becomes that id
----in `blocked_by` / `after` / `plan`; any other stays as written (a blocker that is neither open nor finished: the
----task waits, like on a dangling id) and is named in `task.link_problems`. Changes the tasks in place.
+---in `blocked_by` / `after` / `plan`; any other is named in `task.link_problems` and stays as written in `blocked_by` /
+---`after` (a blocker that is neither open nor finished: the task waits, like on a dangling id), while `plan` stays
+---unset (the task is in no plan, like a plan file whose `target` names no single id). Changes the tasks in place.
 ---@param tasks Tasks.Task[]
 ---@param resolver Tasks.LinkResolver
 ---@return Tasks.Task[] tasks
@@ -423,8 +423,9 @@ function M.typed_id(raw, what, resolver)
     )
 end
 
----The written form `opts.links`, `setup({ links })` or `$TASKS_LINKS` asks for: `wikilink` when one of them says so
----(in that order: an explicit `opts.links` wins), else `plain`.
+---The written form asked for, the first that says one: `opts.links`, then a `links` that `setup()` set (also an
+---explicit `plain`), then `$TASKS_LINKS` (for the headless CLI, which has no `setup`; Neovim reads it too when its
+---`setup()` names no `links`), else `plain`.
 ---@param opts? { links?: string }
 ---@return "plain"|"wikilink"
 function M.mode(opts)
@@ -432,8 +433,9 @@ function M.mode(opts)
   if asked == "plain" or asked == "wikilink" then
     return asked
   end
-  if require("tasks_nvim.config").get().links == "wikilink" then
-    return "wikilink"
+  local config = require("tasks_nvim.config")
+  if config.given("links") then
+    return config.get().links == "wikilink" and "wikilink" or "plain"
   end
   if vim.env.TASKS_LINKS == "wikilink" then
     return "wikilink"
@@ -441,8 +443,9 @@ function M.mode(opts)
   return "plain"
 end
 
----How the id `id` is written in `mode`. `plain`: the id. `wikilink`: `[[<slug>]]` when the slug names this id only,
----else `[[<vault path>|<id>]]` when the file exists, else `[[<id>]]`.
+---How the id `id` is written in `mode`. `plain`: the id. `wikilink`: `[[<file name>]]` when the slug names this id
+---only (the slug; for a finished task the `YYYY-MM-DD_<slug>` of its file, so Obsidian finds it too), else
+---`[[<vault path>|<id>]]` when the file exists, else `[[<id>]]`.
 ---@param id string
 ---@param mode "plain"|"wikilink"
 ---@param resolver? Tasks.LinkResolver
@@ -456,10 +459,11 @@ function M.render(id, mode, resolver)
     return "[[" .. id .. "]]"
   end
   local ids = resolver.candidates(slug)
-  if #ids == 1 and ids[1] == id then
-    return "[[" .. slug .. "]]"
-  end
   local rel = resolver.path(id)
+  if #ids == 1 and ids[1] == id then
+    -- Obsidian's shortest form is the file name: a finished file is `YYYY-MM-DD_<slug>`, not `<slug>`
+    return "[[" .. (rel and rel:match("([^/]+)$") or slug) .. "]]"
+  end
   if rel then
     return "[[" .. rel .. "|" .. id .. "]]"
   end

@@ -67,7 +67,8 @@ blockers, plan or estimate is valid and stays visible everywhere.
                            `"[[slug]]"`, the vault path with the id as alias when
                            the slug is in several areas). A value the file holds
                            keeps its form, both forms are always read. The
-                           headless CLI reads `$TASKS_LINKS`. |tasks_nvim-wikilinks|
+                           headless CLI reads `$TASKS_LINKS` (Neovim too while
+                           `setup()` sets no `links`). |tasks_nvim-wikilinks|
   dashboard.watch          Refresh the dashboard when task files change.
   dashboard.debounce_ms    Quiet period before a refresh (default 250).
   dashboard.backend        Picker of `:Tasks list`: "snacks", "kit" (lib.nvim, no snacks;

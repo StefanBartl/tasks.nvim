@@ -66,6 +66,12 @@ return function(H)
     "a comma inside a link does not split"
   )
   eq(wikilinks.split("[a/b, c/d]"), { "a/b", "c/d" }, "plain ids as before")
+  eq(
+    wikilinks.split("[[[dep-a]], lib.nvim/x]"),
+    { "[[dep-a]]", "lib.nvim/x" },
+    "list brackets around a link and an id: the last item is not a link"
+  )
+  eq(wikilinks.split("[[[dep-a]]]"), { "[[dep-a]]" }, "list brackets around one link")
 
   -- parse_text: an id-wikilink is its id at once, a bare slug is left for the scan
   local parsed = model.parse_text(
@@ -258,6 +264,15 @@ return function(H)
     { "[[common]]", "[[nowhere]]", "lib.nvim/odd", "lib.nvim/old" },
     "an unresolved link stays as written, a resolved one is its id"
   )
+  eq(odd_task.plan, nil, "an unresolved plan link leaves the task without a plan")
+  local plan_problem = vim.tbl_filter(function(p)
+    return p.field == "plan"
+  end, odd_task.link_problems or {})
+  eq(
+    plan_problem,
+    { { code = "wikilink-dangling", field = "plan", raw = "[[no-plan]]", candidates = {} } },
+    "it is named in link_problems"
+  )
   local wait = run(wiki_root, { "list", "--waiting", "--format=ids" })
   has(wait.out, "lib.nvim/odd", "an unresolved blocker holds the task like a dangling id")
   vim.fn.delete(odd)
@@ -373,8 +388,40 @@ return function(H)
   config.merge({ links = "wikilink" })
   assert(mutate.set("lib.nvim/linked", { after = { "cascade.nvim/dep-b", "lib.nvim/old" } }, o))
   config.merge({ links = "plain" })
-  has(H.read(linked_path), 'after: ["[[dep-b]]", "[[old]]"]\n', "setup({ links }) is read")
+  has(
+    H.read(linked_path),
+    'after: ["[[dep-b]]", "[[2026-09-01_old]]"]\n',
+    "setup({ links }) is read; a finished task is linked by its file name, which Obsidian resolves"
+  )
+  eq(
+    assert(scan.find("lib.nvim/linked", { root = wiki_root })).after,
+    { "cascade.nvim/dep-b", "lib.nvim/old" },
+    "the file-name link of a finished task reads back as its id"
+  )
   eq(wikilinks.mode({}), "plain", "back to plain")
+
+  -- `$TASKS_LINKS` (the switch of the headless CLI) counts only while setup() names no `links`
+  local saved_env = vim.env.TASKS_LINKS
+  vim.env.TASKS_LINKS = "wikilink"
+  eq(wikilinks.mode(), "plain", 'an explicit setup({ links = "plain" }) wins over $TASKS_LINKS')
+  local saved_config = package.loaded["tasks_nvim.config"]
+  package.loaded["tasks_nvim.config"] = nil
+  local env_ok, env_err = pcall(function()
+    eq(wikilinks.mode(), "wikilink", "no links in setup(): $TASKS_LINKS switches it")
+    eq(wikilinks.mode({ links = "plain" }), "plain", "opts.links wins over $TASKS_LINKS")
+    local env_cli = run(wiki_root, { "set", "lib.nvim/linked", "after=lib.nvim/folder-dep" })
+    eq(env_cli.code, 0, env_cli.err)
+    has(
+      H.read(linked_path),
+      'after: "[[folder-dep]]"\n',
+      "the CLI writes wikilinks under $TASKS_LINKS (a folder task by its file name)"
+    )
+    require("tasks_nvim.config").merge({ links = "plain" })
+    eq(wikilinks.mode(), "plain", 'setup({ links = "plain" }) after the start wins as well')
+  end)
+  package.loaded["tasks_nvim.config"] = saved_config
+  vim.env.TASKS_LINKS = saved_env
+  assert(env_ok, env_err)
   config.merge({ links = "wiki" })
   eq(config.get().links, "plain", "a wrong word is ignored, the default stays")
   has(table.concat(config.ignored(), "\n"), '`links` must be one of "plain", "wikilink"')
@@ -506,6 +553,44 @@ return function(H)
       id .. " waits on the moved task"
     )
   end
+
+  -- an unresolved [[slug]] the file holds is written back as it is: the list the scan gave, and a move that rewrites
+  -- the other id of that list
+  F.task(H, wiki_root, "lib.nvim", "mover-two", F.meta("Mover two", "open"))
+  local fan3 = F.task(
+    H,
+    wiki_root,
+    "lib.nvim",
+    "fan-three",
+    F.meta("Fan three", "open", { { "blocked_by", '["[[nowhere]]", lib.nvim/mover-two]' } })
+  )
+  assert(index.write_area("lib.nvim", { root = wiki_root }))
+  local fan3_task = assert(scan.find("lib.nvim/fan-three", { root = wiki_root }))
+  eq(fan3_task.blocked_by, { "[[nowhere]]", "lib.nvim/mover-two" }, "the scan keeps the link")
+  local back, back_err = mutate.set("lib.nvim/fan-three", { blocked_by = fan3_task.blocked_by }, o)
+  ok(back, "set takes the list the scan gave: " .. tostring(back_err))
+  eq(back.changed, false, "and it is no change")
+  local typed_back, typed_err =
+    mutate.set("lib.nvim/fan-three", { blocked_by = "[[[nowhere]], lib.nvim/mover-two]" }, o)
+  ok(typed_back, "the typed list with list brackets: " .. tostring(typed_err))
+  eq(typed_back.changed, false, "the same list typed is no change either")
+  local refused, refused_err =
+    mutate.set("lib.nvim/fan-three", { blocked_by = { "[[nowhere]]", "[[elsewhere]]" } }, o)
+  eq(refused, nil, "a new unresolved link is still refused")
+  has(refused_err, "[[elsewhere]] names no task or plan")
+  local moved_two, move_err =
+    require("tasks_nvim.moves").move("lib.nvim/mover-two", "cascade.nvim", {
+      root = wiki_root,
+      today = F.TODAY,
+      checkpoint_dir = H.tmpdir() .. "/checkpoints",
+    })
+  ok(moved_two, "move next to an unresolved link: " .. tostring(move_err))
+  has(
+    H.read(fan3),
+    'blocked_by: ["[[nowhere]]", cascade.nvim/mover-two]\n',
+    "the moved id is rewritten, the unresolved link kept"
+  )
+  vim.fn.delete(fan3)
 
   -- ── the dashboard's assign (P) and done --unblock ─────────────────────────
   local core = require("tasks_nvim.ui.dash_core")

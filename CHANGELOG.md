@@ -31,6 +31,14 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- Review of the Obsidian wikilinks: `set` writes a bare `[[slug]]` that the task's file already holds unresolved
+  (`wikilink-dangling` / `wikilink-ambiguous`) back as it is instead of refusing the list, so a move to another area
+  no longer fails on a task whose `blocked_by` / `after` holds such a link next to the moved id, and the list the scan
+  gave can be written back (a new unresolved link is still refused); `wikilinks.split` drops the list brackets of
+  `[[[x]], y]`; a `links` given to `setup()` (also `"plain"`) wins over `$TASKS_LINKS` (`config.given`); the
+  `wikilink` form of a finished task is its file name (`[[YYYY-MM-DD_<slug>]]`), which Obsidian resolves; the docs say
+  that an unresolved `plan` link leaves the task without a plan (as the code does, like a plan file's `target`).
+  Spec: `tasks_wikilinks_spec`.
 - Review of `:Tasks open` by a part of a name and of `:TasksVault`: a title is matched in any case also when it is not ASCII (`über` finds `Über uns`), `area/part` prefers the exact spelling of the area, the completion lists an id once, a missing vault is told instead of "no task matches"; the hint for a vault without an area names the command with the vault's own folder, and naming the folder in use again adds an area to it without `--force`; a `create` that fails at a later area names the folders made before it.
 - Review of `:TasksVault create`: an area folder that cannot be made (a file in the way) fails the create with the reason instead of reporting a vault with the area missing; a clipboard that cannot be written is told and not claimed to hold the setup line; the hints for an empty vault name `:TasksVault create <dir> <area>` and not `:Tasks new` (which refuses an unknown area); the lazy.nvim example and the health hint load the plugin on `:TasksVault` as well; the help file names `--yes` and the README the part `all`.
 - The editor commands `:Tasks list`, `plan` and `estimate` take `--phase=` (and `list` also `--plan=`), as the CLI does; the code passed both to the filter already, only the flags were missing from the routes. The drift guard (`tasks_verbs_drift_spec.lua`) shows the smaller difference.

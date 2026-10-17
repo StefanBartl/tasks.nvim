@@ -275,11 +275,13 @@ there is a way to clear it. A buffer showing the file is reloaded when it has no
 (several: refused with the candidates, `wikilink-ambiguous`; none: `wikilink-dangling`). A comma inside `[[...]]` does
 not split. What is written: an id the file already names keeps its form, a value you give as a wikilink is written as
 you gave it, and any other id in the form `setup({ links })` asks for -- `plain` (the default) writes `lib.nvim/a`,
-`wikilink` writes `"[[a]]"` when the slug is unique in the vault and `"[[lib.nvim/ROADMAP/tasks/a|lib.nvim/a]]"` (the
+`wikilink` writes `"[[a]]"` when the slug is unique in the vault (to a finished task its file name,
+`"[[2026-09-01_a]]"`, which Obsidian finds in `Backlog/`) and `"[[lib.nvim/ROADMAP/tasks/a|lib.nvim/a]]"` (the
 path, which Obsidian resolves, with the id as alias) when it is not. The same rule holds for `:Tasks new` (`after=`,
 `plan=`), the dashboard's assign (`P`), a move to another area (a bare `[[slug]]` still fits and is kept, an
 `[[old-area/slug]]` is rewritten) and `done --unblock` (it only sets the status: no reference is rewritten). The
-headless CLI has no `setup`: `TASKS_LINKS=wikilink` switches it there.
+headless CLI has no `setup`: `TASKS_LINKS=wikilink` switches it there. Neovim reads it too as long as `setup()` names
+no `links`; a `links` given to `setup()` (also `"plain"`) wins.
 
 A new task whose slug another area already has turns every bare `[[slug]]` that named the old task into a
 `wikilink-ambiguous` one. `new` (CLI, `:Tasks new` and its form) says so at once and names those tasks:

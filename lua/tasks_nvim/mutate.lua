@@ -370,12 +370,16 @@ end
 
 ---A list of task ids. An item may be an id or an Obsidian wikilink (`tasks_nvim.wikilinks`); a wikilink is read as
 ---the id it names and remembered in `typed` (id -> the link as given), so it is written the way it was typed.
+---A bare `[[slug]]` the task's file already holds unresolved in this field (`kept`, from `task.link_problems`) is
+---taken as written, like a dangling plain id: the list the scan gave (`move` rewriting one id of it, `set` writing it
+---back) must not be refused for a link nobody changed. A new one that names no single id is refused.
 ---@param value any
 ---@param what? string
 ---@param resolver? Tasks.LinkResolver
+---@param kept? table<string, boolean>  # raw unresolved links the file holds in this field
 ---@return string[]|nil ids
 ---@return string|table<string, string> err_or_typed  # the message, or `typed` when the list is good
-local function id_list(value, what, resolver)
+local function id_list(value, what, resolver, kept)
   what = what or "blocked_by"
   if type(value) == "string" and value:find("[[", 1, true) then
     value = wikilinks.split(value)
@@ -387,6 +391,10 @@ local function id_list(value, what, resolver)
   local typed = {}
   for i, raw in ipairs(list) do
     local id, id_err = wikilinks.typed_id(raw, what, resolver)
+    if not id and kept and kept[raw] then
+      -- the unresolved link stays as it is: the item is its raw text, written back as given
+      id = raw
+    end
     if not id then
       return nil, id_err --[[@as string]]
     end
@@ -467,9 +475,10 @@ M.SETTABLE = SETTABLE
 ---Check and normalise a `set` patch into an ordered list of `{ key, value }`.
 ---A value of `REMOVE` deletes the key (not for `title` and `status`). `blocked_by`, `after` and `plan` come out as
 ---ids (a wikilink is resolved, a bare `[[slug]]` against the vault of `opts`); `result.typed[key]` names the ids that
----were given as wikilinks (id -> the link), for the writer.
+---were given as wikilinks (id -> the link), for the writer. `opts.kept_links[key]` names the unresolved bare links
+---the task's file holds in `blocked_by` / `after`; those pass as written (`id_list`).
 ---@param patch table<string, any>
----@param opts? { allow_unknown?: boolean, root?: string, link_resolver?: Tasks.LinkResolver }
+---@param opts? { allow_unknown?: boolean, root?: string, link_resolver?: Tasks.LinkResolver, kept_links?: table<string, table<string, boolean>> }
 ---@return table[]|nil pairs
 ---@return string|nil err
 local function normalize_patch(patch, opts)
@@ -616,7 +625,12 @@ local function normalize_patch(patch, opts)
           needs = needs or (type(item) == "string" and item:find("[[", 1, true))
         end
       end
-      local ids, typed = id_list(value, key, needs and resolver() or nil)
+      local ids, typed = id_list(
+        value,
+        key,
+        needs and resolver() or nil,
+        opts and opts.kept_links and opts.kept_links[key]
+      )
       if not ids then
         return nil, typed --[[@as string]]
       end
@@ -1136,8 +1150,18 @@ function M.set(id, patch, opts)
   end
   -- one index of the vault's slugs for the wikilinks of the patch and of the file (built only when one is bare)
   local resolver = opts.link_resolver or wikilinks.resolver(root)
-  local pairs_, perr =
-    normalize_patch(patch, vim.tbl_extend("force", opts, { link_resolver = resolver }))
+  -- the bare links the scan left unresolved in this file: written back as they are, not refused (`id_list`)
+  local kept_links = {}
+  for _, p in ipairs(task.link_problems or {}) do
+    if p.field == "blocked_by" or p.field == "after" then
+      kept_links[p.field] = kept_links[p.field] or {}
+      kept_links[p.field][p.raw] = true
+    end
+  end
+  local pairs_, perr = normalize_patch(
+    patch,
+    vim.tbl_extend("force", opts, { link_resolver = resolver, kept_links = kept_links })
+  )
   if not pairs_ then
     return nil, perr
   end

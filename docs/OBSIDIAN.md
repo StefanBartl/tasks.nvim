@@ -195,8 +195,9 @@ plan: "[[desktop-ui]]"                            # a plan file
   `wikilink-ambiguous` in `check` (the candidates are named), one that exists nowhere `wikilink-dangling`; the task
   then waits as on a blocker that does not exist. Give such a link the area (`[[<area>/<slug>]]`) or the path. A new
   task of the same slug in another area makes an old `[[<slug>]]` ambiguous: `check` says so.
-- **Write**: `setup({ links = "wikilink" })` (headless CLI: `TASKS_LINKS=wikilink`) makes `:Tasks set`, `new`, the
-  dashboard's assign (`P`) and a move to another area write new references as `"[[<slug>]]"`, or, when the slug is
+- **Write**: `setup({ links = "wikilink" })` (headless CLI: `TASKS_LINKS=wikilink`; a `links` given to `setup()`
+  wins over it) makes `:Tasks set`, `new`, the dashboard's assign (`P`) and a move to another area write new
+  references as `"[[<slug>]]"` (to a finished task as its file name, `"[[2026-10-01_<slug>]]"`), or, when the slug is
   in several areas, as the vault path with the id as alias (`"[[<area>/ROADMAP/tasks/<slug>|<area>/<slug>]]"`), which
   Obsidian resolves too. The default `plain` writes ids. A reference a file already holds keeps its form in both
   modes, and a value you type as a wikilink is written as typed.
@@ -205,7 +206,8 @@ plan: "[[desktop-ui]]"                            # a plan file
   an id follows `links`; a move rewrites a target that named the old id and keeps a bare `[[<slug>]]`, and `new`
   names a plan whose `[[<slug>]]` target the new slug makes ambiguous.
 - **Finishing** moves the file to `Backlog/` under a date prefix: Obsidian then shows `[[<slug>]]` to the finished
-  task as unresolved, `tasks.nvim` still reads it as the finished id. Wikilinks in `refs` (file paths) and in the
+  task as unresolved, `tasks.nvim` still reads it as the finished id (a link `tasks.nvim` writes to a finished task
+  names its file, `[[2026-10-01_<slug>]]`, which both resolve). Wikilinks in `refs` (file paths) and in the
   generated index are not part of this.
 
 ## What is not there yet
