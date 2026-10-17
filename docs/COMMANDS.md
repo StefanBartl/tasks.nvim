@@ -281,6 +281,11 @@ path, which Obsidian resolves, with the id as alias) when it is not. The same ru
 `[[old-area/slug]]` is rewritten) and `done --unblock` (it only sets the status: no reference is rewritten). The
 headless CLI has no `setup`: `TASKS_LINKS=wikilink` switches it there.
 
+A new task whose slug another area already has turns every bare `[[slug]]` that named the old task into a
+`wikilink-ambiguous` one. `new` (CLI, `:Tasks new` and its form) says so at once and names those tasks:
+`warn: [[dep-a]] now names cascade.nvim/dep-a and lib.nvim/dep-a: wikilink-ambiguous in lib.nvim/linked (write the id
+there)`. The task is created all the same.
+
 ### `:Tasks attach <id> <file> [name=<file name>]` / `task folderize <id>`
 
 A task may be a folder `tasks/<slug>/<slug>.md` that holds assets (concept section 12.2).

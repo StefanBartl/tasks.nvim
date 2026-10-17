@@ -331,6 +331,49 @@ function M.resolve(tasks, resolver)
   return tasks
 end
 
+---The ids of the tasks that name `slug` as a bare `[[slug]]` in `blocked_by`, `after` or `plan`, read from the raw
+---frontmatter (`task.meta`), so it does not matter whether the scan could resolve the link. Sorted, each id once.
+---@param tasks Tasks.Task[]
+---@param slug string
+---@param skip? string  # an id to leave out (the task that was just created)
+---@return string[]
+function M.slug_referrers(tasks, slug, skip)
+  local out, seen = {}, {}
+  for _, t in ipairs(tasks) do
+    local meta = t.meta or {}
+    for _, field in ipairs(M.FIELDS) do
+      local v = meta[field]
+      for _, raw in ipairs(type(v) == "table" and v or { v }) do
+        if type(raw) == "string" and t.id ~= skip and not seen[t.id] then
+          local kind, value = M.read(trim(raw))
+          if kind == "slug" and value == slug then
+            seen[t.id] = true
+            out[#out + 1] = t.id
+          end
+        end
+      end
+    end
+  end
+  table.sort(out)
+  return out
+end
+
+---@class Tasks.NewAmbiguity
+---@field slug string        # the slug the new task shares
+---@field ids string[]       # the ids `[[slug]]` names now (the old one and the new one), sorted
+---@field tasks string[]     # the tasks whose `[[slug]]` named the old id and is `wikilink-ambiguous` now
+
+---The warning for a new task whose slug turned bare `[[slug]]` links into `wikilink-ambiguous` ones.
+---@param amb Tasks.NewAmbiguity
+---@return string
+function M.ambiguity_message(amb)
+  return ("[[%s]] now names %s: wikilink-ambiguous in %s (write the id there)"):format(
+    amb.slug,
+    table.concat(amb.ids, " and "),
+    table.concat(amb.tasks, ", ")
+  )
+end
+
 ---The id one reference names, or nil (a malformed one, a slug that is not exactly one id).
 ---@param raw string
 ---@param resolver? Tasks.LinkResolver
