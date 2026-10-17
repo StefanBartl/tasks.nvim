@@ -153,6 +153,7 @@ A wrong key or value is ignored with a message and listed in
 
 An id is `<area>/<slug>`. `<Tab>` completes verbs, areas, ids, values and the
 settable keys. Details: docs/COMMANDS.md. Scenarios: docs/WORKFLOWS.md.
+The vault in Obsidian (Bases, Dataview, what to edit there): docs/OBSIDIAN.md.
 
 ==============================================================================
 5. DASHBOARD AND FORM KEYS                                       *tasks_nvim-keys*
