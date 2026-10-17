@@ -179,6 +179,7 @@ the file `done` says so and moves the task anyway.
 | [docs/BINDINGS.md](docs/BINDINGS.md) | commands, dashboard and form keys, autocommands |
 | [docs/ENGINE.md](docs/ENGINE.md) | file format, rules, checks, the CLI, limits |
 | [docs/CONTRACT.md](docs/CONTRACT.md) | the machine contract `tasks-export/1`: documents, rules, errors, how to write a reader |
+| [docs/OBSIDIAN.md](docs/OBSIDIAN.md) | the vault in Obsidian: what it sees, a Bases view and a Dataview query, rules for editing there |
 | `:help tasks_nvim` | the same in short |
 
 ## Tests

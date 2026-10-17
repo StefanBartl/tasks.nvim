@@ -5,6 +5,10 @@ the version is not tagged yet (the repository is not published).
 
 ## [Unreleased]
 
+### Added
+
+- `docs/OBSIDIAN.md`: how to open the vault in Obsidian, what it sees (properties, the index links, the Backlog), a Bases view and a Dataview query of the open tasks, and the rules for editing there (fields yes; finishing, moving and renaming only through `:Tasks`; `updated`, the lock, the Tasks and Kanban plugins). Linked from the README and `:help tasks_nvim`.
+
 ### Changed
 
 - `fsio.EXISTS` and `fsio.is_exists` are the token of `lib.nvim.fs.create_exclusive`; `fsio.copy` answers its own `fsio.COPY_EXISTS` (checked with `fsio.is_copy_exists`), so a change of the library's token cannot change what `attach` tells about an asset that is already there. `tasks_export_encoder_spec.lua` pins the encoder rules a client of `tasks-export/1` relies on (an empty object stays `{}` and an empty list `[]`, NaN, inf and a whole number of 2^53 or more are errors, `<`, U+2028 and U+2029 are escaped, a bad byte becomes U+FFFD); the spec of the copied encoder is gone since the encoder lives in lib.nvim. The README names the spec count (70).
