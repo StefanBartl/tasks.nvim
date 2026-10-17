@@ -70,6 +70,27 @@ M.FOLDERS = {
 
 local same_path = fsio.same_path
 
+---An existing `file:` target is replaced only after a yes in a dialog (UI-05): the command already knows the file,
+---so it asks instead of telling the user to type the whole line again with `--force`. `--force` skips the question.
+---`run(force)` is called at once when nothing is in the way, after a yes with `true`; a no leaves the file alone.
+---@param target Tasks.Target|nil
+---@param force boolean|nil
+---@param run fun(force: boolean|nil)
+local function unless_overwrite_refused(target, force, run)
+  local blocked = view.overwrite_guard(target, force)
+  if not blocked then
+    run(force)
+    return
+  end
+  confirm.yesno(blocked .. ". Overwrite it?", "overwrite", function(yes)
+    if yes then
+      run(true)
+    else
+      notify.info("cancelled -- the file stays as it is")
+    end
+  end)
+end
+
 ---@param path string
 ---@param root string
 ---@return string
@@ -436,18 +457,20 @@ function M.plan(ctx)
     text = table.concat(plan_view.ids(scope.plan, { ready_only = flags.ready == true }), "\n")
       .. "\n"
   end
-  local ok, err = view.deliver_text(text, target, {
-    force = flags.force,
-    title = "tasks/plan/" .. scope.title:gsub("[^%w._-]+", "-"),
-    filetype = format == "md" and "markdown" or "text",
-  })
-  if not ok then
-    notify.error(tostring(err))
-    return
-  end
-  notify.info(
-    ("plan of %s: %d task(s), %d ready"):format(scope.title, #scope.tasks, #scope.plan.ready)
-  )
+  unless_overwrite_refused(target, flags.force, function(force)
+    local ok, err = view.deliver_text(text, target, {
+      force = force,
+      title = "tasks/plan/" .. scope.title:gsub("[^%w._-]+", "-"),
+      filetype = format == "md" and "markdown" or "text",
+    })
+    if not ok then
+      notify.error(tostring(err))
+      return
+    end
+    notify.info(
+      ("plan of %s: %d task(s), %d ready"):format(scope.title, #scope.tasks, #scope.plan.ready)
+    )
+  end)
 end
 
 ---`:Tasks lists`: pick a named list and open it as the dashboard.
@@ -521,16 +544,20 @@ function M.quickwins(ctx)
   else
     text = table.concat(qw.ids(result), "\n") .. "\n"
   end
-  local ok, err = view.deliver_text(text, target, {
-    force = flags.force,
-    title = "tasks/quickwins/" .. scope.title:gsub("[^%w._-]+", "-"),
-    filetype = format == "md" and "markdown" or "text",
-  })
-  if not ok then
-    notify.error(tostring(err))
-    return
-  end
-  notify.info(("quick wins of %s: %d (of %d task(s))"):format(scope.title, #result.wins, result.n))
+  unless_overwrite_refused(target, flags.force, function(force)
+    local ok, err = view.deliver_text(text, target, {
+      force = force,
+      title = "tasks/quickwins/" .. scope.title:gsub("[^%w._-]+", "-"),
+      filetype = format == "md" and "markdown" or "text",
+    })
+    if not ok then
+      notify.error(tostring(err))
+      return
+    end
+    notify.info(
+      ("quick wins of %s: %d (of %d task(s))"):format(scope.title, #result.wins, result.n)
+    )
+  end)
 end
 
 ---`:Tasks plan --write=<file> [--scope=<name>] [--check]`: replace only the generated block of the scope in a
@@ -914,24 +941,26 @@ function M.list(ctx)
   end
 
   local label = area or "alle Bereiche"
-  local ok, err = view.deliver(shown, target, {
-    force = flags.force,
-    format = flags.format,
-    heading = ("Offene Tasks — %s (%d)"):format(label, #shown),
-    note = (function()
-      local base = filter_note(flags)
-      if ref_note then
-        return base and (base .. "\n\n" .. ref_note) or ref_note
-      end
-      return base
-    end)(),
-    title = "tasks://tasks/" .. (area or "all"),
-  })
-  if not ok then
-    notify.error(("cannot deliver the task list: %s"):format(tostring(err)))
-    return
-  end
-  notify.info(("%d open task(s) -> %s"):format(#shown, flags.to or "buffer"))
+  unless_overwrite_refused(target, flags.force, function(force)
+    local ok, err = view.deliver(shown, target, {
+      force = force,
+      format = flags.format,
+      heading = ("Offene Tasks — %s (%d)"):format(label, #shown),
+      note = (function()
+        local base = filter_note(flags)
+        if ref_note then
+          return base and (base .. "\n\n" .. ref_note) or ref_note
+        end
+        return base
+      end)(),
+      title = "tasks://tasks/" .. (area or "all"),
+    })
+    if not ok then
+      notify.error(("cannot deliver the task list: %s"):format(tostring(err)))
+      return
+    end
+    notify.info(("%d open task(s) -> %s"):format(#shown, flags.to or "buffer"))
+  end)
 end
 
 ---`:Tasks index [<area>] [--all] [--check]`
@@ -1628,31 +1657,30 @@ function M.task_template(ctx)
     notify.error(terr or "--to=qf makes no sense for the template")
     return
   end
-  local blocked = view.overwrite_guard(target, ctx.flags.force)
-  if blocked then
-    notify.error(blocked .. " (pass --force to overwrite it)")
-    return
-  end
   local text = mutate.template({ with_plan = ctx.flags["with-plan"] == true })
-  local ok, err = harvest.emit(text, target.kind, {
-    path = target.path,
-    title = "tasks://task-template",
-    filetype = "markdown",
-  })
-  if not ok then
-    if target.kind == "clipboard" then
-      harvest.sink.scratch(text, { title = "tasks://task-template", filetype = "markdown" })
-      notify.warn(("no clipboard (%s): the template is in a buffer instead"):format(tostring(err)))
+  unless_overwrite_refused(target, ctx.flags.force, function()
+    local ok, err = harvest.emit(text, target.kind, {
+      path = target.path,
+      title = "tasks://task-template",
+      filetype = "markdown",
+    })
+    if not ok then
+      if target.kind == "clipboard" then
+        harvest.sink.scratch(text, { title = "tasks://task-template", filetype = "markdown" })
+        notify.warn(
+          ("no clipboard (%s): the template is in a buffer instead"):format(tostring(err))
+        )
+        return
+      end
+      notify.error(tostring(err))
       return
     end
-    notify.error(tostring(err))
-    return
-  end
-  if target.kind == "clipboard" then
-    notify.info("task template copied to the + register")
-  else
-    notify.info("task template -> " .. target.kind)
-  end
+    if target.kind == "clipboard" then
+      notify.info("task template copied to the + register")
+    else
+      notify.info("task template -> " .. target.kind)
+    end
+  end)
 end
 
 ---Seam for the choice among several tasks (`nil`: `vim.ui.select`); specs replace it.
@@ -1825,19 +1853,16 @@ function M.open_area(ctx)
       return
     end
     local kind = target and target.kind or "buffer"
-    local blocked = view.overwrite_guard(target, ctx.flags.force)
-    if blocked then
-      notify.error(blocked .. " (pass --force to overwrite it)")
-      return
-    end
-    local ok, err = harvest.emit(table.concat(lines, "\n") .. "\n", kind, {
-      path = target and target.path or nil,
-      title = ("tasks://open/%s/%s"):format(area, folder),
-      filetype = "text",
-    })
-    if not ok then
-      notify.error(tostring(err))
-    end
+    unless_overwrite_refused(target, ctx.flags.force, function()
+      local ok, err = harvest.emit(table.concat(lines, "\n") .. "\n", kind, {
+        path = target and target.path or nil,
+        title = ("tasks://open/%s/%s"):format(area, folder),
+        filetype = "text",
+      })
+      if not ok then
+        notify.error(tostring(err))
+      end
+    end)
     return
   end
 

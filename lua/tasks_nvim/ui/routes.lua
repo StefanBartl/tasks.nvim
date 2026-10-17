@@ -391,7 +391,7 @@ end
 -- can mean something else on another route (`to`, `format`, `status`, `area`, ...): each route words its own.
 
 ---The `--force` of every route that can write a `--to=file:` target.
-local FORCE_DESC = "Overwrite an existing --to=file: target"
+local FORCE_DESC = "Overwrite an existing --to=file: target without asking"
 
 ---The `<id>` of the routes that also take a finished task (`allow_done`) and only read it.
 local ANY_TASK_DESC = "Id of a task, open or finished, as area/slug"

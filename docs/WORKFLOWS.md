@@ -170,8 +170,9 @@ The filter and sort you leave are remembered for the next time; a `--sort=` on t
 ```
 
 Targets: `buffer` (default), `clipboard`, `qf` (one quickfix entry per task, each jumping to the file),
-`file:<path>`, `echo`, `mdview` (a browser preview). An existing file is never overwritten unless you pass
-`--force` (the dashboard asks instead). CSV cells that start like a formula are defused.
+`file:<path>`, `echo`, `mdview` (a browser preview). An existing file is never overwritten silently: the
+command (and the dashboard) asks first, a "No" leaves the file as it is, `--force` skips the question. CSV cells
+that start like a formula are defused.
 
 ### 11. An AI session or a script without an editor — works today
 
@@ -437,7 +438,7 @@ The design lives with the author's notes; the tasks for it are ordinary tasks in
 | --- | --- | --- |
 | a task file has broken frontmatter | it is listed as invalid; `check` names the problem | fix the file; one bad file never hides the others |
 | two sessions edit the same task | `done` stops with "changed while it was being finished"; dashboard `s`/`p` skips the task | run it again after looking at the file |
-| an export would replace a file | "already exists (pass --force ...)" | choose another path or pass `--force` |
+| an export would replace a file | a dialog: "... already exists. Overwrite it?" | answer it; "No" keeps the file, `--force` skips the question |
 | `TASKS.md` is your own file | "not a generated index": it is never overwritten | move it; the generated one gets the name |
 | a `blocked_by` id does not exist | `check`: `blocked-by-dangling` | correct the id (ids are `<area>/<slug>`) |
 | two tasks wait on each other | `check`: `blocked-by-cycle` (an error) naming the members; the plan leaves them out of the stages | remove one `blocked_by` |

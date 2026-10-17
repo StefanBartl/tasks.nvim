@@ -77,8 +77,16 @@ return function(H)
     has(text, "## Ready now")
     has(text, "## Stage 1")
     has(said(), "plan of lib.nvim")
+    local overwrite_q = nil
+    confirm.yesno = function(msg, _, cb)
+      overwrite_q = msg
+      cb(false)
+    end
+    H.write(plan_file, "MINE")
     run("plan lib.nvim --to=file:" .. plan_file)
-    has(said(), "already exists", "an existing file is never overwritten silently")
+    has(overwrite_q or "", "already exists", "an existing file is never overwritten silently")
+    eq(H.read(plan_file), "MINE", "a no keeps the file")
+    confirm.yesno = orig_yesno
     run("plan lib.nvim --to=file:" .. plan_file .. " --force")
     eq(H.read(plan_file), text, "--force replaces it")
 
