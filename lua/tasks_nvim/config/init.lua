@@ -13,6 +13,11 @@ local M = {}
 ---@type Tasks.Opts
 local state = vim.deepcopy(DEFAULTS)
 
+---The top-level keys a `setup()` set (and that passed the check), so a caller can tell a chosen value from the
+---default (`wikilinks.mode`: an explicit `links = "plain"` wins over `$TASKS_LINKS`).
+---@type table<string, boolean>
+local given = {}
+
 ---@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"|"value"|"effort"|"lists"|"finished_window"|"links"
 
 ---@type table<string, Tasks.ConfigType|table<string, Tasks.ConfigType>>
@@ -223,6 +228,9 @@ function M.merge(opts)
   -- What any `setup()` threw away stays listed for `:checkhealth`: a second call that ignores nothing
   -- must not erase the first call's messages.
   local checked = M.validate(opts)
+  for key in pairs(checked) do
+    given[key] = true
+  end
   state = vim.tbl_deep_extend("force", state, checked)
   if checked.lists then
     -- The named lists are replaced as a whole, not merged: a later `setup({ lists })` is the complete set.
@@ -235,6 +243,14 @@ end
 ---@return Tasks.Opts
 function M.get()
   return vim.deepcopy(state)
+end
+
+---Whether a `setup()` set the top-level option `key` (a value that was ignored does not count): the value `get`
+---returns is then the user's choice, not the default.
+---@param key string
+---@return boolean
+function M.given(key)
+  return given[key] == true
 end
 
 ---The messages collected since the last call, each returned once.

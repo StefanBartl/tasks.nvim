@@ -33,7 +33,7 @@
 ---@field blocked_by string[]         # Task ids (hard edges: the task cannot begin before they are finished). A wikilink is its id; a bare `[[slug]]` that names no single id stays as written (see `link_problems`).
 ---@field after string[]              # Task ids (soft edges: "should come after", never an error), read like `blocked_by`.
 ---@field order? number               # Sort hint inside a stage (a fraction like 2.5 slots a task in between).
----@field plan? string                # The plan file (`<area>/<slug>`) this task belongs to (a wikilink read as its id).
+---@field plan? string                # The plan file (`<area>/<slug>`) this task belongs to (a wikilink read as its id; a bare `[[slug]]` that names no single id leaves it unset, see `link_problems`).
 ---@field phase? string               # The stage of that plan (a kebab-case word).
 ---@field wikilinks? { field: string, index?: integer, slug: string, raw: string }[]  # Bare `[[slug]]` references `parse_text` could not settle without the vault; `scan` resolves them (`tasks_nvim.wikilinks.resolve`) and clears the field.
 ---@field link_problems? Tasks.LinkProblem[]  # The bare `[[slug]]` references that name no id or several (`check`: `wikilink-dangling`, `wikilink-ambiguous`).
