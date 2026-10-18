@@ -196,8 +196,9 @@ prefix, no absolute path, no control character, no colon but the line suffix. En
 are. A task file that is a link is not written through (`forbidden`). No error carries a path of this machine, only ids.
 
 **`move_area`** answers, as a dry run, with `move`: `new_id`, `from`, `to`, `conflicts` (the slug is taken in the target
-area), `references` (the `blocked_by`, `after`, `refs`, plan `target` and documents that name the old id and would
-dangle) and `notes`. Without `dry_run` the move is made (see the table above); a report that is not `ok` (a taken slug)
+area, or the target of an earlier `move_area` of the same request: the dry run sees the disk, and the real run makes the
+moves one after the other), `references` (the `blocked_by`, `after`, `refs`, plan `target` and documents that name the
+old id and would dangle) and `notes`. Without `dry_run` the move is made (see the table above); a report that is not `ok` (a taken slug)
 fails with `invalid_argument` and writes nothing.
 
 The exit code of `tasks call ops` is `0` when every operation worked, `1` when any failed (the document says which), `2`

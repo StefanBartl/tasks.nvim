@@ -632,6 +632,25 @@ return function(H)
   )
   eq(blocked.results[1].error.code, "invalid_argument")
 
+  -- two moves of one request that meet in one target: the dry run sees the disk only, so it must say for the second
+  -- what the real run does (an open task of that name is there by then); the dry run writes nothing
+  F.task(H, root, "third.nvim", "anchor", F.meta("Anchor", "open", {}))
+  F.task(H, root, "lib.nvim", "twin", F.meta("Twin", "open", {}))
+  F.task(H, root, "cascade.nvim", "twin", F.meta("Twin", "open", {}))
+  local before_twins = everything()
+  local twins = ops({
+    { op = "move_area", id = "lib.nvim/twin", to_area = "third.nvim" },
+    { op = "move_area", id = "cascade.nvim/twin", to_area = "third.nvim" },
+  }, { dry_run = true }).results
+  eq({ twins[1].ok, twins[1].outcome }, { true, "would_move" }, vim.inspect(twins[1]))
+  eq({ twins[2].ok, twins[2].outcome }, { false, "blocked" }, vim.inspect(twins[2]))
+  eq(twins[2].move.conflicts[1].code, "slug-taken")
+  has(twins[2].move.conflicts[1].message, "another move of this request")
+  eq(everything(), before_twins, "a dry run touches not one byte")
+  vim.fn.delete(root .. "/third.nvim", "rf")
+  os.remove(find("lib.nvim/twin").path)
+  os.remove(find("cascade.nvim/twin").path)
+
   -- the move: file, references and indexes follow, the answer carries the way moved_back
   local moved = one({ { op = "move_area", id = "lib.nvim/alpha", to_area = "cascade.nvim" } })
   eq({ moved.ok, moved.outcome, moved.new_id }, { true, "moved", "cascade.nvim/alpha" })

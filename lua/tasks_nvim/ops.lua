@@ -249,6 +249,7 @@ end
 ---@field today string
 ---@field dry boolean
 ---@field touched table<string, boolean>   # Areas whose index must be written.
+---@field claimed table<string, string>   # A dry run: the new id an earlier `move_area` of the request takes -> its old id.
 
 ---A failure from `mutate` whose reason has no code: its validation messages are all about the request.
 ---@param ctx Tasks.OpsCtx
@@ -838,6 +839,23 @@ local function do_move_area(op, ctx)
   if not report then
     return fail(ctx, err, info)
   end
+  -- a dry run sees the disk, not the earlier moves of the request: the real run makes them one after the other, so a
+  -- target that an earlier move of this request takes is taken (the second move would be refused as "open task already")
+  if report.ok then
+    local first = ctx.claimed[report.new_id]
+    if first then
+      report.ok = false
+      report.conflicts[#report.conflicts + 1] = {
+        code = "slug-taken",
+        message = ("%s is the target of another move of this request (%s)"):format(
+          report.new_id,
+          first
+        ),
+      }
+    else
+      ctx.claimed[report.new_id] = op.id
+    end
+  end
   local conflicts = {}
   for _, c in ipairs(report.conflicts) do
     conflicts[#conflicts + 1] = { code = c.code, message = c.message }
@@ -972,7 +990,7 @@ door = contract_ops.make({
     if not model.is_date(today) then
       return nil, errors.fail("invalid_argument", "today is not a date (YYYY-MM-DD)")
     end
-    return { root = root, today = today, dry = params.dry_run == true, touched = {} }
+    return { root = root, today = today, dry = params.dry_run == true, touched = {}, claimed = {} }
   end,
   ---The index of every area that changed, once.
   ---@param ctx Tasks.OpsCtx

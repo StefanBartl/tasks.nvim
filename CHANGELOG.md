@@ -36,6 +36,11 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- `ops` dry run of `move_area`: two moves of one request that meet in one target (`x/foo` and `y/foo` to `z`) were both
+  reported `would_move`, while the real run refuses the second as "an open task already". The dry run now claims the new
+  id of every move it reports `ok` and names a second move to the same id as a `slug-taken` conflict (`blocked`).
+  Spec: `tasks_ops_spec`.
+
 - Review of the Obsidian wikilinks: `set` writes a bare `[[slug]]` that the task's file already holds unresolved
   (`wikilink-dangling` / `wikilink-ambiguous`) back as it is instead of refusing the list, so a move to another area
   no longer fails on a task whose `blocked_by` / `after` holds such a link next to the moved id, and the list the scan
