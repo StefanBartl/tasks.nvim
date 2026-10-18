@@ -489,7 +489,7 @@ can ask the same question):
   case does not matter; an open task comes before a finished one of the same closeness;
 - `area/part` looks in that area only, `area/` alone lists all of its tasks;
 - one hit, or one slug that is exactly the text, is opened; several are offered in a list (`vim.ui.select`);
-  none is told with the closest slugs ("did you mean");
+  none is told, and when some slugs come close they are offered to pick from ("did you mean");
 - `<Tab>` completes a slug without its area where it names one task only.
 
 `preview` and the other verbs still take a full id.

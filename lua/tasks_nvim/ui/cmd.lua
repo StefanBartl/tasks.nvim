@@ -1720,10 +1720,29 @@ function M.task_open(ctx)
     return open_id(one.id)
   end
   if #found == 0 then
+    local _, vault_err = vault.root()
+    -- a part of a name that comes close to some tasks offers them (a full id, or a missing vault, keeps its reason)
+    if #near > 0 and not vault_err and not query:find("/", 1, true) then
+      local items = {}
+      for _, id in ipairs(near) do
+        items[#items + 1] = { id = id }
+      end
+      local pick = M.select_task or vim.ui.select
+      pick(items, {
+        prompt = ("no task matches '%s'; did you mean> "):format(query),
+        format_item = function(m)
+          return m.id
+        end,
+      }, function(choice)
+        if choice then
+          open_id(choice.id)
+        end
+      end)
+      return
+    end
     local hint = #near > 0 and ("; did you mean " .. table.concat(near, ", ") .. "?") or ""
     -- a full id that is none keeps its reason ("no such open task"); a part of a name has none, unless the
     -- vault itself is missing: that is what to tell then
-    local _, vault_err = vault.root()
     local reason = (vault_err or query:find("/", 1, true)) and (vault_err or find_err)
       or ("no task matches '%s'"):format(query)
     notify.error(reason .. hint)

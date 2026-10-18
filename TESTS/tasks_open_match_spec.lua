@@ -139,10 +139,26 @@ return function(H)
   open("alpha-widget")
   eq(vim.api.nvim_buf_get_name(0), before, "a cancelled choice opens nothing")
 
+  -- no hit, but close slugs: they are offered, and the choice opens the task
+  pick = 3
   open("alphx")
+  ok(offered ~= nil, "the close slugs are offered, not only named")
+  eq(#offered.items, 3)
+  has(offered.prompt, "did you mean", "the question says why")
+  has(offered.shown, "cascade.nvim/alpha-widget", "with their ids")
+  eq(notes, {}, "and nothing is told as an error")
+  eq(current(), "alpha-widget.md", "the chosen one is opened")
+  pick = nil
+  before = vim.api.nvim_buf_get_name(0)
+  open("alphx")
+  eq(vim.api.nvim_buf_get_name(0), before, "a dismissed choice opens nothing")
+  eq(notes, {}, "and says nothing")
+
+  -- nothing comes close: told as before, no question
+  open("zzzzqq")
   eq(offered, nil)
-  has(notes[1].msg, "no task matches 'alphx'", "no hit is told")
-  has(notes[1].msg, "did you mean", "with the closest slugs")
+  has(notes[1].msg, "no task matches 'zzzzqq'", "no hit is told")
+  ok(not notes[1].msg:find("did you mean", 1, true), "without a guess")
   eq(notes[1].level, vim.log.levels.ERROR)
 
   -- a missing vault is what is told, not "no task matches"
