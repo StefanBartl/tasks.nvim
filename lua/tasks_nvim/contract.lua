@@ -604,6 +604,15 @@ function M.list(params, opts)
         retryable = false,
       }
   end
+  -- `sort` is a word of `model.SORTS`; "default" (and none) is the plan's order.
+  local sort = "default"
+  if params.sort ~= nil then
+    local parsed, serr = model.parse_sort(params.sort)
+    if not parsed then
+      return nil, { code = "invalid_argument", message = serr, retryable = false }
+    end
+    sort = parsed
+  end
   local view, err = opts and opts.view or nil, nil
   if not view then
     view, err = M.view(opts)
@@ -641,6 +650,10 @@ function M.list(params, opts)
       return nil, kerr
     end
     matching = kept
+  end
+  if sort ~= "default" then
+    -- The same orders as the text form; a tie ends by name (`model.compare`), so a page is the same each time.
+    matching = model.sort(matching, sort, { scores = opts and opts.scores })
   end
   local items = {}
   for i = offset + 1, math.min(offset + limit, #matching) do

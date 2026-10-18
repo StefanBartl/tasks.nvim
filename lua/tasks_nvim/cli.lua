@@ -62,7 +62,7 @@ commands:
        [--category=c,d] [--severity=high,critical] [--value=4,5|>=4] [--actor=cdx,me,pair,none]
        [--stale=<days>|refs] [--stale-refs] [--blocked] [--reminders] [--ready|--waiting] [--unestimated] [--quick-win]
        [--sort=default|prio-effort|severity|frecency|roi] [--format=tsv|ids|json] [--done]   open tasks, sorted; one line each
-       (--format=json: the tasks.list document in plan order, with [--limit=1..100] [--offset=N]; --done: the finished tasks)
+       (--format=json: the tasks.list document in plan order or that of --sort, with [--limit=1..100] [--offset=N]; --done: the finished tasks)
        (categories: @CATEGORIES@; --category=bug also finds kind=bug;
         --sort=prio-effort: small first within a prio; --sort=severity: critical first;
         --sort=roi: most value per effort first, tasks without value or effort last;

@@ -36,7 +36,13 @@ local methods = {
     end,
   },
   list = {
-    params = { area = "string", status = "string_list", limit = "integer", offset = "integer" },
+    params = {
+      area = "string",
+      status = "string_list",
+      limit = "integer",
+      offset = "integer",
+      sort = "string",
+    },
     run = function(params, opts)
       return contract.list(params, opts)
     end,

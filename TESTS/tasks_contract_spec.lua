@@ -288,6 +288,46 @@ return function(H)
   eq({ doing.total, doing.items[1].id }, { 1, "lib.nvim/beta" })
   local in_area = call("list", { area = "cascade.nvim" })
   eq(in_area.total, 4)
+
+  -- sort: the words of model.SORTS; none or "default" is the plan's order
+  local function ids_of(doc)
+    local ids = {}
+    for _, it in ipairs(doc.items) do
+      ids[#ids + 1] = it.id
+    end
+    return ids
+  end
+  local plan_ids = ids_of(call("list"))
+  eq(ids_of(call("list", { sort = "default" })), plan_ids, "default is the plan's order")
+  local by_prio = call("list", { sort = "prio-effort" })
+  eq(by_prio.total, 14, "a sort drops nothing")
+  local seen_ids = ids_of(by_prio)
+  table.sort(seen_ids)
+  local want_ids = vim.deepcopy(plan_ids)
+  table.sort(want_ids)
+  eq(seen_ids, want_ids, "the same tasks, in another order")
+  -- within one status the best prio comes first and a task without a prio last
+  local open_plan = ids_of(call("list", { status = { "open" } }))
+  local open_prio = call("list", { status = { "open" }, sort = "prio-effort" })
+  local last_prio = 0
+  for _, it in ipairs(open_prio.items) do
+    local p = it.prio or math.huge
+    ok(p >= last_prio, "prio-effort: the best prio first, none last (" .. it.id .. ")")
+    last_prio = p
+  end
+  ok(not vim.deep_equal(ids_of(open_prio), open_plan), "the fixture is not in prio order already")
+  local paged = {}
+  for _, off in ipairs({ 0, 5, 10 }) do
+    vim.list_extend(paged, ids_of(call("list", { sort = "prio-effort", limit = 5, offset = off })))
+  end
+  eq(paged, ids_of(by_prio), "pages of a sorted list join up")
+  eq(
+    ids_of(call("list", { sort = "frecency" })),
+    ids_of(call("list", { sort = "frecency" })),
+    "frecency without scores is the same each time"
+  )
+  local _, _, scode = call("list", { sort = "sideways" })
+  eq(scode, "invalid_argument", "an unknown word is refused")
   golden("list-page")
 
   -- ── task ──

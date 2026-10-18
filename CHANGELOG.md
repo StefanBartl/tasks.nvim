@@ -7,6 +7,9 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Contract `tasks-export/1`: `tasks.list` takes `sort` (`default` = the plan's order, `prio-effort`, `severity`, `frecency`, `roi`;
+  an unknown word is `invalid_argument`) and `tasks list --format=json` takes `--sort` instead of refusing it. The
+  document is unchanged (no new field). For `tasks-desktop`, which offers the sorts of the engine in its list.
 - Plan files: `target` takes Obsidian wikilinks like `blocked_by` / `after` / `plan` of a task (`"[[<slug>]]"`,
   `"[[<area>/<slug>|Alias]]"`, the vault path): read as its id (`plans.parse` with `ctx.link_resolver`; `area`, `all`,
   `find` pass one over the vault), a bare slug of no or several ids is `wikilink-dangling` / `wikilink-ambiguous` in

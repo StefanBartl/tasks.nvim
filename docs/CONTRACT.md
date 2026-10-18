@@ -34,7 +34,7 @@ nvim --headless -u NONE -l scripts/tasks.lua --capabilities          # the same 
 |---|---|---|
 | `hello` | none | `tasks.hello`: the handshake, reads no task |
 | `snapshot` | none | `tasks.snapshot`: counts, areas, the plan head, the plans and every open task with its readiness |
-| `list` | `area`, `status` (list), `limit` (1..100), `offset` | `tasks.list`: a page of open tasks in plan order |
+| `list` | `area`, `status` (list), `sort` (`default`, `prio-effort`, `severity`, `frecency`, `roi`), `limit` (1..100), `offset` | `tasks.list`: a page of open tasks in plan order, or in the order of `sort` (the orders of `tasks list --sort`; a tie ends by name; `frecency` reads the usage file of the editor on the machine of the engine and is the default order where there is none; an unknown word is `invalid_argument`) |
 | `task` | `id` (`<area>/<slug>`) | `tasks.task`: one task with its body and steps |
 | `bodies` | `ids` (list, up to 1000) or `offset`, `limit` (1..1000) | `tasks.bodies`: `{ id, etag, body, body_truncated }` of the open tasks in plan order, for a reader that searches the text; a page ends early at 2 MiB of text (`next_offset`); the `rev` is that of the snapshot of the same state |
 | `estimate` | `ids` (list, up to 1000), `assume` (list of `{ id, effort?, value? }`, up to 1000) | `tasks.estimate`: the figures of an estimate for the tasks named (default: all open tasks) - `tasks`, `days` and its `range` (every size at its low and at its high end), `value`, `n_with_effort`, `n_without_effort`, `n_with_value`, `n_without_value`, `roi`, `quick_wins`, `unestimated` - as they would be with the efforts and values of `assume` (nothing is written; an id outside `ids`, an entry with neither effort nor value, an effort the engine would not write (`XS`..`XL`, or `<n>d` up to 3650 days: a larger number is no effort anywhere, in a file or through the write door) and a value outside 1..5 are `invalid_argument`); `assumed` says how many tasks were taken so. The tasks are in the order of the snapshot, so `unestimated` and `quick_wins` read as there. The figures are those of the snapshot: a client that shows the sum of a draft never reckons it itself |
@@ -51,7 +51,7 @@ The exit code of `tasks call` is `0` for an answer, `2` for `invalid_argument`, 
 `tasks.error` document on stdout like any answer, so a reader parses one stream. `--pretty` indents the same document.
 
 The command line also has a few forms of the same documents: `tasks list --format=json [--limit=N] [--offset=N]` (the
-filters of the text form, the plan's order; `--sort` has no meaning there), `tasks next --format=json`,
+filters of the text form, the plan's order, or that of `--sort`), `tasks next --format=json`,
 `tasks areas --format=json|tsv`, `tasks show <id> [--format=json|text]`, `tasks plans [area]` and `tasks list --done`
 (the finished tasks of the Backlogs).
 

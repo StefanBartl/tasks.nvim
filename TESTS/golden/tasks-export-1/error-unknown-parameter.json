@@ -7,7 +7,7 @@
   },
   "generated_at": "2026-01-01T00:00:00Z",
   "kind": "tasks.error",
-  "message": "list takes no parameter 'colour' (parameters: area, limit, offset, status)",
+  "message": "list takes no parameter 'colour' (parameters: area, limit, offset, sort, status)",
   "plugin": "tasks.nvim",
   "retryable": false,
   "schema": 1,

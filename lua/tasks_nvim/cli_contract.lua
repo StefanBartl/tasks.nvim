@@ -268,17 +268,10 @@ end
 ---@return integer
 function M.list_json(ctx, filter, area, helpers)
   local opt = ctx.args.opt
-  if opt.sort ~= nil then
-    return usage_error(
-      ctx,
-      "invalid_argument",
-      "--sort has no meaning with --format=json: the order is the plan's (see readiness.rank)"
-    )
-  end
   if opt.ready and opt.waiting then
     return usage_error(ctx, "invalid_argument", "--ready and --waiting exclude each other")
   end
-  local params = { area = area }
+  local params = { area = area, sort = opt.sort }
   if opt.limit ~= nil then
     local n = helpers.to_int(opt.limit --[[@as string]], "--limit")
     params.limit = n or -1
