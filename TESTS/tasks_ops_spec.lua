@@ -728,6 +728,23 @@ return function(H)
     table.sort(out)
     return out
   end
+  -- a positive control: the detector finds what it is for, or the empty answers below prove nothing
+  F.task(
+    H,
+    root,
+    "lib.nvim",
+    "ghostly",
+    F.meta("Ghostly", "open", {
+      { "after", "[lib.nvim/no-such]" },
+      { "blocked_by", "lib.nvim/no-such-either" },
+    })
+  )
+  eq(
+    dangling(),
+    { "after-dangling lib.nvim/ghostly", "blocked-by-dangling lib.nvim/ghostly" },
+    "a relation that points nowhere is found"
+  )
+  os.remove(find("lib.nvim/ghostly").path)
   eq(dangling(), {}, "nothing dangles before the move")
 
   local with_plan = one({ { op = "move_area", id = "lib.nvim/alpha", to_area = "cascade.nvim" } })
