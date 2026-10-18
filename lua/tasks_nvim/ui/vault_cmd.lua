@@ -527,7 +527,11 @@ function M.create(ctx)
     local named = ops.check_vault_target(ctx.args.dir, {})
     adds_to_current = named ~= nil and fsio.norm(named) == fsio.norm(current)
   end
-  if current and not force and not adds_to_current then
+  -- Another vault is in use: the plan question below says so and asks. With `--yes` (no question) or with nobody to ask,
+  -- `--force` stays the only way, as it was.
+  local switching = current ~= nil and not force and not adds_to_current
+  local yes = ctx.flags and ctx.flags.yes
+  if switching and (yes or #vim.api.nvim_list_uis() == 0) then
     notify.warn(
       ("A vault is in use already (%s). :TasksVault create --force <dir> makes and uses another one"):format(
         current
@@ -560,11 +564,21 @@ function M.create(ctx)
       return make(dir)
     end
     local confirm = require("tasks_nvim.ui.confirm")
-    confirm.yesno(M.create_plan(root, areas), "create it", function(accepted)
-      if accepted then
-        make(dir)
+    local question = M.create_plan(root, areas)
+    if switching then
+      local note = "A vault is in use already (%s). This makes and uses another one for this session;"
+        .. " the one in use stays what setup() or $TASKS_VAULT names.\n\n"
+      question = note:format(current) .. question
+    end
+    confirm.yesno(
+      question,
+      switching and "make and use another vault" or "create it",
+      function(accepted)
+        if accepted then
+          make(dir)
+        end
       end
-    end)
+    )
   end
   local dir = ctx.args.dir
   if dir and dir ~= "" then

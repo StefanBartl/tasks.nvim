@@ -454,6 +454,33 @@ return function(H)
   end)
   has(notes[1].msg, "in use already", "a second create without --force is refused")
   ok(not H.exists(H.tmpdir() .. "/other"))
+
+  -- at the editor the same create asks instead (the plan question names the vault in use); No switches nothing
+  local uis_was = vim.api.nvim_list_uis
+  vim.api.nvim_list_uis = function()
+    return { {} }
+  end
+  plan_shown, answer = nil, false
+  quiet(function()
+    cmd.create(ctx({ dir = H.tmpdir() .. "/other" }))
+  end)
+  has(plan_shown, "A vault is in use already", "asked in the plan, not refused")
+  has(plan_shown, target, "the question names the vault in use")
+  has(plan_shown, "REQUIRED", "and still carries the plan")
+  ok(not H.exists(H.tmpdir() .. "/other"), "No makes nothing")
+  eq(vault.root(), target, "and switches nothing")
+  -- --yes has no question to answer, so it still needs --force
+  plan_shown = nil
+  quiet(function()
+    cmd.create(ctx({ dir = H.tmpdir() .. "/other" }, { yes = true }))
+  end)
+  has(notes[1].msg, "in use already", "--yes without --force is refused")
+  has(notes[1].msg, "--force")
+  eq(plan_shown, nil, "and asks nothing")
+  ok(not H.exists(H.tmpdir() .. "/other"))
+  vim.api.nvim_list_uis = uis_was
+  answer = true
+
   -- naming the vault in use again adds an area to it: no --force, nothing switched
   quiet(function()
     cmd.create(ctx({ dir = target }, { yes = true }, { "added.nvim" }))
@@ -469,6 +496,19 @@ return function(H)
   end)
   eq(plan_shown, nil, "--yes skips the question")
   eq(vault.root(), target .. "-2", "--force switches the vault")
+
+  -- Yes to the question switches, the same way --force does
+  vim.api.nvim_list_uis = function()
+    return { {} }
+  end
+  plan_shown, answer = nil, true
+  quiet(function()
+    cmd.create(ctx({ dir = target .. "-4" }))
+  end)
+  has(plan_shown, "A vault is in use already", "the question was asked")
+  ok(H.exists(target .. "-4"), "Yes makes the vault")
+  eq(vault.root(), target .. "-4", "and uses it")
+  vim.api.nvim_list_uis = uis_was
 
   -- a clipboard that cannot be written is not reported as written
   cmd.copy = function()
