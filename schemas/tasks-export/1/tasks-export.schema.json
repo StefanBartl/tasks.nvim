@@ -17,6 +17,9 @@
       "$ref": "#/$defs/Order"
     },
     {
+      "$ref": "#/$defs/NamedLists"
+    },
+    {
       "$ref": "#/$defs/Bodies"
     },
     {
@@ -998,6 +1001,75 @@
           "description": "Absent on the last page."
         },
         "incomplete": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "NamedList": {
+      "description": "A named list: a filter and an order under a name. `options` are the option words of the command line (`tasks list --effort=<=S --sort=roi`), a switch is present as `true` and absent when off; a list the engine rejects is not here but in `notes` of the document. `summary` is the one line the engine shows for it (its description, else the words).",
+      "type": "object",
+      "required": ["name", "source", "summary", "options"],
+      "properties": {
+        "name": { "type": "string" },
+        "source": { "enum": ["builtin", "saved", "config"] },
+        "desc": { "type": "string" },
+        "summary": { "type": "string" },
+        "options": {
+          "type": "object",
+          "properties": {
+            "area": { "type": "string" },
+            "sort": { "type": "string" },
+            "status": { "type": "string" },
+            "prio": { "type": "string" },
+            "effort": { "type": "string" },
+            "kind": { "type": "string" },
+            "category": { "type": "string" },
+            "severity": { "type": "string" },
+            "value": { "type": "string" },
+            "actor": { "type": "string" },
+            "tag": { "type": "string" },
+            "stale": { "type": "string" },
+            "plan": { "type": "string" },
+            "phase": { "type": "string" },
+            "blocked": { "const": true },
+            "reminders": { "const": true },
+            "unestimated": { "const": true },
+            "stale_refs": { "const": true },
+            "quick_win": { "const": true },
+            "readiness": { "enum": ["ready", "waiting"] }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "NamedLists": {
+      "description": "tasks.lists: the named lists of the engine, read only: the built-in ones, the ones saved with the editor and the ones of the configuration (the later source wins by name), by name. `notes` tell what had to be left out (a rejected definition, a shadowed list, a state file that cannot be read), in the engine's words and without a path of this machine.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": ["kind", "digest", "lists", "notes"],
+      "properties": {
+        "kind": {
+          "const": "tasks.lists"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "lists": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NamedList"
+          }
+        },
+        "notes": {
           "type": "array",
           "items": {
             "type": "string"

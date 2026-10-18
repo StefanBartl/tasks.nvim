@@ -1,0 +1,52 @@
+{
+  "digest": "sha256:8c9b3f42348e2082",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "kind": "tasks.lists",
+  "lists": [
+    {
+      "desc": "Value and effort at the quick-win thresholds, best return first",
+      "name": "quick-wins",
+      "options": {
+        "quick_win": true,
+        "sort": "roi",
+        "status": "open,doing,decision"
+      },
+      "source": "builtin",
+      "summary": "Value and effort at the quick-win thresholds, best return first"
+    },
+    {
+      "desc": "Prio 1-2, effort S or less, startable now",
+      "name": "small-and-important",
+      "options": {
+        "effort": "\u003c=S",
+        "prio": "\u003c=2",
+        "readiness": "ready",
+        "sort": "prio-effort",
+        "status": "open,doing"
+      },
+      "source": "builtin",
+      "summary": "Prio 1-2, effort S or less, startable now"
+    },
+    {
+      "desc": "Missing an effort or a value (what `estimate --walk` asks for)",
+      "name": "unestimated",
+      "options": {
+        "status": "open,doing,decision",
+        "unestimated": true
+      },
+      "source": "builtin",
+      "summary": "Missing an effort or a value (what `estimate --walk` asks for)"
+    }
+  ],
+  "notes": [],
+  "plugin": "tasks.nvim",
+  "schema": 1,
+  "vault": {
+    "id": "vault"
+  }
+}

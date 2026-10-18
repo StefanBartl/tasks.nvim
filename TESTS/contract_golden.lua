@@ -32,6 +32,7 @@ G.cases = {
   { name = "snapshot", method = "snapshot" },
   { name = "list-page", method = "list", request = '{"params":{"limit":5,"offset":0}}' },
   { name = "order-roi", method = "order", request = '{"params":{"sort":"roi"}}' },
+  { name = "lists-builtin", method = "lists" },
   { name = "task-alpha", method = "task", request = '{"params":{"id":"lib.nvim/alpha"}}' },
   { name = "bodies-page", method = "bodies", request = '{"params":{"limit":3,"offset":1}}' },
   {
@@ -131,6 +132,11 @@ G.cases = {
 function G.fixed(fn)
   local contract = require("tasks_nvim.contract")
   local clock, engine = contract.clock, contract.engine_info
+  -- The named lists of this machine are not part of a golden: no state file, none of the configuration.
+  local lists, config = require("tasks_nvim.lists"), require("tasks_nvim.config")
+  local lists_path, lists_cfg = lists.path(), config.get().lists or {}
+  lists.set_path(vim.fn.tempname() .. "/none/lists.json")
+  config.merge({ lists = {} })
   contract.clock = function()
     return "2026-01-01T00:00:00Z"
   end
@@ -139,6 +145,8 @@ function G.fixed(fn)
   end
   local ok, res = pcall(fn)
   contract.clock, contract.engine_info = clock, engine
+  lists.set_path(lists_path)
+  config.merge({ lists = lists_cfg })
   if not ok then
     error(res, 0)
   end

@@ -67,6 +67,7 @@ M.CAPABILITIES = {
   "if_match",
   "links",
   "list",
+  "lists",
   "move_area",
   "move_area_preview",
   "next",
@@ -708,6 +709,63 @@ function M.order(params, opts)
   doc.total = #ids
   doc.ids = json.memo(ids)
   doc.incomplete = view.errors
+  return seal(doc, nil), nil
+end
+
+---The options of a list that the document carries: the fields of `lists.FIELD_ORDER` but the description and the
+---name, as they are written (strings, `true` for a switch).
+---@param def table
+---@return table
+local function list_options(def)
+  local lists = require("tasks_nvim.lists")
+  local out = {}
+  for _, key in ipairs(lists.FIELD_ORDER) do
+    if key ~= "desc" and def[key] ~= nil then
+      out[key] = def[key]
+    end
+  end
+  return json.object(out)
+end
+
+---The named lists of the engine, read only: the built-in ones, the ones saved with the editor and the ones of the
+---configuration (the later source wins by name). A list is a filter and an order under a name; running one is the
+---reader's job. What the engine had to leave out (a definition it rejects, a list another source shadows, a state file
+---it cannot read) comes back as `notes`, in its words and without a path of this machine.
+---@param opts? { root?: string }
+---@return table|nil doc
+---@return Tasks.ContractError|string|nil err
+function M.lists(opts)
+  local root, rerr = vault.root(opts)
+  if not root then
+    return nil, rerr
+  end
+  local lists = require("tasks_nvim.lists")
+  local entries, raw_notes = lists.all()
+  local _, status = lists.load()
+  local items = {}
+  for _, e in ipairs(entries) do
+    local item = {
+      name = e.name,
+      source = e.source,
+      summary = clip(lists.summary(e.def), M.LIMITS.title),
+      options = list_options(e.def),
+    }
+    if e.def.desc then
+      item.desc = clip(e.def.desc, M.LIMITS.summary)
+    end
+    items[#items + 1] = json.object(item)
+  end
+  local notes = {}
+  for _, n in ipairs(raw_notes) do
+    if n:find("^saved lists not used:") then
+      -- (the engine's sentence names the state file of the editor: only the fact is told)
+      n = "saved lists not used: the state file is " .. tostring(status)
+    end
+    notes[#notes + 1] = clip(redact(root, n), 600)
+  end
+  local doc = M.head("tasks.lists", root)
+  doc.lists = json.memo(items)
+  doc.notes = notes
   return seal(doc, nil), nil
 end
 

@@ -357,6 +357,77 @@ return function(H)
   local _, _, acode = call("order", { area = "no-such-area" })
   eq(acode, "not_found", "an unknown area is refused")
   golden("order-roi")
+
+  -- ── lists: the named lists of the engine, read only ──
+  do
+    local named = require("tasks_nvim.lists")
+    local config = require("tasks_nvim.config")
+    local state = H.tmpdir() .. "/lists-state/lists.json"
+    local old_path, old_cfg = named.path(), config.get().lists or {}
+    named.set_path(state)
+    config.merge({ lists = {} })
+    local by_name = function(doc)
+      local out = {}
+      for _, l in ipairs(doc.lists) do
+        out[l.name] = l
+      end
+      return out
+    end
+
+    -- no state file and no configuration: the built-in lists, with the option words
+    local doc, _, lcode2 = call("lists")
+    eq(lcode2, nil)
+    eq({ doc.kind, doc.notes }, { "tasks.lists", {} })
+    local names = {}
+    for _, l in ipairs(doc.lists) do
+      names[#names + 1] = l.name .. ":" .. l.source
+    end
+    eq(names, { "quick-wins:builtin", "small-and-important:builtin", "unestimated:builtin" })
+    eq(by_name(doc)["small-and-important"].options, {
+      status = "open,doing",
+      prio = "<=2",
+      effort = "<=S",
+      readiness = "ready",
+      sort = "prio-effort",
+    })
+    eq(by_name(doc)["quick-wins"].options.quick_win, true, "a switch is true")
+
+    -- a saved list is there, and replaces a built-in one of its name; a list of the configuration wins over both
+    ok(named.save("mine", { effort = "<=S", value = 4, desc = "small and worth it", sort = "roi" }))
+    ok(named.save("quick-wins", { status = "open" }))
+    config.merge({ lists = { mine = { status = "doing" }, ["from-config"] = { actor = "cdx" } } })
+    doc = call("lists")
+    local got = by_name(doc)
+    eq(got.mine.source, "config", "the configuration wins over the saved list of the name")
+    eq(got.mine.options, { status = "doing" })
+    eq(got["quick-wins"].source, "saved", "a saved list replaces the built-in one")
+    eq(got["quick-wins"].options, { status = "open" })
+    eq(got["from-config"].options, { actor = "cdx" })
+    has(
+      table.concat(doc.notes, "\n"),
+      "list 'mine' is defined in setup() and shadows the saved one"
+    )
+
+    -- a definition the engine rejects is a note, never a list that selects nothing
+    config.merge({ lists = { broken = { effort = "huge" } } })
+    doc = call("lists")
+    eq(by_name(doc).broken, nil)
+    has(table.concat(doc.notes, "\n"), "list 'broken'")
+
+    -- a state file that cannot be read: the built-in lists, a note, and no path of this machine anywhere
+    config.merge({ lists = {} })
+    H.write(state, "{not json")
+    doc = call("lists")
+    eq(#doc.lists, 3, "only the built-in lists are left")
+    local text = table.concat(doc.notes, "\n")
+    has(text, "saved lists not used")
+    lacks(text, "lists-state", "the state file is not named")
+    lacks(vim.json.encode(doc), vim.fs.dirname(state), "no folder of this machine in the document")
+
+    named.set_path(old_path)
+    config.merge({ lists = old_cfg })
+  end
+  golden("lists-builtin")
   local _, _, scode = call("list", { sort = "sideways" })
   eq(scode, "invalid_argument", "an unknown word is refused")
   golden("list-page")

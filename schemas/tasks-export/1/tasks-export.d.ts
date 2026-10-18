@@ -8,6 +8,7 @@ export type TasksExport =
   | Snapshot
   | List
   | Order
+  | NamedLists
   | Bodies
   | Estimate
   | PlanFor
@@ -206,6 +207,15 @@ export type Order = Head & {
   total: number;
   ids: string[];
   incomplete: string[];
+};
+/**
+ * tasks.lists: the named lists of the engine, read only: the built-in ones, the ones saved with the editor and the ones of the configuration (the later source wins by name), by name. `notes` tell what had to be left out (a rejected definition, a shadowed list, a state file that cannot be read), in the engine's words and without a path of this machine.
+ */
+export type NamedLists = Head & {
+  kind: "tasks.lists";
+  digest: Digest;
+  lists: NamedList[];
+  notes: string[];
 };
 /**
  * tasks.bodies: the text of many tasks, a page at a time, for a reader that searches it. Its `rev` is that of the snapshot of the same vault.
@@ -663,6 +673,37 @@ export interface Readiness {
   };
   in_cycle?: true;
   same_file?: string[];
+}
+/**
+ * A named list: a filter and an order under a name. `options` are the option words of the command line (`tasks list --effort=<=S --sort=roi`), a switch is present as `true` and absent when off; a list the engine rejects is not here but in `notes` of the document. `summary` is the one line the engine shows for it (its description, else the words).
+ */
+export interface NamedList {
+  name: string;
+  source: "builtin" | "saved" | "config";
+  desc?: string;
+  summary: string;
+  options: {
+    area?: string;
+    sort?: string;
+    status?: string;
+    prio?: string;
+    effort?: string;
+    kind?: string;
+    category?: string;
+    severity?: string;
+    value?: string;
+    actor?: string;
+    tag?: string;
+    stale?: string;
+    plan?: string;
+    phase?: string;
+    blocked?: true;
+    reminders?: true;
+    unestimated?: true;
+    stale_refs?: true;
+    quick_win?: true;
+    readiness?: "ready" | "waiting";
+  };
 }
 export interface TaskBrief {
   id: string;

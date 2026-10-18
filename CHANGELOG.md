@@ -7,6 +7,10 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Contract `tasks-export/1`: the method `lists` (capability `lists`, document `tasks.lists`): the named lists of the engine - built-in,
+  saved with the editor, from the configuration - read only, with the option words of each and `notes` for what was left out
+  (a rejected definition, a shadowed list, a state file that cannot be read, told without its path). For `tasks-desktop`,
+  which shows them next to its own lists.
 - Contract `tasks-export/1`: the method `order` (capability `order`, document `tasks.order`): the ids of the open tasks in the order of
   `sort`, in one document, for a reader that lays the tasks it holds along an order (`tasks-desktop` read one page of 100 per
   read of the vault: 7 pages, about 3.5 s, for 617 tasks).
