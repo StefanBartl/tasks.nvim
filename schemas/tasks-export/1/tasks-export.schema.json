@@ -944,7 +944,7 @@
       "unevaluatedProperties": false
     },
     "List": {
-      "description": "tasks.list: one page of tasks in plan order.",
+      "description": "tasks.list: one page of tasks in plan order, or in the order the request named (`sort`).",
       "allOf": [
         {
           "$ref": "#/$defs/Head"

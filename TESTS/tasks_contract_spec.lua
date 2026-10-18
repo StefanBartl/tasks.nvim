@@ -326,6 +326,17 @@ return function(H)
     ids_of(call("list", { sort = "frecency" })),
     "frecency without scores is the same each time"
   )
+  -- frecency: the scores put the tasks along them, the rest follows (the scores are the test seam of `model.sort`)
+  local scored, serr = contract.list(
+    { sort = "frecency" },
+    { root = root, scores = { [plan_ids[3]] = 5, [plan_ids[5]] = 2 } }
+  )
+  eq(serr, nil)
+  eq(
+    { ids_of(scored)[1], ids_of(scored)[2] },
+    { plan_ids[3], plan_ids[5] },
+    "frecency: the highest score first, then the next"
+  )
   local _, _, scode = call("list", { sort = "sideways" })
   eq(scode, "invalid_argument", "an unknown word is refused")
   golden("list-page")

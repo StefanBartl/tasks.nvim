@@ -179,7 +179,7 @@ export type Severity = "low" | "medium" | "high" | "critical";
 export type Category =
   "bug" | "security" | "performance" | "docs" | "ruleset" | "ux" | "bindings" | "refactor" | "tests" | "ci";
 /**
- * tasks.list: one page of tasks in plan order.
+ * tasks.list: one page of tasks in plan order, or in the order the request named (`sort`).
  */
 export type List = Head & {
   kind: "tasks.list";
