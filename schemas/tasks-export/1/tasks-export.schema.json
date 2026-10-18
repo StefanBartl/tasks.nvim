@@ -14,6 +14,9 @@
       "$ref": "#/$defs/List"
     },
     {
+      "$ref": "#/$defs/Order"
+    },
+    {
       "$ref": "#/$defs/Bodies"
     },
     {
@@ -993,6 +996,44 @@
           "type": "integer",
           "minimum": 1,
           "description": "Absent on the last page."
+        },
+        "incomplete": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "Order": {
+      "description": "tasks.order: the ids of the open tasks in the order the request named (`sort`; \"default\" is the plan's order), all in one document.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": ["kind", "digest", "sort", "total", "ids", "incomplete"],
+      "properties": {
+        "kind": {
+          "const": "tasks.order"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "sort": {
+          "enum": ["default", "prio-effort", "severity", "frecency", "roi"]
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "incomplete": {
           "type": "array",

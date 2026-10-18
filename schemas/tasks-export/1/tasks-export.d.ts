@@ -7,6 +7,7 @@ export type TasksExport =
   | Hello
   | Snapshot
   | List
+  | Order
   | Bodies
   | Estimate
   | PlanFor
@@ -193,6 +194,17 @@ export type List = Head & {
    * Absent on the last page.
    */
   next_offset?: number;
+  incomplete: string[];
+};
+/**
+ * tasks.order: the ids of the open tasks in the order the request named (`sort`; "default" is the plan's order), all in one document.
+ */
+export type Order = Head & {
+  kind: "tasks.order";
+  digest: Digest;
+  sort: "default" | "prio-effort" | "severity" | "frecency" | "roi";
+  total: number;
+  ids: string[];
   incomplete: string[];
 };
 /**

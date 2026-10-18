@@ -47,6 +47,12 @@ local methods = {
       return contract.list(params, opts)
     end,
   },
+  order = {
+    params = { area = "string", status = "string_list", sort = "string" },
+    run = function(params, opts)
+      return contract.order(params, opts)
+    end,
+  },
   task = {
     params = { id = "string" },
     required = { "id" },

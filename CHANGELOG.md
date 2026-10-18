@@ -7,6 +7,9 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Contract `tasks-export/1`: the method `order` (capability `order`, document `tasks.order`): the ids of the open tasks in the order of
+  `sort`, in one document, for a reader that lays the tasks it holds along an order (`tasks-desktop` read one page of 100 per
+  read of the vault: 7 pages, about 3.5 s, for 617 tasks).
 - Contract `tasks-export/1`: `tasks.list` takes `sort` (`default` = the plan's order, `prio-effort`, `severity`, `frecency`, `roi`;
   an unknown word is `invalid_argument`) and `tasks list --format=json` takes `--sort` instead of refusing it. The
   document is unchanged (no new field). For `tasks-desktop`, which offers the sorts of the engine in its list.

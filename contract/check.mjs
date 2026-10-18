@@ -108,6 +108,7 @@ mutate(
 );
 mutate("a vault id that is not a string", "snapshot", (d) => (d.vault.id = 7));
 mutate("schema 2", "hello", (d) => (d.schema = 2));
+mutate("an order by a word the engine does not have", "order-roi", (d) => (d.sort = "sideways"));
 mutate(
   "a conflict group as a tuple",
   "snapshot",

@@ -31,6 +31,7 @@ G.cases = {
   { name = "hello", method = "hello" },
   { name = "snapshot", method = "snapshot" },
   { name = "list-page", method = "list", request = '{"params":{"limit":5,"offset":0}}' },
+  { name = "order-roi", method = "order", request = '{"params":{"sort":"roi"}}' },
   { name = "task-alpha", method = "task", request = '{"params":{"id":"lib.nvim/alpha"}}' },
   { name = "bodies-page", method = "bodies", request = '{"params":{"limit":3,"offset":1}}' },
   {

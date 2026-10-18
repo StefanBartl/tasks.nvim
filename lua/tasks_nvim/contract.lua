@@ -71,6 +71,7 @@ M.CAPABILITIES = {
   "move_area_preview",
   "next",
   "ops",
+  "order",
   "plan_for",
   "plan_new",
   "reminders",
@@ -573,37 +574,13 @@ function M.build_snapshot(opts)
   return seal(doc, rev_of(view, entries)), nil
 end
 
----A page of tasks in plan order, optionally of one area or status. The command line adds what the dispatcher does not
----offer (`opts.filter`: every filter of `list`; `opts.readiness`: `ready` or `waiting`).
----@param params? { area?: string, status?: string[], limit?: integer, offset?: integer }
----@param opts? { root?: string, view?: Tasks.ContractView, filter?: Tasks.Filter, readiness?: "ready"|"waiting" }
----@return table|nil doc
----@return Tasks.ContractError|string|nil err
-function M.list(params, opts)
-  params = params or {}
-  local limit = params.limit or M.LIMITS.list_items
-  local offset = params.offset or 0
-  if
-    type(limit) ~= "number"
-    or limit < 1
-    or limit > M.LIMITS.list_items
-    or limit ~= math.floor(limit)
-  then
-    return nil,
-      {
-        code = "invalid_argument",
-        message = ("limit must be 1..%d"):format(M.LIMITS.list_items),
-        retryable = false,
-      }
-  end
-  if type(offset) ~= "number" or offset < 0 or offset ~= math.floor(offset) then
-    return nil,
-      {
-        code = "invalid_argument",
-        message = "offset must be a whole number of 0 or more",
-        retryable = false,
-      }
-  end
+---The open tasks a `list` or `order` request names, in the order it names: the view, the tasks and the sort word.
+---@param params table
+---@param opts? { root?: string, view?: Tasks.ContractView, filter?: Tasks.Filter, readiness?: "ready"|"waiting", scores?: table<string, number> }
+---@return Tasks.ContractView|nil view
+---@return Tasks.Task[]|Tasks.ContractError|string|nil matching  # the error when `view` is nil
+---@return string|nil sort
+local function matching_tasks(params, opts)
   -- `sort` is a word of `model.SORTS`; "default" (and none) is the plan's order.
   local sort = "default"
   if params.sort ~= nil then
@@ -655,6 +632,44 @@ function M.list(params, opts)
     -- The same orders as the text form; a tie ends by name (`model.compare`), so a page is the same each time.
     matching = model.sort(matching, sort, { scores = opts and opts.scores })
   end
+  return view, matching, sort
+end
+
+---A page of tasks in plan order, optionally of one area or status. The command line adds what the dispatcher does not
+---offer (`opts.filter`: every filter of `list`; `opts.readiness`: `ready` or `waiting`).
+---@param params? { area?: string, status?: string[], limit?: integer, offset?: integer }
+---@param opts? { root?: string, view?: Tasks.ContractView, filter?: Tasks.Filter, readiness?: "ready"|"waiting" }
+---@return table|nil doc
+---@return Tasks.ContractError|string|nil err
+function M.list(params, opts)
+  params = params or {}
+  local limit = params.limit or M.LIMITS.list_items
+  local offset = params.offset or 0
+  if
+    type(limit) ~= "number"
+    or limit < 1
+    or limit > M.LIMITS.list_items
+    or limit ~= math.floor(limit)
+  then
+    return nil,
+      {
+        code = "invalid_argument",
+        message = ("limit must be 1..%d"):format(M.LIMITS.list_items),
+        retryable = false,
+      }
+  end
+  if type(offset) ~= "number" or offset < 0 or offset ~= math.floor(offset) then
+    return nil,
+      {
+        code = "invalid_argument",
+        message = "offset must be a whole number of 0 or more",
+        retryable = false,
+      }
+  end
+  local view, matching = matching_tasks(params, opts)
+  if not view then
+    return nil, matching
+  end
   local items = {}
   for i = offset + 1, math.min(offset + limit, #matching) do
     local t = matching[i]
@@ -670,6 +685,30 @@ function M.list(params, opts)
   end
   doc.incomplete = view.errors
   return seal(doc, rev_of(view, items)), nil
+end
+
+---The ids of the open tasks in the order of `sort` (one of `model.SORTS`; none or "default" is the plan's order), all in
+---one document: a reader that lays tasks it already holds along an order does not page through `list` for it.
+---@param params? { area?: string, status?: string[], sort?: string }
+---@param opts? { root?: string, view?: Tasks.ContractView, scores?: table<string, number> }
+---@return table|nil doc
+---@return Tasks.ContractError|string|nil err
+function M.order(params, opts)
+  params = params or {}
+  local view, matching, sort = matching_tasks(params, opts)
+  if not view then
+    return nil, matching
+  end
+  local ids = {}
+  for i, t in ipairs(matching) do
+    ids[i] = t.id
+  end
+  local doc = M.head("tasks.order", view.root)
+  doc.sort = sort
+  doc.total = #ids
+  doc.ids = json.memo(ids)
+  doc.incomplete = view.errors
+  return seal(doc, nil), nil
 end
 
 ---One task with its body and steps.

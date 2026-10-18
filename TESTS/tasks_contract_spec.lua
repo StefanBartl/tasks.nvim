@@ -337,6 +337,26 @@ return function(H)
     { plan_ids[3], plan_ids[5] },
     "frecency: the highest score first, then the next"
   )
+  -- order: the same ids as the pages of `list`, in one document
+  for _, word in ipairs({ "default", "prio-effort", "severity", "roi" }) do
+    local ord, _, ocode = call("order", { sort = word })
+    eq(ocode, nil, word)
+    eq({ ord.kind, ord.sort, ord.total, #ord.ids }, { "tasks.order", word, 14, 14 }, word)
+    local paged_ids = {}
+    for _, off in ipairs({ 0, 5, 10 }) do
+      vim.list_extend(paged_ids, ids_of(call("list", { sort = word, limit = 5, offset = off })))
+    end
+    eq(ord.ids, paged_ids, "order is what the pages of list join up to: " .. word)
+  end
+  eq(call("order").sort, "default", "no word is the plan's order")
+  eq(call("order").ids, plan_ids, "no word is the plan's order")
+  eq(call("order", { status = { "doing" } }).ids, { "lib.nvim/beta" }, "the status narrows it")
+  eq(call("order", { area = "cascade.nvim" }).total, 4, "the area narrows it")
+  local _, _, ncode = call("order", { sort = "sideways" })
+  eq(ncode, "invalid_argument", "an unknown word is refused")
+  local _, _, acode = call("order", { area = "no-such-area" })
+  eq(acode, "not_found", "an unknown area is refused")
+  golden("order-roi")
   local _, _, scode = call("list", { sort = "sideways" })
   eq(scode, "invalid_argument", "an unknown word is refused")
   golden("list-page")
