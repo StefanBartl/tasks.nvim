@@ -212,6 +212,6 @@ plan: "[[desktop-ui]]"                            # a plan file
 
 ## What is not there yet
 
-- **YAML block lists** in the frontmatter are read and kept since `lib.nvim@9b7a7f3`; older versions of `lib.nvim`
+- **YAML block lists** in the frontmatter are read and kept since `lib.nvim@46e03fa`; older versions of `lib.nvim`
   report such a file as `frontmatter-invalid`. Update `lib.nvim` if `check` does that after an edit in Obsidian.
 - Opening a task in Obsidian from Neovim (`obsidian://open`) is not part of `tasks.nvim`.
