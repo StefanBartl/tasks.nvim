@@ -472,7 +472,7 @@ return function(H)
         ok(vim.tbl_contains(f.values, "fine"), "a tag of normal length stays")
         for _, v in ipairs(f.values) do
           ok(vim.fn.strchars(v) <= contract.LIMITS.title, "no value is longer than the limit")
-          ok(v ~= ("x"):rep(contract.LIMITS.title), "a long tag is not cut to the limit")
+          ok(v:find("^xxx") == nil, "a long tag is not there at all, cut or not")
         end
       end
     end
