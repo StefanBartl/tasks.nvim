@@ -18,6 +18,7 @@ export type TasksExport =
   | Areas
   | Finished
   | Links
+  | Groupings
   | DonePreview
   | Result
   | Error;
@@ -478,6 +479,23 @@ export type Links = Head & {
     areas: [string, string, ...string[]];
   }[];
   incomplete: string[];
+};
+/**
+ * tasks.groupings: the fields the open tasks can be grouped by, with the values each can have and how a reader writes it. `status`, `prio`, `actor`, `kind`, `effort` and `value` are the model's; `tags`, `plan` and `phase` are the ones the open tasks name (at most 200, `truncated` says the rest); `area` is the areas of the vault; `state` is derived. `mode` says which operation writes the field: `set` (a field of the file), `tags` (the list of tags: leaving one and taking another is one `set` of the whole list) or `move_area`; a field without `mode` is read only. The same `rev` as the snapshot of the same vault.
+ */
+export type Groupings = Head & {
+  kind: "tasks.groupings";
+  rev: Rev;
+  digest: Digest;
+  fields: {
+    field: "status" | "prio" | "actor" | "kind" | "effort" | "value" | "tags" | "plan" | "phase" | "area" | "state";
+    values: string[];
+    truncated: boolean;
+    writable: boolean;
+    value_type: "string" | "number";
+    mode?: "set" | "tags" | "move_area";
+    multi?: boolean;
+  }[];
 };
 /**
  * tasks.donepreview: what finishing a task would do, with nothing written, and the `confirm` token that `done` needs for exactly this version of the file.

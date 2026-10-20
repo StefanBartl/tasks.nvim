@@ -358,6 +358,97 @@ return function(H)
   eq(acode, "not_found", "an unknown area is refused")
   golden("order-roi")
 
+  -- ── groupings: the fields the open tasks can be grouped by, and how each is written ──
+  do
+    local doc, _, gcode = call("groupings")
+    eq(gcode, nil)
+    eq(doc.kind, "tasks.groupings")
+    local state_doc = call("snapshot")
+    eq(doc.rev, state_doc.rev, "the rev of the snapshot of the same state")
+    local by, names = {}, {}
+    for _, f in ipairs(doc.fields) do
+      by[f.field] = f
+      names[#names + 1] = f.field
+    end
+    eq(names, {
+      "status",
+      "prio",
+      "actor",
+      "kind",
+      "effort",
+      "value",
+      "tags",
+      "plan",
+      "phase",
+      "area",
+      "state",
+    })
+    -- the model's fields: their words, and that a reader writes them with `set`
+    eq(
+      by.status.values,
+      { "doing", "decision", "blocked", "open", "parked" },
+      "an open task is never grouped as done"
+    )
+    eq({ by.status.mode, by.status.writable, by.status.value_type }, { "set", true, "string" })
+    eq({ by.prio.values, by.prio.value_type }, { { "1", "2", "3" }, "number" })
+    eq({ by.value.values, by.value.value_type }, { { "1", "2", "3", "4", "5" }, "number" })
+    eq(by.effort.values, { "XS", "S", "M", "L", "XL" })
+    -- the list of tags is one field written as a whole, an area by moving the file, a derived field not at all
+    eq({ by.tags.mode, by.tags.multi }, { "tags", true })
+    eq({ by.area.mode, by.area.writable }, { "move_area", true })
+    eq({ by.state.mode, by.state.writable }, { nil, false })
+    -- what comes from the vault is what the open tasks name, once each and sorted
+    local tags, plans, phases = {}, {}, {}
+    for _, t in ipairs(state_doc.tasks) do
+      for _, tag in ipairs(t.tags or {}) do
+        tags[tag] = true
+      end
+      if t.plan then
+        plans[t.plan] = true
+      end
+      if t.phase then
+        phases[t.phase] = true
+      end
+    end
+    local sorted = function(set)
+      local out = vim.tbl_keys(set)
+      table.sort(out)
+      return out
+    end
+    eq(by.tags.values, sorted(tags), "tags")
+    eq(by.plan.values, sorted(plans), "plans")
+    eq(by.phase.values, sorted(phases), "phases")
+    ok(#by.tags.values > 0, "the fixture has tags, so the check above compares something")
+    eq(
+      by.area.values,
+      vim.tbl_map(function(a)
+        return a.name
+      end, call("areas").areas),
+      "areas, by name"
+    )
+    ok(not by.tags.truncated, "few tags: nothing is cut")
+
+    -- many values are cut, and the field says so
+    local view = assert(contract.view({ root = root }))
+    local many = {}
+    for i = 1, 205 do
+      many[#many + 1] = ("tag-%03d"):format(i)
+    end
+    view.open[1].tags = many
+    local cut = assert(contract.groupings({ view = view }))
+    local cut_tags
+    for _, f in ipairs(cut.fields) do
+      if f.field == "tags" then
+        cut_tags = f
+      end
+    end
+    eq({ #cut_tags.values, cut_tags.truncated }, { 200, true })
+    local resorted = vim.deepcopy(cut_tags.values)
+    table.sort(resorted)
+    eq(cut_tags.values, resorted, "what is kept is the first 200 of the sorted values")
+    golden("groupings")
+  end
+
   -- ── lists: the named lists of the engine, read only ──
   do
     local named = require("tasks_nvim.lists")

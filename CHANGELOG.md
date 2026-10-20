@@ -7,6 +7,10 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Contract `tasks-export/1`: the method `groupings` (capability `groupings`, document `tasks.groupings`): the fields the open tasks can be
+  grouped by, with the values of each and how it is written (`set`, `tags`, `move_area`, or not at all for a derived field), under
+  the `rev` of the snapshot of the same state. For `tasks-desktop` and `rules-desktop`, whose views draw groups (columns, a grouped
+  list, a matrix) and write the field of a task dragged from one group to another without knowing a field themselves.
 - Contract `tasks-export/1`: the method `lists` (capability `lists`, document `tasks.lists`): the named lists of the engine - built-in,
   saved with the editor, from the configuration - read only, with the option words of each and `notes` for what was left out
   (a rejected definition, a shadowed list, a state file that cannot be read, told without its path). For `tasks-desktop`,

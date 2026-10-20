@@ -1,0 +1,160 @@
+{
+  "digest": "sha256:3b05061bb8602588",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "fields": [
+    {
+      "field": "status",
+      "mode": "set",
+      "truncated": false,
+      "value_type": "string",
+      "values": [
+        "doing",
+        "decision",
+        "blocked",
+        "open",
+        "parked"
+      ],
+      "writable": true
+    },
+    {
+      "field": "prio",
+      "mode": "set",
+      "truncated": false,
+      "value_type": "number",
+      "values": [
+        "1",
+        "2",
+        "3"
+      ],
+      "writable": true
+    },
+    {
+      "field": "actor",
+      "mode": "set",
+      "truncated": false,
+      "value_type": "string",
+      "values": [
+        "cdx",
+        "me",
+        "pair"
+      ],
+      "writable": true
+    },
+    {
+      "field": "kind",
+      "mode": "set",
+      "truncated": false,
+      "value_type": "string",
+      "values": [
+        "feature",
+        "task",
+        "bug",
+        "idea",
+        "research"
+      ],
+      "writable": true
+    },
+    {
+      "field": "effort",
+      "mode": "set",
+      "truncated": false,
+      "value_type": "string",
+      "values": [
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "writable": true
+    },
+    {
+      "field": "value",
+      "mode": "set",
+      "truncated": false,
+      "value_type": "number",
+      "values": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "writable": true
+    },
+    {
+      "field": "tags",
+      "mode": "tags",
+      "multi": true,
+      "truncated": false,
+      "value_type": "string",
+      "values": [
+        "docs",
+        "ui"
+      ],
+      "writable": true
+    },
+    {
+      "field": "plan",
+      "mode": "set",
+      "truncated": false,
+      "value_type": "string",
+      "values": [
+        "lib.nvim/the-plan"
+      ],
+      "writable": true
+    },
+    {
+      "field": "phase",
+      "mode": "set",
+      "truncated": false,
+      "value_type": "string",
+      "values": [
+        "build",
+        "test"
+      ],
+      "writable": true
+    },
+    {
+      "field": "area",
+      "mode": "move_area",
+      "truncated": false,
+      "value_type": "string",
+      "values": [
+        "ALL",
+        "cascade.nvim",
+        "lib.nvim",
+        "migrate.nvim",
+        "nvim-config"
+      ],
+      "writable": true
+    },
+    {
+      "field": "state",
+      "truncated": false,
+      "value_type": "string",
+      "values": [
+        "ready",
+        "decision",
+        "waiting",
+        "stuck",
+        "freed",
+        "parked",
+        "unknown"
+      ],
+      "writable": false
+    }
+  ],
+  "generated_at": "2026-01-01T00:00:00Z",
+  "kind": "tasks.groupings",
+  "plugin": "tasks.nvim",
+  "rev": "rev:a9077a",
+  "schema": 1,
+  "vault": {
+    "id": "vault"
+  }
+}

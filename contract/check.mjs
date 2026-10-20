@@ -110,6 +110,8 @@ mutate("a vault id that is not a string", "snapshot", (d) => (d.vault.id = 7));
 mutate("schema 2", "hello", (d) => (d.schema = 2));
 mutate("a list with an option the engine does not have", "lists-builtin", (d) => (d.lists[0].options.colour = "red"));
 mutate("a list from a source of its own", "lists-builtin", (d) => (d.lists[0].source = "cloud"));
+mutate("a grouping by a field the engine does not have", "groupings", (d) => (d.fields[0].field = "colour"));
+mutate("a grouping that is written by an operation the engine does not have", "groupings", (d) => (d.fields[0].mode = "drag"));
 mutate("an order by a word the engine does not have", "order-roi", (d) => (d.sort = "sideways"));
 mutate(
   "a conflict group as a tuple",

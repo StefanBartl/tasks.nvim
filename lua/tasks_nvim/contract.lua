@@ -6,7 +6,7 @@
 --- (`lib.nvim.json.canonical`). The contract is versioned (`schema: 1`), only ever grows inside a version, and is described by
 --- the JSON Schemas in `schemas/tasks-export/1/`. The Markdown files stay the single source of truth.
 ---
---- Documents (`kind`): `tasks.hello`, `tasks.snapshot`, `tasks.list`, `tasks.task`, `tasks.next`, `tasks.areas`, `tasks.finished`, `tasks.links`,
+--- Documents (`kind`): `tasks.hello`, `tasks.snapshot`, `tasks.list`, `tasks.task`, `tasks.next`, `tasks.areas`, `tasks.finished`, `tasks.links`, `tasks.groupings`,
 --- `tasks.error`. Every one starts with the same head (`schema`, `plugin`, `kind`, `generated_at`, `vault.id`,
 --- `engine`); a document that comes from a scan also carries `rev` (what the vault looked like) and `digest` (the hash
 --- of the content: without `generated_at` and `engine`, so two runs on an unchanged vault have the same digest).
@@ -63,6 +63,7 @@ M.CAPABILITIES = {
   "estimate",
   "etag",
   "finished",
+  "groupings",
   "hello",
   "if_match",
   "links",
@@ -1731,6 +1732,104 @@ function M.links(opts)
     return json.object({ id = t.id, areas = t.areas })
   end, result.tasks)
   doc.incomplete = view.errors
+  return seal(doc, rev_of(view, entries)), nil
+end
+
+---How many values of a field that comes from the vault (tags, plans, phases) a grouping lists.
+local GROUPING_VALUES_MAX = 200
+
+---The distinct values a function names over the open tasks, sorted, cut at `LIMITS.grouping_values`.
+---@param tasks table[]
+---@param pick fun(t: table): string|string[]|nil
+---@return string[] values
+---@return boolean truncated
+local function grouping_values(tasks, pick)
+  local seen, values = {}, {}
+  for _, t in ipairs(tasks) do
+    local got = pick(t)
+    if type(got) == "string" then
+      got = { got }
+    end
+    for _, v in ipairs(got or {}) do
+      if type(v) == "string" and v ~= "" and not seen[v] then
+        seen[v] = true
+        values[#values + 1] = clip(v, M.LIMITS.title)
+      end
+    end
+  end
+  table.sort(values)
+  if #values > GROUPING_VALUES_MAX then
+    return vim.list_slice(values, 1, GROUPING_VALUES_MAX), true
+  end
+  return values, false
+end
+
+---The fields the open tasks can be grouped by, with the values each can have and how a reader writes it. A reader that
+---draws groups (columns, a grouped list, a matrix) and lets a task be dragged from one group to another asks this, so
+---that the page names no field and no value itself: `status`, `prio`, `actor`, `kind`, `effort`, `value` come from the
+---model, `tags`, `plan` and `phase` from the open tasks, `area` from the vault; `state` is derived and cannot be written.
+---`mode` says which operation writes it (`set` for a field of the file, `tags` for the list of tags - leaving one and
+---taking another is one `set` of the whole list - and `move_area` for the area); a field without `mode` is read only.
+---The same `rev` as the snapshot of the same vault.
+---@param opts? { root?: string, view?: Tasks.ContractView }
+---@return table|nil doc
+---@return Tasks.ContractError|string|nil err
+function M.groupings(opts)
+  local view, err = opts and opts.view or nil, nil
+  if not view then
+    view, err = M.view(opts)
+  end
+  if not view then
+    return nil, err
+  end
+  local fields = {}
+  ---@param name string
+  ---@param values string[]|number[]
+  ---@param mode? "set"|"tags"|"move_area"
+  ---@param extra? table
+  local function add(name, values, mode, extra)
+    local item = { field = name, values = {}, truncated = false, writable = mode ~= nil }
+    local numeric = type(values[1]) == "number"
+    for _, v in ipairs(values) do
+      item.values[#item.values + 1] = tostring(v)
+    end
+    item.value_type = numeric and "number" or "string"
+    item.mode = mode
+    for k, v in pairs(extra or {}) do
+      item[k] = v
+    end
+    item.values = json.memo(item.values)
+    fields[#fields + 1] = json.object(item)
+  end
+  add("status", model.OPEN_STATUSES, "set")
+  add("prio", model.PRIOS, "set")
+  add("actor", model.ACTORS, "set")
+  add("kind", model.KINDS, "set")
+  add("effort", model.EFFORTS, "set")
+  add("value", model.VALUES, "set")
+  local tags, tags_cut = grouping_values(view.open, function(t)
+    return t.tags
+  end)
+  add("tags", tags, "tags", { truncated = tags_cut, multi = true })
+  local plans, plans_cut = grouping_values(view.open, function(t)
+    return t.plan
+  end)
+  add("plan", plans, "set", { truncated = plans_cut })
+  local phases, phases_cut = grouping_values(view.open, function(t)
+    return t.phase
+  end)
+  add("phase", phases, "set", { truncated = phases_cut })
+  local areas = vim.tbl_map(function(a)
+    return a.name
+  end, vault.areas(view.root))
+  table.sort(areas)
+  add("area", areas, "move_area")
+  add("state", { "ready", "decision", "waiting", "stuck", "freed", "parked", "unknown" }, nil)
+  local entries = vim.tbl_map(function(t)
+    return { id = t.id, etag = t.etag or etag_of(t.path) }
+  end, view.open)
+  local doc = M.head("tasks.groupings", view.root)
+  doc.fields = json.memo(fields)
   return seal(doc, rev_of(view, entries)), nil
 end
 
