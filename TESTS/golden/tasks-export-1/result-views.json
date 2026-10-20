@@ -1,0 +1,135 @@
+{
+  "client_op_id": "golden-views",
+  "digest": "sha256:1df2696057a8c513",
+  "dry_run": false,
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "kind": "tasks.result",
+  "ok": false,
+  "plugin": "tasks.nvim",
+  "results": [
+    {
+      "changed_ids": [],
+      "etag_after": "sha256:4a859d38ff816fa8",
+      "file": "cascade.nvim/ROADMAP/views/golden-view.md",
+      "id": "cascade.nvim/golden-view",
+      "inverse": {
+        "id": "cascade.nvim/golden-view",
+        "if_match": "sha256:4a859d38ff816fa8",
+        "op": "view_delete"
+      },
+      "n": 1,
+      "ok": true,
+      "op": "view_save",
+      "outcome": "created"
+    },
+    {
+      "changed_ids": [],
+      "etag_after": "sha256:bded52e3edddf808",
+      "etag_before": "sha256:0c69ada28f28de1e",
+      "file": "lib.nvim/ROADMAP/views/by-status.md",
+      "id": "lib.nvim/by-status",
+      "inverse": {
+        "id": "lib.nvim/by-status",
+        "if_match": "sha256:bded52e3edddf808",
+        "op": "view_save",
+        "view": {
+          "collapsed": [],
+          "display": "columns",
+          "group_by": "status",
+          "select": {
+            "actors": [],
+            "areas": [],
+            "kinds": [],
+            "plans": [],
+            "statuses": [
+              "open",
+              "doing",
+              "parked"
+            ],
+            "tags": []
+          },
+          "title": "Columns by status"
+        }
+      },
+      "n": 2,
+      "ok": true,
+      "op": "view_save",
+      "outcome": "changed"
+    },
+    {
+      "changed_ids": [],
+      "error": {
+        "code": "conflict",
+        "details": {
+          "actual": "sha256:bded52e3edddf808",
+          "expected": "sha256:0000000000000000",
+          "id": "lib.nvim/by-status"
+        },
+        "message": "the view lib.nvim/by-status is not the version the change was made on (it is sha256:bded52e3edddf808, the change was made on sha256:0000000000000000)",
+        "retryable": false
+      },
+      "n": 3,
+      "ok": false,
+      "op": "view_save",
+      "outcome": "failed"
+    },
+    {
+      "changed_ids": [],
+      "etag_before": "sha256:9845766db3ff5796",
+      "file": "lib.nvim/ROADMAP/views/prio-by-actor.md",
+      "id": "lib.nvim/prio-by-actor",
+      "inverse": {
+        "id": "lib.nvim/prio-by-actor",
+        "op": "view_save",
+        "view": {
+          "collapsed": [
+            "3"
+          ],
+          "display": "matrix",
+          "group_by": "prio",
+          "group_by2": "actor",
+          "select": {
+            "actors": [],
+            "areas": [
+              "lib.nvim",
+              "cascade.nvim"
+            ],
+            "kinds": [],
+            "plans": [],
+            "query": "build",
+            "statuses": [],
+            "tags": [
+              "golden"
+            ]
+          },
+          "title": "Prio by actor"
+        }
+      },
+      "n": 4,
+      "ok": true,
+      "op": "view_delete",
+      "outcome": "deleted"
+    },
+    {
+      "changed_ids": [],
+      "error": {
+        "code": "not_found",
+        "message": "no such view: lib.nvim/not-there",
+        "retryable": false
+      },
+      "n": 5,
+      "ok": false,
+      "op": "view_delete",
+      "outcome": "failed"
+    }
+  ],
+  "schema": 1,
+  "vault": {
+    "id": "vault"
+  }
+}

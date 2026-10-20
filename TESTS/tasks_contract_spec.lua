@@ -77,6 +77,8 @@ return function(H)
     "reorder",
     "set_body",
     "tick_step",
+    "view_delete",
+    "view_save",
   }) do
     table.insert(expected_caps, feature)
   end

@@ -7,6 +7,12 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Contract `tasks-export/1`: saved views in the vault. The method `views` (capability `views`, document `tasks.views`) lists the views kept
+  in `<area>/ROADMAP/views/<slug>.md` - a selection, a grouping and how it is drawn (`columns`, `list`, `matrix`) - with the version tag of
+  each file, and names a file that is no view as a problem. The operations `view_save` and `view_delete` (capabilities of the same names)
+  make, replace and delete them through the write door: a view that exists is replaced only on the version the caller read, a dry run
+  writes nothing, every change has an `inverse`. For `tasks-desktop` and `rules-desktop`, whose views are the same on every machine because
+  they live in the vault.
 - Contract `tasks-export/1`: the method `groupings` (capability `groupings`, document `tasks.groupings`): the fields the open tasks can be
   grouped by, with the values of each and how it is written (`set`, `tags`, `move_area`, or not at all for a derived field), under
   the `rev` of the snapshot of the same state. For `tasks-desktop` and `rules-desktop`, whose views draw groups (columns, a grouped

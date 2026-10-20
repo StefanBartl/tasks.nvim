@@ -53,6 +53,12 @@ local methods = {
       return contract.groupings(opts)
     end,
   },
+  views = {
+    params = {},
+    run = function(_, opts)
+      return contract.views(opts)
+    end,
+  },
   lists = {
     params = {},
     run = function(_, opts)

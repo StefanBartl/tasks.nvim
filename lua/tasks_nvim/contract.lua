@@ -6,7 +6,7 @@
 --- (`lib.nvim.json.canonical`). The contract is versioned (`schema: 1`), only ever grows inside a version, and is described by
 --- the JSON Schemas in `schemas/tasks-export/1/`. The Markdown files stay the single source of truth.
 ---
---- Documents (`kind`): `tasks.hello`, `tasks.snapshot`, `tasks.list`, `tasks.task`, `tasks.next`, `tasks.areas`, `tasks.finished`, `tasks.links`, `tasks.groupings`,
+--- Documents (`kind`): `tasks.hello`, `tasks.snapshot`, `tasks.list`, `tasks.task`, `tasks.next`, `tasks.areas`, `tasks.finished`, `tasks.links`, `tasks.groupings`, `tasks.views`,
 --- `tasks.error`. Every one starts with the same head (`schema`, `plugin`, `kind`, `generated_at`, `vault.id`,
 --- `engine`); a document that comes from a scan also carries `rev` (what the vault looked like) and `digest` (the hash
 --- of the content: without `generated_at` and `engine`, so two runs on an unchanged vault have the same digest).
@@ -83,6 +83,9 @@ M.CAPABILITIES = {
   "snapshot",
   "task",
   "tick_step",
+  "view_delete",
+  "view_save",
+  "views",
 }
 
 ---Sizes the contract promises to keep.
@@ -1838,6 +1841,54 @@ function M.groupings(opts)
   local doc = M.head("tasks.groupings", view.root)
   doc.fields = json.memo(fields)
   return seal(doc, rev_of(view, entries)), nil
+end
+
+---The saved views of the tasks, from the vault (`tasks_nvim.views`): each with its selection, its grouping and how it is
+---drawn, and the version tag of its file (`etag`, what a change is made on). A file that cannot be read as a view is no
+---view but a line in `problems` (its id, its file, the engine's words). The `rev` is that of the views, not of the tasks:
+---a view changes when its file does.
+---@param opts? { root?: string }
+---@return table|nil doc
+---@return Tasks.ContractError|string|nil err
+function M.views(opts)
+  local root, rerr = vault.root(opts)
+  if not root then
+    return nil, rerr
+  end
+  local views = require("tasks_nvim.views")
+  local list, problems = views.all(root)
+  local lines, items = {}, {}
+  for _, v in ipairs(list) do
+    lines[#lines + 1] = v.id .. "\t" .. v.etag
+    local select = {}
+    for _, s in ipairs(views.SELECT) do
+      select[s.name] = json.memo(vim.deepcopy(v.select[s.name]))
+    end
+    select.query = v.select.query
+    items[#items + 1] = json.object({
+      id = v.id,
+      area = v.area,
+      title = clip(v.title, M.LIMITS.title),
+      display = v.display,
+      group_by = v.group_by,
+      group_by2 = v.group_by2,
+      collapsed = json.memo(vim.deepcopy(v.collapsed)),
+      select = json.object(select),
+      etag = v.etag,
+      created = v.created,
+      updated = v.updated,
+    })
+  end
+  local notes = {}
+  for _, p in ipairs(problems) do
+    lines[#lines + 1] = "problem:" .. p.id
+    notes[#notes + 1] =
+      json.object({ id = p.id, file = p.file, message = clip(redact(root, p.message), 600) })
+  end
+  local doc = M.head("tasks.views", root)
+  doc.views = json.memo(items)
+  doc.problems = json.memo(notes)
+  return seal(doc, builder.rev_of(lines)), nil
 end
 
 ---What finishing a task would do, written down: the target, the README row, the steps, the plan it closes, the

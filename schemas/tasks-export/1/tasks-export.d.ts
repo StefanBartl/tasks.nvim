@@ -19,6 +19,7 @@ export type TasksExport =
   | Finished
   | Links
   | Groupings
+  | Views
   | DonePreview
   | Result
   | Error;
@@ -498,6 +499,22 @@ export type Groupings = Head & {
   }[];
 };
 /**
+ * tasks.views: the saved views of the vault (`<area>/ROADMAP/views/<slug>.md`), sorted by id. A file that cannot be read as a view is no view but a line of `problems`. The `rev` is that of the views, not of the tasks.
+ */
+export type Views = Head & {
+  kind: "tasks.views";
+  rev: Rev;
+  digest: Digest;
+  views: View[];
+  problems: {
+    id: string;
+    file: string;
+    message: string;
+  }[];
+};
+export type GroupField =
+  "status" | "prio" | "actor" | "kind" | "effort" | "value" | "tags" | "plan" | "phase" | "area" | "state";
+/**
  * tasks.donepreview: what finishing a task would do, with nothing written, and the `confirm` token that `done` needs for exactly this version of the file.
  */
 export type DonePreview = Head & {
@@ -804,12 +821,60 @@ export interface LinkEdge {
   ref?: string;
 }
 /**
+ * One saved view: a selection (which tasks), a grouping (by which field, a matrix by a second one) and how it is drawn. It holds no task and no rule. `etag` is the version of its file: a change is made on it (`view_save`, `view_delete`).
+ */
+export interface View {
+  /**
+   * `<area>/<slug>`.
+   */
+  id: string;
+  area: string;
+  title: string;
+  display: "columns" | "list" | "matrix";
+  group_by: GroupField;
+  /**
+   * The field of the rows of a matrix (never the field of the columns).
+   */
+  group_by2?: "status" | "prio" | "actor" | "kind" | "effort" | "value" | "tags" | "plan" | "phase" | "area" | "state";
+  /**
+   * The groups that are folded (the values as `tasks.groupings` names them).
+   */
+  collapsed: string[];
+  select: ViewSelect;
+  etag: Etag;
+  created?: string;
+  updated?: string;
+}
+/**
+ * Which tasks a view shows: every list narrows (an empty list does not), `query` is a word the title must hold.
+ */
+export interface ViewSelect {
+  areas: string[];
+  statuses: string[];
+  actors: string[];
+  kinds: string[];
+  tags: string[];
+  plans: string[];
+  query?: string;
+}
+/**
  * What happened to one operation of a request, in the order they were sent. A failed operation does not stop the others.
  */
 export interface ResultEntry {
   n: number;
   op:
-    "set" | "new" | "reorder" | "done" | "move_area" | "plan_new" | "tick_step" | "append_note" | "reopen" | "set_body";
+    | "set"
+    | "new"
+    | "reorder"
+    | "done"
+    | "move_area"
+    | "plan_new"
+    | "tick_step"
+    | "append_note"
+    | "reopen"
+    | "set_body"
+    | "view_save"
+    | "view_delete";
   id?: string;
   ok: boolean;
   /**
@@ -825,6 +890,8 @@ export interface ResultEntry {
     | "would_done"
     | "would_move"
     | "moved"
+    | "deleted"
+    | "would_delete"
     | "blocked"
     | "failed";
   etag_before?: Etag;
@@ -879,7 +946,7 @@ export interface ResultEntry {
  * The operation that undoes a change: send it as a new operation (its `if_match` is the version the change left). A key the change added is `null` in the patch of a `set`.
  */
 export interface Inverse {
-  op: "set" | "reorder" | "tick_step" | "set_body" | "move_area";
+  op: "set" | "reorder" | "tick_step" | "set_body" | "move_area" | "view_save" | "view_delete";
   id: string;
   /**
    * `tick_step`: the number of the step.
@@ -897,6 +964,10 @@ export interface Inverse {
    * `move_area`: the area the task came from (`id` is the id it has now).
    */
   to_area?: string;
+  /**
+   * `view_save`: the view as it was (a `view_save` with it puts it back).
+   */
+  view?: {};
   patch?: {};
   after?: string;
   before?: string;

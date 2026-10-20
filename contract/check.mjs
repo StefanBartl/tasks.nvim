@@ -112,6 +112,10 @@ mutate("a list with an option the engine does not have", "lists-builtin", (d) =>
 mutate("a list from a source of its own", "lists-builtin", (d) => (d.lists[0].source = "cloud"));
 mutate("a grouping by a field the engine does not have", "groupings", (d) => (d.fields[0].field = "colour"));
 mutate("a grouping that is written by an operation the engine does not have", "groupings", (d) => (d.fields[0].mode = "drag"));
+mutate("a view drawn in a way the engine does not have", "views", (d) => (d.views[0].display = "cube"));
+mutate("a view grouped by a field the engine does not have", "views", (d) => (d.views[0].group_by = "colour"));
+mutate("a view without the version of its file", "views", (d) => delete d.views[0].etag);
+mutate("an inverse of a view that is neither a save nor a delete", "result-views", (d) => (d.results[0].inverse.op = "view_rename"));
 mutate("an order by a word the engine does not have", "order-roi", (d) => (d.sort = "sideways"));
 mutate(
   "a conflict group as a tuple",

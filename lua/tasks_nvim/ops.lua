@@ -35,6 +35,13 @@
 ---  - `plan_new` { area, title, areas?, target?, phases?, gate?, status?, summary?, slug? }: make a plan file; a dry run names
 ---    the id it would get and whether the slug had to be changed (`plans.new`)
 ---
+---  - `view_save` { id | area (slug?), view, if_match? }: make or replace a saved view of the tasks (`tasks_nvim.views`: a small
+---    file at `<area>/ROADMAP/views/<slug>.md`). `view` is `{ title, display, group_by, group_by2?, collapsed?, select? }`; with
+---    `area` alone a new view is made under a name taken from the title, with `id` (`<area>/<slug>`, or `area` and `slug`) the
+---    view of that name is replaced, and only on the version the caller read (`if_match`: a view that exists and no tag is a
+---    `conflict`; a name that is free is made); the answer has an `inverse`
+---  - `view_delete` { id, if_match? }: delete a saved view; the answer has an `inverse` (the view made again)
+---
 --- Rules the door keeps:
 ---  - **the shape is checked first**, for the whole request: an unknown operation or field, a wrong type, too many
 ---    operations is `invalid_argument` and nothing runs. After that every operation runs on its own: one that fails
@@ -102,6 +109,8 @@ M.OPS = {
   "append_note",
   "reopen",
   "set_body",
+  "view_save",
+  "view_delete",
 }
 
 ---Longest `client_op_id`.
@@ -134,6 +143,14 @@ local FIELDS = {
   append_note = { id = "string", text = "string", if_match = "string" },
   reopen = { id = "string", status = "string", if_match = "string" },
   set_body = { id = "string", body = "string", if_match = "string" },
+  view_save = {
+    id = "string",
+    area = "string",
+    slug = "string",
+    view = "object",
+    if_match = "string",
+  },
+  view_delete = { id = "string", if_match = "string" },
   plan_new = {
     area = "string",
     title = "string",
@@ -948,6 +965,102 @@ local function do_plan_new(op, ctx)
   }
 end
 
+---The answer of a view operation that failed: the engine's words and the code that says why.
+---@param ctx Tasks.OpsCtx
+---@param err string|nil
+---@param info table|nil
+---@return table
+local function view_failure(ctx, err, info)
+  if info and info.code == "invalid_argument" then
+    return refuse("invalid_argument", tostring(err))
+  end
+  if info and info.code == "not_found" then
+    return refuse("not_found", tostring(err))
+  end
+  return mutate_failure(ctx, err, info)
+end
+
+---@param op table
+---@param ctx Tasks.OpsCtx
+---@return table entry
+local function do_view_save(op, ctx)
+  if op.view == nil then
+    return refuse("invalid_argument", "view_save needs view")
+  end
+  local area, slug = op.area, op.slug
+  if op.id ~= nil then
+    if area ~= nil or slug ~= nil then
+      return refuse("invalid_argument", "view_save takes id or area, not both")
+    end
+    area, slug = tostring(op.id):match("^([^/]+)/([^/]+)$")
+    if not area then
+      return refuse("invalid_argument", "expected <area>/<slug>")
+    end
+  elseif area == nil then
+    return refuse("invalid_argument", "view_save needs id or area")
+  end
+  local views = require("tasks_nvim.views")
+  local r, err, info = views.save(ctx.root, area, op.view, {
+    slug = slug,
+    if_match = op.if_match,
+    today = ctx.today,
+    dry_run = ctx.dry,
+  })
+  if not r then
+    return view_failure(ctx, err, info)
+  end
+  local outcome = r.created and "created" or (r.changed and "changed" or "unchanged")
+  local entry = {
+    ok = true,
+    id = r.id,
+    outcome = ctx.dry and ("would_" .. (r.created and "create" or "change")) or outcome,
+    file = rel(ctx, r.path),
+    etag_before = r.etag_before,
+    etag_after = (not ctx.dry) and r.etag_after or nil,
+    changed_ids = {},
+  }
+  if ctx.dry or not r.changed then
+    return entry
+  end
+  if r.created then
+    entry.inverse = json.object({ op = "view_delete", id = r.id, if_match = r.etag_after })
+  elseif r.before then
+    entry.inverse = json.object({
+      op = "view_save",
+      id = r.id,
+      view = json.object(r.before),
+      if_match = r.etag_after,
+    })
+  end
+  return entry
+end
+
+---@param op table
+---@param ctx Tasks.OpsCtx
+---@return table entry
+local function do_view_delete(op, ctx)
+  if op.id == nil then
+    return refuse("invalid_argument", "view_delete needs id")
+  end
+  local views = require("tasks_nvim.views")
+  local r, err, info = views.delete(ctx.root, op.id, { if_match = op.if_match, dry_run = ctx.dry })
+  if not r then
+    return view_failure(ctx, err, info)
+  end
+  local entry = {
+    ok = true,
+    id = r.id,
+    outcome = ctx.dry and "would_delete" or "deleted",
+    file = rel(ctx, r.path),
+    etag_before = r.etag_before,
+    changed_ids = {},
+  }
+  if not ctx.dry and r.before then
+    entry.inverse = json.object({ op = "view_save", id = r.id, view = json.object(r.before) })
+  end
+  return entry
+end
+
 ---@type table<string, fun(op: table, ctx: Tasks.OpsCtx): table>
 local HANDLERS = {
   set = do_set,
@@ -960,6 +1073,8 @@ local HANDLERS = {
   append_note = do_append_note,
   reopen = do_reopen,
   set_body = do_set_body,
+  view_save = do_view_save,
+  view_delete = do_view_delete,
 }
 
 -- ── the request ──────────────────────────────────────────────────────────────

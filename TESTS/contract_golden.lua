@@ -34,6 +34,7 @@ G.cases = {
   { name = "order-roi", method = "order", request = '{"params":{"sort":"roi"}}' },
   { name = "lists-builtin", method = "lists" },
   { name = "groupings", method = "groupings" },
+  { name = "views", method = "views" },
   { name = "task-alpha", method = "task", request = '{"params":{"id":"lib.nvim/alpha"}}' },
   { name = "bodies-page", method = "bodies", request = '{"params":{"limit":3,"offset":1}}' },
   {
@@ -85,6 +86,59 @@ G.cases = {
             title = "Golden plan",
             phases = { "design", "build" },
           },
+        },
+      })
+    end,
+  },
+  {
+    -- saved views for real: made, replaced on the version read, replaced on a stale one, deleted, a view that is not there
+    name = "result-views",
+    method = "ops",
+    fresh = true,
+    request = function(root)
+      local views = require("tasks_nvim.views")
+      local function view_etag(id)
+        local area, slug = id:match("^([^/]+)/(.+)$")
+        return require("tasks_nvim.fsio").etag(
+          assert(require("tasks_nvim.fsio").read(views.path(root, area, slug)))
+        )
+      end
+      return encode({
+        client_op_id = "golden-views",
+        ops = {
+          {
+            op = "view_save",
+            area = "cascade.nvim",
+            view = {
+              title = "Golden view",
+              display = "list",
+              group_by = "kind",
+              select = { actors = { "me" } },
+            },
+          },
+          {
+            op = "view_save",
+            id = "lib.nvim/by-status",
+            view = {
+              title = "Columns by status",
+              display = "columns",
+              group_by = "status",
+              collapsed = { "parked" },
+            },
+            if_match = view_etag("lib.nvim/by-status"),
+          },
+          {
+            op = "view_save",
+            id = "lib.nvim/by-status",
+            view = { title = "Stale", display = "list", group_by = "status" },
+            if_match = "sha256:0000000000000000",
+          },
+          {
+            op = "view_delete",
+            id = "lib.nvim/prio-by-actor",
+            if_match = view_etag("lib.nvim/prio-by-actor"),
+          },
+          { op = "view_delete", id = "lib.nvim/not-there" },
         },
       })
     end,

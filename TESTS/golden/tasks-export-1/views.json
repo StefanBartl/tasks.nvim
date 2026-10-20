@@ -1,0 +1,76 @@
+{
+  "digest": "sha256:60842483f87ca035",
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "kind": "tasks.views",
+  "plugin": "tasks.nvim",
+  "problems": [
+    {
+      "file": "lib.nvim/ROADMAP/views/broken.md",
+      "id": "lib.nvim/broken",
+      "message": "display 'cube' is unknown (expected columns, list, matrix)"
+    }
+  ],
+  "rev": "rev:e11279",
+  "schema": 1,
+  "vault": {
+    "id": "vault"
+  },
+  "views": [
+    {
+      "area": "lib.nvim",
+      "collapsed": [],
+      "created": "2026-01-01",
+      "display": "columns",
+      "etag": "sha256:0c69ada28f28de1e",
+      "group_by": "status",
+      "id": "lib.nvim/by-status",
+      "select": {
+        "actors": [],
+        "areas": [],
+        "kinds": [],
+        "plans": [],
+        "statuses": [
+          "open",
+          "doing",
+          "parked"
+        ],
+        "tags": []
+      },
+      "title": "Columns by status",
+      "updated": "2026-01-01"
+    },
+    {
+      "area": "lib.nvim",
+      "collapsed": [
+        "3"
+      ],
+      "created": "2026-01-01",
+      "display": "matrix",
+      "etag": "sha256:9845766db3ff5796",
+      "group_by": "prio",
+      "group_by2": "actor",
+      "id": "lib.nvim/prio-by-actor",
+      "select": {
+        "actors": [],
+        "areas": [
+          "lib.nvim",
+          "cascade.nvim"
+        ],
+        "kinds": [],
+        "plans": [],
+        "query": "build",
+        "statuses": [],
+        "tags": [
+          "golden"
+        ]
+      },
+      "title": "Prio by actor",
+      "updated": "2026-01-01"
+    }
+  ]
+}

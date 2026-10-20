@@ -211,6 +211,25 @@ function M.build(H)
       .. DATE
       .. "\n---\n\nMoved by hand.\n"
   )
+
+  -- saved views: one per way to draw, and one that is no view (a display nobody knows), which the document names as a problem
+  vim.fn.mkdir(root .. "/lib.nvim/ROADMAP/views", "p")
+  local function view(slug, head)
+    H.write(
+      root .. "/lib.nvim/ROADMAP/views/" .. slug .. ".md",
+      "---\n" .. head .. "\ncreated: " .. DATE .. "\nupdated: " .. DATE .. "\n---\n\n"
+    )
+  end
+  view(
+    "by-status",
+    "title: Columns by status\ndisplay: columns\ngroup_by: status\nsel_statuses: [open, doing, parked]"
+  )
+  view(
+    "prio-by-actor",
+    "title: Prio by actor\ndisplay: matrix\ngroup_by: prio\ngroup_by2: actor\ncollapsed: ['3']\n"
+      .. "sel_areas: [lib.nvim, cascade.nvim]\nsel_tags: [golden]\nsel_query: build"
+  )
+  view("broken", "title: A view nobody can draw\ndisplay: cube\ngroup_by: status")
   return root
 end
 

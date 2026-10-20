@@ -28,7 +28,10 @@
     "set_body",
     "snapshot",
     "task",
-    "tick_step"
+    "tick_step",
+    "view_delete",
+    "view_save",
+    "views"
   ],
   "engine": {
     "git": "0000000",

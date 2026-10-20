@@ -50,6 +50,9 @@
       "$ref": "#/$defs/Groupings"
     },
     {
+      "$ref": "#/$defs/Views"
+    },
+    {
       "$ref": "#/$defs/DonePreview"
     },
     {
@@ -2126,6 +2129,114 @@
       },
       "unevaluatedProperties": false
     },
+    "View": {
+      "description": "One saved view: a selection (which tasks), a grouping (by which field, a matrix by a second one) and how it is drawn. It holds no task and no rule. `etag` is the version of its file: a change is made on it (`view_save`, `view_delete`).",
+      "type": "object",
+      "required": ["id", "area", "title", "display", "group_by", "collapsed", "select", "etag"],
+      "properties": {
+        "id": {
+          "description": "`<area>/<slug>`.",
+          "type": "string"
+        },
+        "area": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "display": {
+          "enum": ["columns", "list", "matrix"]
+        },
+        "group_by": {
+          "$ref": "#/$defs/GroupField"
+        },
+        "group_by2": {
+          "description": "The field of the rows of a matrix (never the field of the columns).",
+          "$ref": "#/$defs/GroupField"
+        },
+        "collapsed": {
+          "description": "The groups that are folded (the values as `tasks.groupings` names them).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "select": {
+          "$ref": "#/$defs/ViewSelect"
+        },
+        "etag": {
+          "$ref": "#/$defs/Etag"
+        },
+        "created": {
+          "type": "string"
+        },
+        "updated": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "GroupField": {
+      "enum": ["status", "prio", "actor", "kind", "effort", "value", "tags", "plan", "phase", "area", "state"]
+    },
+    "ViewSelect": {
+      "description": "Which tasks a view shows: every list narrows (an empty list does not), `query` is a word the title must hold.",
+      "type": "object",
+      "required": ["areas", "statuses", "actors", "kinds", "tags", "plans"],
+      "properties": {
+        "areas": {"type": "array", "items": {"type": "string"}},
+        "statuses": {"type": "array", "items": {"type": "string"}},
+        "actors": {"type": "array", "items": {"type": "string"}},
+        "kinds": {"type": "array", "items": {"type": "string"}},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "plans": {"type": "array", "items": {"type": "string"}},
+        "query": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Views": {
+      "description": "tasks.views: the saved views of the vault (`<area>/ROADMAP/views/<slug>.md`), sorted by id. A file that cannot be read as a view is no view but a line of `problems`. The `rev` is that of the views, not of the tasks.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/Head"
+        }
+      ],
+      "type": "object",
+      "required": ["kind", "rev", "digest", "views", "problems"],
+      "properties": {
+        "kind": {
+          "const": "tasks.views"
+        },
+        "rev": {
+          "$ref": "#/$defs/Rev"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "views": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/View"
+          }
+        },
+        "problems": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "file", "message"],
+            "properties": {
+              "id": {"type": "string"},
+              "file": {"type": "string"},
+              "message": {"type": "string"}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
     "Error": {
       "description": "tasks.error: what went wrong, in a code that is stable. `message` carries no path of the machine.",
       "allOf": [
@@ -2197,7 +2308,7 @@
       "required": ["op", "id"],
       "properties": {
         "op": {
-          "enum": ["set", "reorder", "tick_step", "set_body", "move_area"]
+          "enum": ["set", "reorder", "tick_step", "set_body", "move_area", "view_save", "view_delete"]
         },
         "id": {
           "type": "string"
@@ -2218,6 +2329,10 @@
         "to_area": {
           "description": "`move_area`: the area the task came from (`id` is the id it has now).",
           "type": "string"
+        },
+        "view": {
+          "description": "`view_save`: the view as it was (a `view_save` with it puts it back).",
+          "type": "object"
         },
         "patch": {
           "type": "object"
@@ -2324,7 +2439,7 @@
           "minimum": 1
         },
         "op": {
-          "enum": ["set", "new", "reorder", "done", "move_area", "plan_new", "tick_step", "append_note", "reopen", "set_body"]
+          "enum": ["set", "new", "reorder", "done", "move_area", "plan_new", "tick_step", "append_note", "reopen", "set_body", "view_save", "view_delete"]
         },
         "id": {
           "type": "string"
@@ -2344,6 +2459,8 @@
             "would_done",
             "would_move",
             "moved",
+            "deleted",
+            "would_delete",
             "blocked",
             "failed"
           ]
