@@ -351,4 +351,64 @@ return function(H)
       eq(v.title, odd)
     end
   end
+
+  -- a folder of views that leads out of the vault (a junction or a link) is neither read nor written nor emptied
+  local uv = vim.uv or vim.loop
+  local outside = H.tmpdir() .. "/outside-views"
+  vim.fn.mkdir(outside, "p")
+  local LEAK = "---\ntitle: Leak\ndisplay: list\ngroup_by: status\ncreated: "
+    .. F.TODAY
+    .. "\nupdated: "
+    .. F.TODAY
+    .. "\n---\n\n"
+  H.write(outside .. "/leak.md", LEAK)
+  vim.fn.mkdir(root .. "/ALL/ROADMAP", "p")
+  local linked_dir = root .. "/ALL/ROADMAP/views"
+  local made_link = uv.fs_symlink(outside, linked_dir, { dir = true, junction = true })
+  ok(made_link == true or uv.fs_stat(linked_dir) == nil, "the junction could not be made")
+  if made_link then
+    local seen = listing()
+    local problem
+    for _, p in ipairs(seen.problems) do
+      if p.id == "ALL/views" then
+        problem = p
+      end
+    end
+    ok(problem ~= nil, "the folder that leaves the vault is a problem of the document")
+    has(problem.message, "leaves the vault")
+    for _, v in ipairs(seen.views) do
+      ok(v.area ~= "ALL", "no view is read through the link")
+    end
+    refused({ op = "view_save", area = "ALL", view = BY_STATUS }, "forbidden", "leaves the vault")
+    refused({ op = "view_delete", id = "ALL/leak" }, "forbidden", "leaves the vault")
+    ok(H.exists(outside .. "/leak.md"), "the file outside is still there")
+    ok(not H.exists(outside .. "/by-status.md"), "nothing was written outside")
+    uv.fs_unlink(linked_dir)
+    uv.fs_rmdir(linked_dir)
+  end
+
+  -- a view file that is a link is not read, replaced or deleted (a file link needs a right on Windows: then it is skipped)
+  local file_link = root .. "/lib.nvim/ROADMAP/views/linked.md"
+  if uv.fs_symlink(outside .. "/leak.md", file_link, {}) then
+    local problem_ids_now = {}
+    for _, p in ipairs(listing().problems) do
+      problem_ids_now[#problem_ids_now + 1] = p.id
+    end
+    ok(
+      vim.tbl_contains(problem_ids_now, "lib.nvim/linked"),
+      "a linked file is a problem, not a view"
+    )
+    for _, v in ipairs(listing().views) do
+      ok(v.id ~= "lib.nvim/linked")
+    end
+    refused({
+      op = "view_save",
+      id = "lib.nvim/linked",
+      view = BY_STATUS,
+      if_match = "sha256:0000000000000000",
+    }, "forbidden", "symbolic link")
+    refused({ op = "view_delete", id = "lib.nvim/linked" }, "forbidden", "symbolic link")
+    eq(H.read(outside .. "/leak.md"), LEAK, "the target is as it was")
+    uv.fs_unlink(file_link)
+  end
 end

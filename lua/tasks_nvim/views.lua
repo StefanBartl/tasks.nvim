@@ -73,6 +73,19 @@ function M.path(root, area, slug)
   return M.dir(root, area) .. "/" .. slug .. ".md"
 end
 
+---Why the views of an area must not be read or written, or nil: the folder (or the nearest one of its parents that is
+---there) leads out of the vault by a symbolic link or a junction.
+---@param root string
+---@param area string
+---@return string|nil err
+local function leaves(root, area)
+  local dir = M.dir(root, area)
+  while not fsio.is_dir(dir) and #dir > #root do
+    dir = vim.fs.dirname(dir)
+  end
+  return vault.leaves(root, dir)
+end
+
 local function has_control(s)
   return type(s) == "string" and s:find("[%c]") ~= nil
 end
@@ -320,14 +333,26 @@ function M.all(root)
   local views, problems = {}, {}
   for _, area in ipairs(vault.areas(root)) do
     local dir = M.dir(root, area.name)
-    if fsio.is_dir(dir) then
+    local escape = fsio.is_dir(dir) and leaves(root, area.name)
+    if escape then
+      problems[#problems + 1] = {
+        id = area.name .. "/views",
+        file = area.name .. "/ROADMAP/views",
+        message = escape,
+      }
+    elseif fsio.is_dir(dir) then
       local names = vim.fn.readdir(dir)
       table.sort(names)
       for _, name in ipairs(names) do
         local slug = name:match("^(.+)%.md$")
         if slug and vault.valid_slug(slug) then
           local path = dir .. "/" .. name
-          local view, problem = M.read_file(path, area.name, slug)
+          local view, problem
+          if fsio.is_link(path) then
+            problem = "is a symbolic link: not read"
+          else
+            view, problem = M.read_file(path, area.name, slug)
+          end
           if view then
             views[#views + 1] = view
           else
@@ -377,6 +402,10 @@ function M.save(root, area, def, opts)
   if not view then
     return nil, verr, { code = "invalid_argument" }
   end
+  local escape = leaves(root, area)
+  if escape then
+    return nil, escape, { code = "forbidden" }
+  end
   local today = opts.today or model.today()
   if
     opts.slug ~= nil and (not vault.valid_slug(opts.slug) or vault.is_reserved_name(opts.slug))
@@ -398,6 +427,9 @@ function M.save(root, area, def, opts)
   end
   local path = M.path(root, area, slug)
   local id = area .. "/" .. slug
+  if fsio.is_link(path) then
+    return nil, id .. " is a symbolic link: it is not changed", { code = "forbidden" }
+  end
   local exists = fsio.is_file(path)
   local result =
     { id = id, area = area, slug = slug, path = path, created = not exists, changed = true }
@@ -484,6 +516,13 @@ function M.delete(root, id, opts)
     return nil, "no such view: " .. tostring(id), { code = "not_found" }
   end
   local path = M.path(root, area, slug)
+  local escape = leaves(root, area)
+  if escape then
+    return nil, escape, { code = "forbidden" }
+  end
+  if fsio.is_link(path) then
+    return nil, id .. " is a symbolic link: it is not deleted", { code = "forbidden" }
+  end
   if not fsio.is_file(path) then
     return nil, "no such view: " .. tostring(id), { code = "not_found" }
   end
