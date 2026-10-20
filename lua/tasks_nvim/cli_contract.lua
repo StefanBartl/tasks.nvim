@@ -210,6 +210,7 @@ local function run_show(ctx)
   field("blocked_by", t.blocked_by)
   field("after", t.after)
   field("refs", t.refs)
+  field("commits", t.commits)
   field("file", t.file)
   if t.readiness then
     field(

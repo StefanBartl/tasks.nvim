@@ -234,7 +234,8 @@ in a name never reaches a shell.
 
 ### `done` (rule R6)
 
-`status: done`, `done_in`, `updated`; the file moves to `Backlog/FEATURES/`
+`status: done`, `done_in`, `commits` (when given: every commit made for the task, `repo@sha` each, added to the
+task's own list), `updated`; the file moves to `Backlog/FEATURES/`
 (`feature`, `idea`, `research`) or `Backlog/TASKS/` (`task`, `bug`, and tasks
 without a kind) as `YYYY-MM-DD_<slug>.md`; the row goes on top of that
 section of `Backlog/README.md` (count recomputed, `_noch leer_` replaced by a
@@ -376,7 +377,7 @@ nvim --headless -u NONE -l scripts/tasks.lua check
 | `attach <area>/<slug> <file> [--name=n] [--no-index]` | copy a file to `<slug>/assets/` (a plain task becomes a folder task), print the Markdown link |
 | `folderize <area>/<slug> [--no-index]` | turn a plain task file into a folder task |
 | `set <area>/<slug> key=value ... [--no-index]` | change frontmatter; an empty value removes the key |
-| `done <area>/<slug> [--done-in=text] [--date=YYYY-MM-DD] [--no-index]` | finish and move to `Backlog/` |
+| `done <area>/<slug> [--commits=repo@sha,...] [--done-in=text] [--date=YYYY-MM-DD] [--no-index]` | finish and move to `Backlog/` |
 | `check [area]` | rule check |
 | `ci [--strict] [--no-lint] [--md-lint=<file>]` | the CI gate: check + `index --check` + md_lint of the generated indexes (see above) |
 | `template [--title --kind --prio --effort --tags --lang=de\|en]` | print the task template |

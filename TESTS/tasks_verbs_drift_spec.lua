@@ -20,7 +20,7 @@ return function(H)
     ["attach"] = { composer = {}, cli = { "name", "no-index" } },
     ["done"] = {
       composer = { "yes" },
-      cli = { "date", "done-in", "no-index", "no-next", "remind", "unblock" },
+      cli = { "commits", "date", "done-in", "no-index", "no-next", "remind", "unblock" },
     },
     ["estimate"] = { composer = { "list", "walk" }, cli = { "stale-refs" } },
     ["folderize"] = { composer = {}, cli = { "no-index" } },

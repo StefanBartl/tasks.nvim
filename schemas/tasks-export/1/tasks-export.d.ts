@@ -649,6 +649,7 @@ export interface TaskEntry {
   plan?: string;
   phase?: string;
   done_in?: string;
+  commits?: string[];
   tags: string[];
   category: Category[];
   blocked_by: string[];
@@ -766,6 +767,7 @@ export interface FinishedItem {
   plan?: string;
   phase?: string;
   done_in?: string;
+  commits?: string[];
   file: string;
 }
 /**

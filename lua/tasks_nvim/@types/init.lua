@@ -40,7 +40,8 @@
 ---@field refs string[]
 ---@field plan_steps? Tasks.StepsSummary  # The optional `## Plan` section: steps, how many are ticked (nil without the section).
 ---@field done_in? string
----@field summary string              # Frontmatter `summary`, else the first body paragraph; "" when neither.
+---@field commits string[]            # Every commit made for the task, `repo@sha` each (empty without the key).
+---@field summary string             # Frontmatter `summary`, else the first body paragraph; "" when neither.
 ---@field meta table<string, any>     # Every frontmatter key as parsed (unknown keys included).
 ---@field errors string[]             # Validation problems; empty when the file is fine.
 ---@field error_codes string[]        # One stable rule code per entry of `errors` (`unknown-status`, `bad-prio`, ...).

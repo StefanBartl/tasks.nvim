@@ -634,6 +634,32 @@ return function(H)
   F.task(H, root, "ALL", "multi", F.meta("Multi", "open"))
   assert(mutate.done("ALL/multi", with(o, { done_in = { "a@1", "b@2" } })))
   eq(scan.find_done("ALL/multi", { root = root }).done_in, "a@1, b@2")
+  -- commits: added to the task's own, a commit named twice is listed once, order kept
+  F.task(
+    H,
+    root,
+    "ALL",
+    "with-commits",
+    F.meta("With commits", "open", { { "commits", "[lib.nvim@1234567]" } })
+  )
+  assert(
+    mutate.done(
+      "ALL/with-commits",
+      with(o, { commits = "buffer-ctx.nvim@abcdef1, lib.nvim@1234567, tasks.nvim@7654321" })
+    )
+  )
+  eq(
+    scan.find_done("ALL/with-commits", { root = root }).commits,
+    { "lib.nvim@1234567", "buffer-ctx.nvim@abcdef1", "tasks.nvim@7654321" }
+  )
+  F.task(H, root, "ALL", "no-commits", F.meta("No commits", "open"))
+  local no_commits = assert(mutate.done("ALL/no-commits", o))
+  ok(not H.read(no_commits.to):find("commits:", 1, true), "no commits given: no key written")
+  F.task(H, root, "ALL", "bad-commits", F.meta("Bad commits", "open"))
+  local bad_done, bad_done_err = mutate.done("ALL/bad-commits", with(o, { commits = "a[b" }))
+  eq(bad_done, nil)
+  ok(bad_done_err ~= nil, "a commit with a bracket is refused")
+  ok(scan.find("ALL/bad-commits", { root = root }), "and the task stays open")
 
   -- ── done: refusals ──────────────────────────────────────────────────────
   local none, none_err = mutate.done("lib.nvim/never-existed", o)
@@ -770,5 +796,6 @@ return function(H)
   -- the keys `set` accepts are exported for front ends (completion, docs)
   eq(mutate.SETTABLE[1], "title")
   ok(vim.tbl_contains(mutate.SETTABLE, "done_in"), "done_in is settable")
+  ok(vim.tbl_contains(mutate.SETTABLE, "commits"), "commits is settable")
   ok(not vim.tbl_contains(mutate.SETTABLE, "updated"), "updated is the tool's, never settable")
 end

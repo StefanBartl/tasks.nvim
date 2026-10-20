@@ -599,6 +599,7 @@ local function set_kv()
     refs = "Files the task is about; --stale=refs watches them",
     rules = "Rule ids a ruleset task brings code in line with",
     done_in = "Commit(s) that delivered the task",
+    commits = "Every commit made for the task, repo@sha each (replaces the list)",
     created = "Creation date, YYYY-MM-DD",
     remind = "Look at the task again on this date (YYYY-MM-DD, or +7d / +2w from today)",
   })
@@ -768,6 +769,11 @@ local function nested_routes()
           key = "done_in",
           type = "STRING",
           desc = "Commit(s) that delivered it, recorded in the finished file",
+        },
+        {
+          key = "commits",
+          type = "STRING",
+          desc = "Commits made for it, repo@sha comma-separated; added to the task's own list",
         },
         {
           key = "date",

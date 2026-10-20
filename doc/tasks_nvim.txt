@@ -121,7 +121,9 @@ A wrong key or value is ignored with a message and listed in
   :Tasks set {id} {key}={value} ...      Change frontmatter; an empty value
                                          removes the key. A finished task takes
                                          `remind=` only.
-  :Tasks done {id} [done_in= date=] [--yes]
+  :Tasks done {id} [done_in= commits= date=] [--yes]
+                                         `commits=repo@sha,...` lists the commits
+                                         made for the task (added to its own).
                                          Finish and move to `Backlog/`; names
                                          what it freed and offers the next task.
   :Tasks plan [{area}|all] [--for={id}|--plan={id}] [filters] [--ready] [--with-steps]

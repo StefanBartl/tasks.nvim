@@ -1498,9 +1498,10 @@ function M.after_finish(flow, id)
 end
 
 ---@param id string
----@param opts { done_in?: string, date?: string }
+---@param opts { done_in?: string, commits?: string, date?: string }
 local function finish_task(id, opts)
-  local flow, err = done_flow.run(id, { done_in = opts.done_in, date = opts.date })
+  local flow, err =
+    done_flow.run(id, { done_in = opts.done_in, commits = opts.commits, date = opts.date })
   if not flow then
     notify.error(tostring(err))
     return
@@ -1535,7 +1536,7 @@ end
 
 ---Finish a task with the messages and the dialog of `:Tasks done` (without the confirmation: the caller asked).
 ---@param id string
----@param opts? { done_in?: string, date?: string }
+---@param opts? { done_in?: string, commits?: string, date?: string }
 function M.finish(id, opts)
   finish_task(id, opts or {})
 end
@@ -1607,7 +1608,7 @@ function M.task_attach(ctx)
   )
 end
 
----`:Tasks done <id> [done_in=...] [date=YYYY-MM-DD] [--yes]`
+---`:Tasks done <id> [done_in=...] [commits=repo@sha,...] [date=YYYY-MM-DD] [--yes]`
 ---@param ctx table
 function M.task_done(ctx)
   if #ctx.rest > 0 then
@@ -1615,7 +1616,12 @@ function M.task_done(ctx)
     return
   end
   local id = ctx.args.id
-  local opts = { done_in = ctx.kv.done_in, date = ctx.kv.date, remind = ctx.kv.remind }
+  local opts = {
+    done_in = ctx.kv.done_in,
+    commits = ctx.kv.commits,
+    date = ctx.kv.date,
+    remind = ctx.kv.remind,
+  }
   local task = scan.find(id)
   if not task or ctx.flags.yes then
     -- A finished task answers "already" without asking anything.

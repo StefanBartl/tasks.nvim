@@ -7,6 +7,11 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Frontmatter key `commits`: every commit made for a task, `repo@sha` each (7-40 hex digits), so a finished task
+  can be traced back to its code. `done` takes `--commits=repo@sha,...` (`commits=` in `:Tasks done`, `commits` in the
+  `done` operation) and adds them to the task's own list; `set <id> commits=[...]` replaces the list; `check` reports a
+  malformed entry as `bad-commit`. `tasks-export/1` carries `commits` (only when the task lists any) on the task
+  entry and on the items of `tasks.finished`. `done_in` stays as free text.
 - Contract `tasks-export/1`: saved views in the vault. The method `views` (capability `views`, document `tasks.views`) lists the views kept
   in `<area>/ROADMAP/views/<slug>.md` - a selection, a grouping and how it is drawn (`columns`, `list`, `matrix`) - with the version tag of
   each file, and names a file that is no view as a problem. The operations `view_save` and `view_delete` (capabilities of the same names)

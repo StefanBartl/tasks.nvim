@@ -25,6 +25,41 @@ return function(H)
     return false
   end
 
+  -- ── commits: a list of repo@sha, a malformed entry is a hint, not an error ──
+  ok(model.is_commit_ref("lib.nvim@46af3b5"))
+  ok(model.is_commit_ref("buffer-ctx.nvim@" .. string.rep("a", 40)))
+  for _, bad_ref in ipairs({
+    "46af3b5",
+    "lib.nvim@123",
+    "lib.nvim@zzzzzzz",
+    "@abcdef1",
+    "a@" .. string.rep("a", 41),
+  }) do
+    ok(not model.is_commit_ref(bad_ref), bad_ref)
+  end
+  local with_commits = parse(
+    F.text({
+      { "title", "T" },
+      { "status", "doing" },
+      { "commits", "[lib.nvim@46af3b5, buffer-ctx.nvim@6249aa1]" },
+    }, "\nBody\n"),
+    "with-commits"
+  )
+  eq(with_commits.commits, { "lib.nvim@46af3b5", "buffer-ctx.nvim@6249aa1" })
+  eq(with_commits.hints, {}, "well-formed commits raise no hint")
+  eq(parse(F.text({ { "title", "T" }, { "status", "open" } }, "\nBody\n")).commits, {})
+  local typo = parse(
+    F.text(
+      { { "title", "T" }, { "status", "open" }, { "commits", "[lib.nvim@46af3b5, oops]" } },
+      "\nB\n"
+    ),
+    "typo-commit"
+  )
+  eq(typo.commits, { "lib.nvim@46af3b5", "oops" }, "the entry stays as written")
+  eq(#typo.hints, 1)
+  eq(typo.hints[1].code, "bad-commit")
+  ok(typo.valid, "a malformed commit does not make the task invalid")
+
   -- ── a complete, valid task ──────────────────────────────────────────────
   local full = parse(
     F.text({

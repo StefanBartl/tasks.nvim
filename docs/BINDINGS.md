@@ -12,7 +12,7 @@ keymaps and no autocommands at load time (the browser preview adds a short-lived
 | `index` | `[<area>] [--all] [--check]` | (re)write `ROADMAP/TASKS.md`; `--check` writes nothing |
 | `new` | `[<area> [title...]] [kind= prio= effort= tags= category= severity= status=] [--folder]` | create a task (without arguments: the Markdown form) |
 | `set` | `<id> key=value ...` | change frontmatter |
-| `done` | `<id> [done_in= date=] [--yes]` | finish after confirmation, move to `Backlog/` |
+| `done` | `<id> [done_in= commits= date=] [--yes]` | finish after confirmation, move to `Backlog/` |
 | `attach` | `<id> <file> [name=]` | copy a file into the task's `assets/` |
 | `folderize` | `<id>` | turn a plain task into a folder task |
 | `template` | `[--to=]` | the task file template |

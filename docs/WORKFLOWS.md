@@ -107,8 +107,11 @@ and `category: [ruleset]` when the task brings code in line with a rule set.
 ### 6. Finish a task — works today
 
 ```vim
-:Tasks done my-area/some-slug done_in=my-repo@abc1234
+:Tasks done my-area/some-slug commits=my-repo@abc1234,my-repo@def5678
 ```
+
+Record every commit made for the task in `commits` (`repo@sha`, several repos allowed): that is
+what lets you find the code of a finished task later. `done_in` stays for free text.
 
 After a confirmation (`--yes` skips it) the task becomes `status: done`, moves to
 `Backlog/TASKS/` or `Backlog/FEATURES/` as `YYYY-MM-DD_<slug>.md` (by `kind`), gets a row in `Backlog/README.md`
@@ -180,7 +183,7 @@ that start like a formula are defused.
 export TASKS_VAULT=~/vault
 nvim --headless -u NONE -l scripts/tasks.lua list --status=doing,decision
 nvim --headless -u NONE -l scripts/tasks.lua set my-area/some-slug status=doing
-nvim --headless -u NONE -l scripts/tasks.lua done my-area/some-slug --done-in=my-repo@abc1234
+nvim --headless -u NONE -l scripts/tasks.lua done my-area/some-slug --commits=my-repo@abc1234,my-repo@def5678
 nvim --headless -u NONE -l scripts/tasks.lua check
 ```
 

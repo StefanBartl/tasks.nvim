@@ -177,6 +177,18 @@ end
 ---written down (2^53 and more, or beyond a double), and one task file would take every document of the vault with it.
 M.MAX_EFFORT_DAYS = 3650
 
+---A commit reference as `commits` holds it: `<repo>@<sha>`, the sha 7-40 hex digits (`lib.nvim@46af3b5`). The repo
+---is the name of the checkout, so a commit is found again on any machine.
+---@param s any
+---@return boolean
+function M.is_commit_ref(s)
+  if type(s) ~= "string" then
+    return false
+  end
+  local repo, sha = s:match("^([%w][%w%._%-]*)@(%x+)$")
+  return repo ~= nil and #sha >= 7 and #sha <= 40
+end
+
 ---`XS`..`XL`, or days: `3d`, `0.5d` (up to `MAX_EFFORT_DAYS`).
 ---@param s any
 ---@return boolean
@@ -770,6 +782,18 @@ function M.parse_text(text, ctx)
       task.done_in = table.concat(as_list(meta.done_in, "done_in", bad), ", ")
     else
       task.done_in = as_text(meta.done_in, "done_in", bad)
+    end
+
+    -- Every commit made for the task, `repo@sha` each. A malformed entry stays in the list (the reader sees what was
+    -- written) and is reported as a hint, so one typo does not make the whole task unreadable.
+    task.commits = as_list(meta.commits, "commits", bad)
+    for _, c in ipairs(task.commits) do
+      if not M.is_commit_ref(c) then
+        hints[#hints + 1] = {
+          code = "bad-commit",
+          msg = ("commit '%s' is not <repo>@<sha> (7-40 hex digits)"):format(c),
+        }
+      end
     end
 
     task.summary = as_text(meta.summary, "summary", bad) or M.first_paragraph(parsed.body)

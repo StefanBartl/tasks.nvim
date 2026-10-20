@@ -366,6 +366,12 @@
         "done_in": {
           "type": "string"
         },
+        "commits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "tags": {
           "type": "array",
           "items": {
@@ -1804,6 +1810,7 @@
         "plan": { "type": "string" },
         "phase": { "type": "string" },
         "done_in": { "type": "string" },
+        "commits": { "type": "array", "items": { "type": "string" } },
         "file": { "type": "string" }
       },
       "additionalProperties": false

@@ -247,9 +247,18 @@ return function(H)
   r = run({ "done", "lib.nvim/notify-unify-channels" })
   eq(r.code, 0)
   has(r.out, "already\tlib.nvim/notify-unify-channels")
-  r = run({ "done", "cascade.nvim/blocked-thing", "--date=2026-10-01" })
+  r = run({
+    "done",
+    "cascade.nvim/blocked-thing",
+    "--date=2026-10-01",
+    "--commits=lib.nvim@abc1234,cascade.nvim@def5678",
+  })
   eq(r.code, 0)
   ok(H.exists(root .. "/cascade.nvim/Backlog/TASKS/2026-10-01_blocked-thing.md"))
+  has(
+    H.read(root .. "/cascade.nvim/Backlog/TASKS/2026-10-01_blocked-thing.md"),
+    "commits: [lib.nvim@abc1234, cascade.nvim@def5678]"
+  )
   r = run({ "done", "lib.nvim/ghost" })
   eq(r.code, 1)
   has(r.err, "no such open task")

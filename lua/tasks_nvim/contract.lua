@@ -246,6 +246,8 @@ local function task_entry(root, task, node, rank)
     plan = task.plan,
     phase = task.phase,
     done_in = task.done_in,
+    -- only when the task lists commits, so a document without them reads as before
+    commits = (task.commits and #task.commits > 0) and vim.list_slice(task.commits, 1) or nil,
     tags = vim.list_slice(task.tags or {}, 1),
     category = model.categories(task),
     blocked_by = vim.list_slice(task.blocked_by or {}, 1),
@@ -1650,6 +1652,7 @@ function M.finished(params, opts)
       plan = t.plan,
       phase = t.phase,
       done_in = t.done_in,
+      commits = (t.commits and #t.commits > 0) and vim.list_slice(t.commits, 1) or nil,
       file = relative(root, t.path) or vim.fs.basename(t.path),
     })
   end

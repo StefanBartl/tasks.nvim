@@ -465,6 +465,7 @@ local SETTABLE = {
   "refs",
   "rules",
   "done_in",
+  "commits",
   "created",
   "remind",
 }
@@ -606,7 +607,13 @@ local function normalize_patch(patch, opts)
         return nil, err
       end
       result[#result + 1] = { key, #list > 0 and list or M.REMOVE }
-    elseif key == "tags" or key == "refs" or key == "rules" or key == "done_in" then
+    elseif
+      key == "tags"
+      or key == "refs"
+      or key == "rules"
+      or key == "done_in"
+      or key == "commits"
+    then
       local list, err = string_list(value, key, key == "tags")
       if not list then
         return nil, err
@@ -1835,6 +1842,7 @@ end
 ---@class Tasks.DoneOpts
 ---@field root? string
 ---@field done_in? string|string[]   # Commit(s) that delivered the task.
+---@field commits? string|string[]    # `repo@sha` commits made for the task; added to those the task already lists.
 ---@field remind? string             # A date or `+<n>d` / `+<n>w`: when to look at the finished task again.
 ---@field date? string               # `YYYY-MM-DD` filename prefix (default: today).
 ---@field today? string              # Sets `updated` (default: today).
@@ -1920,6 +1928,23 @@ local function plan_done(id, opts)
     end
     if #list > 0 then
       patch[#patch + 1] = { "done_in", table.concat(list, ", ") }
+    end
+  end
+  if opts.commits ~= nil then
+    local list, cerr = string_list(opts.commits, "commits", true)
+    if not list then
+      return nil, cerr
+    end
+    -- The task's own list stays first and keeps its order; a commit named twice is listed once.
+    local merged, seen = {}, {}
+    for _, c in ipairs(vim.list_extend(vim.list_slice(task.commits or {}, 1), list)) do
+      if not seen[c] then
+        seen[c] = true
+        merged[#merged + 1] = c
+      end
+    end
+    if #merged > 0 then
+      patch[#patch + 1] = { "commits", merged }
     end
   end
   if opts.remind ~= nil then

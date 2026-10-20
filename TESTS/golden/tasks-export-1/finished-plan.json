@@ -1,5 +1,5 @@
 {
-  "digest": "sha256:7444c435dcc5b1ce",
+  "digest": "sha256:f647b3a5cb9d4aa9",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -10,6 +10,10 @@
   "items": [
     {
       "area": "lib.nvim",
+      "commits": [
+        "lib.nvim@def5678",
+        "buffer-ctx.nvim@1234abc"
+      ],
       "done": "2025-12-30",
       "done_in": "lib.nvim@def5678",
       "effort": "2d",

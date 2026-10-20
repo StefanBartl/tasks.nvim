@@ -262,7 +262,7 @@ opens with the same title and ref filled in.
 
 Changes frontmatter of an *open* task and sets `updated` -- but only when something really
 changed (an identical value rewrites nothing). Settable: `title status kind prio effort tags
-category severity value actor summary blocked_by after order plan phase refs rules done_in created remind`. A value may contain spaces
+category severity value actor summary blocked_by after order plan phase refs rules done_in commits created remind`. A value may contain spaces
 (`title=Fix the thing status=doing`: a word that does not start with a known `key=`
 continues the value before it); an empty value removes the key (`kind=`). `status=done` is
 refused: finishing moves the file, see `task done`. A *finished* task takes `remind=` only (a date, or `+7d` / `+2w` from today;
@@ -446,9 +446,15 @@ nvim --headless -u NONE -l scripts/tasks.lua quickwins --min-value=3 --max-effor
 `setup({ quick_wins = { min_value = 3, max_effort = "M" } })`: every place that names quick wins (`:Tasks estimate`, the
 plan header, `--quick-win`, this report) follows it.
 
-### `:Tasks done <id> [done_in=...] [date=YYYY-MM-DD] [--yes]`
+### `:Tasks done <id> [done_in=...] [commits=repo@sha,...] [date=YYYY-MM-DD] [--yes]`
 
-Rule R6, after a confirmation (`--yes` skips it): `status: done`, `done_in`; the file moves
+`commits` is the list of every commit made for the task, `repo@sha` each (7-40 hex digits),
+so a finished task can be traced back to its code afterwards. `commits=` adds to the task's own
+`commits` (a commit named twice is listed once); `:Tasks set <id> commits=[...]` replaces the
+list at any time, and `tasks check` reports a malformed entry (`bad-commit`). `done_in` stays
+free text.
+
+Rule R6, after a confirmation (`--yes` skips it): `status: done`, `done_in`, `commits`; the file moves
 to `Backlog/FEATURES/` (`feature`, `idea`, `research`) or `Backlog/TASKS/` (`task`, `bug`, no
 kind) as `YYYY-MM-DD_<slug>.md`; its row goes on top of that section of `Backlog/README.md`;
 the index is regenerated. On any failure the files involved are restored byte for byte.

@@ -596,7 +596,13 @@ return function(H)
     )
   )
   local fin = one({
-    { op = "done", id = "lib.nvim/gamma", confirm = pv.confirm, done_in = "lib.nvim@abc1234" },
+    {
+      op = "done",
+      id = "lib.nvim/gamma",
+      confirm = pv.confirm,
+      done_in = "lib.nvim@abc1234",
+      commits = { "lib.nvim@abc1234", "tasks.nvim@def5678" },
+    },
   })
   eq({ fin.ok, fin.outcome }, { true, "done" }, vim.inspect(fin))
   eq(fin.to, "lib.nvim/Backlog/TASKS/" .. F.TODAY .. "_gamma.md")
@@ -607,6 +613,10 @@ return function(H)
   has(
     H.read(root .. "/lib.nvim/Backlog/TASKS/" .. F.TODAY .. "_gamma.md"),
     "done_in: lib.nvim@abc1234"
+  )
+  has(
+    H.read(root .. "/lib.nvim/Backlog/TASKS/" .. F.TODAY .. "_gamma.md"),
+    "commits: [lib.nvim@abc1234, tasks.nvim@def5678]"
   )
   local again = one({ { op = "done", id = "lib.nvim/gamma", confirm = pv.confirm } })
   eq(
