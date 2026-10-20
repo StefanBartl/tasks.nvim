@@ -447,6 +447,35 @@ return function(H)
     table.sort(resorted)
     eq(cut_tags.values, resorted, "what is kept is the first 200 of the sorted values")
     golden("groupings")
+
+    -- a vault without tags, plans and phases: empty lists, written as lists
+    local solo = H.tmpdir() .. "/solo"
+    vim.fn.mkdir(solo .. "/solo.nvim/ROADMAP/tasks", "p")
+    vim.fn.writefile(
+      { "---", "title: One", "status: open", "---", "", "Body." },
+      solo .. "/solo.nvim/ROADMAP/tasks/one.md"
+    )
+    local _, empty_text = call("groupings", nil, { root = solo })
+    for _, name in ipairs({ "tags", "plan", "phase" }) do
+      ok(
+        empty_text:find('"field":"' .. name .. '".-"values":%[%]') ~= nil,
+        name .. " has no values and says so as a list: [] and not {}"
+      )
+    end
+
+    -- a value that is too long is left out and not cut (a cut tag is another tag)
+    local long_view = assert(contract.view({ root = root }))
+    long_view.open[1].tags = { ("x"):rep(contract.LIMITS.title + 1), "fine" }
+    local long_doc = assert(contract.groupings({ view = long_view }))
+    for _, f in ipairs(long_doc.fields) do
+      if f.field == "tags" then
+        ok(vim.tbl_contains(f.values, "fine"), "a tag of normal length stays")
+        for _, v in ipairs(f.values) do
+          ok(vim.fn.strchars(v) <= contract.LIMITS.title, "no value is longer than the limit")
+          ok(v ~= ("x"):rep(contract.LIMITS.title), "a long tag is not cut to the limit")
+        end
+      end
+    end
   end
 
   -- ── lists: the named lists of the engine, read only ──

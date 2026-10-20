@@ -1751,9 +1751,16 @@ local function grouping_values(tasks, pick)
       got = { got }
     end
     for _, v in ipairs(got or {}) do
-      if type(v) == "string" and v ~= "" and not seen[v] then
+      -- A value that is too long is left out, not cut: a cut tag would be another tag, and a reader that writes the value
+      -- of a group would write that one. The reader meets the long one on the task and shows a group of its own for it.
+      if
+        type(v) == "string"
+        and v ~= ""
+        and not seen[v]
+        and vim.fn.strchars(v) <= M.LIMITS.title
+      then
         seen[v] = true
-        values[#values + 1] = clip(v, M.LIMITS.title)
+        values[#values + 1] = v
       end
     end
   end
