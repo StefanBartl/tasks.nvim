@@ -221,12 +221,15 @@ function M.validate(opts)
   return out
 end
 
----Merge the options over the current state and return a copy of it.
+---Set the options and return a copy of the state. Every call starts from the defaults, so an option an
+---earlier call set and this one leaves out is back at its default; `ignored()` lists what THIS call threw
+---away (the earlier call's problems belong to options that are no longer in force).
 ---@param opts? table
 ---@return Tasks.Opts
 function M.merge(opts)
-  -- What any `setup()` threw away stays listed for `:checkhealth`: a second call that ignores nothing
-  -- must not erase the first call's messages.
+  state = vim.deepcopy(DEFAULTS)
+  given = {}
+  ignored = {}
   local checked = M.validate(opts)
   for key in pairs(checked) do
     given[key] = true

@@ -33,7 +33,7 @@ local M = {}
 ---@field ci? { lint_timeout_ms?: integer }
 -- Defaults and validation: `tasks_nvim.config`.
 
----Tell the engine where the vault is. Safe to call twice; the last call wins per key.
+---Tell the engine where the vault is. Safe to call twice; every call starts from the defaults.
 ---@param opts? Tasks.SetupOpts
 ---@return nil
 function M.setup(opts)
@@ -55,7 +55,7 @@ function M.setup(opts)
       require("tasks_nvim.ui.steps_watch").enable()
     end)
   else
-    -- "last call wins per key": a reload that switches the option off removes what an earlier call registered (the
+    -- every call starts from the defaults: a reload that switches the option off removes what an earlier call registered (the
     -- augroup survives a `package.loaded` reset, so it is removed by name when the module is not loaded)
     vim.schedule(function()
       if package.loaded["tasks_nvim.ui.steps_watch"] then

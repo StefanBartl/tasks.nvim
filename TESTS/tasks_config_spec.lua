@@ -23,7 +23,39 @@ return function(H)
   config.merge({ extra_areas = { "Z" } })
   eq(config.get().extra_areas, { "Z" }, "merge keeps what passed")
   config.merge({ extra_areas = 5 })
-  eq(config.get().extra_areas, { "Z" }, "a bad value does not overwrite a good one")
+  eq(
+    config.get().extra_areas,
+    {},
+    "a bad value is dropped: the default applies, not the earlier call's value"
+  )
+  config.merge(before)
+
+  -- every merge starts from the defaults: what an earlier call set and this one leaves out is gone
+  config.merge({ extra_areas = { "Z" }, dashboard = { watch = false }, links = "plain" })
+  ok(config.given("links"), "fixture: links was given")
+  config.merge({ staleness = { budget_ms = 77 } })
+  eq(config.get().extra_areas, {}, "a top-level option left out is back at its default")
+  eq(
+    config.get().dashboard.watch,
+    require("tasks_nvim.config.DEFAULTS").dashboard.watch,
+    "a section left out is back"
+  )
+  eq(config.get().staleness.budget_ms, 77, "the option of this call applies")
+  ok(not config.given("links"), "given() forgets what the earlier call set")
+  config.merge({ lists = { mine = { status = "open" } } })
+  config.merge({})
+  eq(
+    config.get().lists,
+    require("tasks_nvim.config.DEFAULTS").lists,
+    "named lists left out are back at the built-in ones"
+  )
+  config.merge({ extra_areas = { "Z" } })
+  config.merge(nil)
+  eq(config.get().extra_areas, {}, "merge(nil) is the defaults")
+  config.merge({ nope = 1 })
+  ok(#config.ignored() == 1, "ignored() lists what the last call threw away")
+  config.merge({})
+  eq(#config.ignored(), 0, "...and a clean call after it lists nothing")
   config.merge(before)
 
   -- sections: checked key by key, merged key by key
@@ -62,6 +94,7 @@ return function(H)
   )
   config.merge({ dashboard = { watch = true } })
   eq(config.get().dashboard.watch, true)
+  config.merge({ dashboard = { watch = "no" } })
   ok(#config.ignored() >= 1, "problems stay listed for :checkhealth")
   eq(require("tasks_nvim.config.DEFAULTS").ci.lint_timeout_ms, 120000, "defaults are data")
 
