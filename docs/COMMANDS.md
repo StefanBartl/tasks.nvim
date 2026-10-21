@@ -288,11 +288,12 @@ A new task whose slug another area already has turns every bare `[[slug]]` that 
 `warn: [[dep-a]] now names cascade.nvim/dep-a and lib.nvim/dep-a: wikilink-ambiguous in lib.nvim/linked (write the id
 there)`. The task is created all the same.
 
-### `:Tasks attach <id> <file> [name=<file name>]` / `task folderize <id>`
+### `:Tasks attach <id> <file> [name=<file name>]` / `attach <id> from=clipboard|latest [dir=<folder>]` / `task folderize <id>`
 
 A task may be a folder `tasks/<slug>/<slug>.md` that holds assets (concept section 12.2).
 `attach` copies the file into `<slug>/assets/` -- a plain task file becomes a folder task
-first -- and puts the Markdown link (`![name](assets/name)` for images) in the `+` register.
+first -- and puts the Markdown link (`![name](assets/name)` for images) at the cursor of the task when it is open
+in a window, else in the `+` register.
 `name=` renames the copy; an asset that already exists is never replaced. Spaces in the file
 name become hyphens, and names Windows treats as devices (`nul`, `con`, ...) are refused. The
 file argument is resolved once, by the composer (`~`, `$VAR`, `%VAR%`) and never expanded a second time,
@@ -301,6 +302,20 @@ A failed copy
 leaves the task as it was (no half-made folder task). `folderize` converts a task without
 attaching anything. Windows showing
 the old task file follow it. `task new ... --folder` creates a folder task from the start.
+
+**Screenshot in one step.** Instead of a file, `from=clipboard` stores the image on the clipboard as a PNG, and
+`from=latest` the newest image of the screenshot folders (`attach.screenshot_dirs`, default: the usual folder of
+the system, e.g. `~/Pictures/Screenshots`; `dir=<folder>` for one call) -- only when it was modified within
+`attach.max_age_s` seconds (default 300), otherwise nothing is attached and the message names the file, so a week-old
+picture is never attached by guess. Without `name=` the copy is called `<slug>-YYYY-MM-DD-HHMM.<ext>`; a taken name gets
+`-2`, `-3`; an existing asset is never replaced. The tools for the clipboard are detected (`powershell.exe` on Windows,
+`pngpaste` on macOS, `wl-paste` or `xclip` on Linux); with none, or without an image on the clipboard, you get a message
+and nothing is created. Example: take a screenshot, then `:Tasks attach lib.nvim/my-task from=clipboard`; the link lands
+at the cursor.
+
+```lua
+require("tasks_nvim").setup({ attach = { screenshot_dirs = { "~/Pictures/Screenshots" }, max_age_s = 120 } })
+```
 
 ### `:Tasks plan [<area>|all] [--for=<id>|--plan=<id>] [filters] [--ready] [--with-steps] [--format=md|tsv|ids] [--to=] [--force]`
 

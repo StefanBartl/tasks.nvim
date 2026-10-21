@@ -17,6 +17,7 @@
 ---    anywhere but as `<slug>/<slug>.md` (a folder task)
 ---  - `slug-conflict`: the same slug exists as a file and as a folder task
 ---  - `asset-dangling` (warning): a folder task links `assets/<file>` that is not there
+---  - `asset-unused` (warning): a folder task has an image in `assets/` that its text never mentions
 ---  - `index-stale`: `ROADMAP/TASKS.md` is missing, outdated, or left over
 ---  - `bad-blocked-by`, `blocked-by-self`, `blocked-by-dangling`: the blocker is
 ---    malformed, the task itself, or exists nowhere; `blocked-by-done` (warning):
@@ -46,6 +47,11 @@
 --- Not its job: fixing anything (`index.write_area` regenerates an index).
 
 local fsio = require("tasks_nvim.fsio")
+
+---Image extensions (as `mutate.attach` links them with `![]()`).
+---@type table<string, boolean>
+local IMAGE_EXT =
+  { png = true, jpg = true, jpeg = true, gif = true, webp = true, svg = true, bmp = true }
 local model = require("tasks_nvim.model")
 local plan = require("tasks_nvim.plan")
 local plans = require("tasks_nvim.plans")
@@ -155,6 +161,41 @@ local function dangling_assets(task)
     pos = math.max(stop, e + 1)
   end
   return missing
+end
+
+---Images directly in a folder task's `assets/` that the task's text does not mention as `assets/<name>`
+---(a percent-encoded link counts).
+---@param task Tasks.Task
+---@return string[] names
+local function unused_assets(task)
+  local text = fsio.read(task.path)
+  if not text then
+    return {}
+  end
+  local dir = fsio.dirname(task.path) .. "/assets"
+  local handle = vim.uv.fs_scandir(dir)
+  if not handle then
+    return {}
+  end
+  local decoded = text:gsub("%%(%x%x)", function(hex)
+    return string.char(tonumber(hex, 16))
+  end)
+  local unused = {}
+  while true do
+    local name, kind = vim.uv.fs_scandir_next(handle)
+    if not name then
+      break
+    end
+    local ext = name:match("%.([%w]+)$")
+    if kind ~= "directory" and ext and IMAGE_EXT[ext:lower()] then
+      local needle = "assets/" .. name
+      if not text:find(needle, 1, true) and not decoded:find(needle, 1, true) then
+        unused[#unused + 1] = name
+      end
+    end
+  end
+  table.sort(unused)
+  return unused
 end
 
 ---What the blocker graph says (`tasks_nvim.plan`), over every open task of the vault, reported for the checked
@@ -413,6 +454,15 @@ function M.run(opts)
       if t.folder then
         for _, target in ipairs(dangling_assets(t)) do
           add(findings, "warn", "asset-dangling", t, "linked asset is missing: " .. target)
+        end
+        for _, asset in ipairs(unused_assets(t)) do
+          add(
+            findings,
+            "warn",
+            "asset-unused",
+            t,
+            "assets/" .. name .. " is not linked from the task"
+          )
         end
       end
       for i, msg in ipairs(t.errors) do

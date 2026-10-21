@@ -17,7 +17,7 @@ return function(H)
     { "areas", "call", "check", "ci", "export", "migrate-actor", "plan-new", "plans", "show" }
   local ONLY_COMPOSER = { "folder", "open", "planfile", "preview" }
   local OPTIONS = {
-    ["attach"] = { composer = {}, cli = { "name", "no-index" } },
+    ["attach"] = { composer = {}, cli = { "clipboard", "latest", "name", "no-index" } },
     ["done"] = {
       composer = { "yes" },
       cli = { "commits", "date", "done-in", "no-index", "no-next", "remind", "unblock" },

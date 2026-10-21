@@ -288,6 +288,14 @@ return function(H)
     table.sort(out)
     return out
   end
+  -- the screenshot was attached but its link was never put into the text: an unused image
+  eq(codes(res), { "warn:asset-unused" }, "an attached image nobody links is reported")
+  has(res.findings[1].message, "assets/")
+  ok(res.ok, "an unused asset is only a warning")
+  local linked = root .. "/lib.nvim/ROADMAP/tasks/needs-shot/needs-shot.md"
+  H.write(linked, H.read(linked) .. "\n" .. att.link .. "\n")
+  assert(index.write_area("lib.nvim", { root = root }))
+  res = assert(check.run({ root = root }))
   eq(codes(res), {}, "folder tasks and assets pass the check")
 
   -- a dangling asset link is a warning

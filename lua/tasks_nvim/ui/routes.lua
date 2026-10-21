@@ -801,16 +801,28 @@ local function nested_routes()
           type = "TASK_ID",
           desc = "Id of the task to attach the file to, as area/slug",
         },
-        { name = "file", type = "FILE", desc = "File to copy into the task's assets/ folder" },
+        {
+          name = "file",
+          type = "FILE",
+          optional = true,
+          desc = "File to copy into the task's assets/ folder (not with from=)",
+        },
       },
       kv = {
         {
           key = "name",
           type = "STRING",
-          desc = "Name for the copy in assets/ (default: the file's name)",
+          desc = "Name of the copy (default: the file's name; with from=: slug-date-time)",
         },
+        {
+          key = "from",
+          type = "STRING",
+          values = { "clipboard", "latest" },
+          desc = "Instead of a file: the clipboard image or the newest screenshot",
+        },
+        { key = "dir", type = "STRING", desc = "With from=latest: the folder to look into" },
       },
-      desc = "Copy a file (screenshot, log) into the task's assets/ folder, turning a plain task into a folder task, and put the Markdown link in the + register; name=<file name> renames the copy",
+      desc = "Copy a file (screenshot, log), the clipboard image (from=clipboard) or the newest screenshot (from=latest) into the task's assets/ folder, turning a plain task into a folder task, and put the Markdown link at the cursor of the task when it is open, else in the + register; name=<file name> renames the copy",
       run = function(ctx)
         cmd().task_attach(ctx)
       end,

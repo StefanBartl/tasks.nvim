@@ -109,6 +109,11 @@ commands:
                                           next; --unblock sets the freed tasks that still say blocked to open
   attach <area>/<slug> <file> [--name=n]  copy a file to <slug>/assets/ (a plain task becomes a
                                           folder task) and print the Markdown link
+  attach <area>/<slug> --clipboard [--name=n]
+                                          the image on the clipboard, saved as a PNG named <slug>-<date>-<HHMM>.png
+  attach <area>/<slug> --latest[=<folder>] [--name=n]
+                                          the newest image of the screenshot folder(s) (config attach.screenshot_dirs),
+                                          only when modified within attach.max_age_s (300 s); older: nothing is guessed
   folderize <area>/<slug>                 turn a plain task file into a folder task
   check [<area>]                          rule check; exit 1 on any error
   template [--title=t] [--kind=k] [--prio=n] [--effort=e] [--tags=a,b] [--lang=de|en] [--with-plan]
@@ -276,7 +281,8 @@ local SPECS = {
     value = { "done-in", "commits", "date", "remind" },
     flag = { "no-index", "no-next", "unblock" },
   },
-  attach = { value = { "name" }, flag = { "no-index" } },
+  -- `latest` is both: `--latest` (the configured screenshot folders) and `--latest=<folder>`.
+  attach = { value = { "name", "latest" }, flag = { "no-index", "clipboard", "latest" } },
   folderize = { value = {}, flag = { "no-index" } },
   check = { value = {}, flag = { "all" } },
   ci = { value = { "md-lint" }, flag = { "strict", "no-lint", "trust-vault-lint" } },
@@ -1340,16 +1346,39 @@ end
 function commands.attach(ctx)
   local args, eo = ctx.args, ctx.eo
   local id, file = args.pos[1], args.pos[2]
-  if not id or not file or #args.pos > 2 then
-    ctx.warn("error: usage: attach <area>/<slug> <file> [--name=n]")
+  local from_clipboard, from_latest = args.opt.clipboard, args.opt.latest
+  local sourced = from_clipboard or from_latest
+  if from_clipboard and from_latest then
+    ctx.warn("error: --clipboard and --latest exclude each other")
     return 2
   end
-  local res, err = mutate.attach(id, file, {
-    root = eo.root,
-    today = eo.today,
-    name = args.opt.name --[[@as string|nil]],
-    index = not args.opt["no-index"],
-  })
+  if not id or (sourced and file) or (not sourced and not file) or #args.pos > 2 then
+    ctx.warn(
+      "error: usage: attach <area>/<slug> <file> [--name=n]  |  attach <area>/<slug> --clipboard|--latest[=<folder>]"
+    )
+    return 2
+  end
+  local res, err, too_old
+  if sourced then
+    res, err, too_old =
+      require("tasks_nvim.attach_source").attach(id, from_clipboard and "clipboard" or "latest", {
+        root = eo.root,
+        today = eo.today,
+        name = args.opt.name --[[@as string|nil]],
+        dir = type(from_latest) == "string" and from_latest or nil,
+        index = not args.opt["no-index"],
+      })
+    if not res and too_old then
+      err = tostring(err) .. " (pass the file, or raise attach.max_age_s)"
+    end
+  else
+    res, err = mutate.attach(id, file, {
+      root = eo.root,
+      today = eo.today,
+      name = args.opt.name --[[@as string|nil]],
+      index = not args.opt["no-index"],
+    })
+  end
   if not res then
     ctx.warn("error: " .. tostring(err))
     return 1

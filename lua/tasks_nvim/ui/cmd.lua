@@ -1567,8 +1567,31 @@ function M.task_folderize(ctx)
   notify.info(("%s is now a folder task"):format(res.id))
 end
 
----`:Tasks attach <id> <file> [name=<file name>]`: copy the file into
----`assets/`, put the Markdown link in the `+` register and say so.
+---Put `text` at the cursor of the window that shows the file `path`, when there is one.
+---@param path string
+---@param text string
+---@return boolean inserted
+local function insert_at_cursor(path, text)
+  local want = vim.fs.normalize(path)
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    if
+      vim.bo[buf].buftype == ""
+      and vim.fs.normalize(vim.api.nvim_buf_get_name(buf)) == want
+      and vim.bo[buf].modifiable
+    then
+      vim.api.nvim_win_call(win, function()
+        vim.api.nvim_put({ text }, "c", true, true)
+      end)
+      return true
+    end
+  end
+  return false
+end
+
+---`:Tasks attach <id> <file> [name=<file name>]`, or `:Tasks attach <id> from=clipboard|latest [dir=<folder>]`:
+---copy the file (the clipboard image, the newest screenshot) into `assets/` and put the Markdown link at the
+---cursor of the task when it is open in a window, else into the `+` register, and say so.
 ---@param ctx table
 function M.task_attach(ctx)
   if #ctx.rest > 0 then
@@ -1576,14 +1599,34 @@ function M.task_attach(ctx)
     return
   end
   local before = scan.find(ctx.args.id)
-  -- The composer's FILE type has resolved `~` and variables already (and checked the file is
-  -- there). A second `vim.fn.expand` would read `[1]` in `shot[1].png` as a wildcard (attaching
-  -- `shot1.png` instead) and run a backtick in a downloaded file's name through the shell.
-  local res, err = mutate.attach(
-    ctx.args.id,
-    vim.fn.fnamemodify(ctx.args.file, ":p"),
-    { name = ctx.kv.name ~= "" and ctx.kv.name or nil }
-  )
+  local from = ctx.kv.from ~= "" and ctx.kv.from or nil
+  local name = ctx.kv.name ~= "" and ctx.kv.name or nil
+  local res, err, too_old
+  if from then
+    if ctx.args.file and ctx.args.file ~= "" then
+      notify.error("give a file or from=clipboard|latest, not both")
+      return
+    end
+    if from ~= "clipboard" and from ~= "latest" then
+      notify.error("from= takes clipboard or latest, got " .. from)
+      return
+    end
+    res, err, too_old = require("tasks_nvim.attach_source").attach(ctx.args.id, from, {
+      name = name,
+      dir = ctx.kv.dir ~= "" and ctx.kv.dir or nil,
+    })
+    if not res and too_old then
+      err = tostring(err) .. " (give the file, or raise attach.max_age_s)"
+    end
+  elseif not ctx.args.file or ctx.args.file == "" then
+    notify.error("give a file, or from=clipboard|latest")
+    return
+  else
+    -- The composer's FILE type has resolved `~` and variables already (and checked the file is
+    -- there). A second `vim.fn.expand` would read `[1]` in `shot[1].png` as a wildcard (attaching
+    -- `shot1.png` instead) and run a backtick in a downloaded file's name through the shell.
+    res, err = mutate.attach(ctx.args.id, vim.fn.fnamemodify(ctx.args.file, ":p"), { name = name })
+  end
   if not res then
     -- The engine speaks CLI (`--name=`); here the same option is `name=<file name>`.
     notify.error((tostring(err):gsub("pass %-%-name=", "pass name=<file name>")))
@@ -1597,6 +1640,10 @@ function M.task_attach(ctx)
   end
   if res.updated_err then
     notify.warn("asset attached, but `updated` was not changed: " .. res.updated_err)
+  end
+  if insert_at_cursor(res.path, res.link) then
+    notify.info(("attached %s -> %s (link inserted at the cursor)"):format(res.id, res.rel))
+    return
   end
   local copied = pcall(vim.fn.setreg, "+", res.link)
   notify.info(

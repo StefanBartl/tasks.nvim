@@ -270,6 +270,7 @@ finished task with the same id under another date, is refused.
 | `slug` | filename is not a kebab-case ASCII slug, or the file lies in a subfolder of `tasks/` other than `<slug>/<slug>.md` |
 | `slug-conflict` | the same slug exists as a file and as a folder task |
 | `asset-dangling` (warning) | a folder task links `assets/<file>` that is not there |
+| `asset-unused` (warning) | a folder task has an image in `assets/` that its text never mentions |
 | `index-stale`, `index-error` | `ROADMAP/TASKS.md` is missing, outdated or left over / could not be checked |
 | `bad-blocked-by`, `blocked-by-self`, `blocked-by-dangling` | the blocker is malformed, the task itself, or exists nowhere |
 | `blocked-by-done` (warning) | the blocker is already finished |
@@ -375,6 +376,7 @@ nvim --headless -u NONE -l scripts/tasks.lua check
 | `plan-new <area> <title> [--areas --target --phases --gate --summary]` | create a plan file under `ROADMAP/plans/` |
 | `migrate-actor [area] [--write]` | propose `actor=me` for tasks that wait for you (status decision, tag needs-user), leave the rest empty; dry run unless `--write` |
 | `attach <area>/<slug> <file> [--name=n] [--no-index]` | copy a file to `<slug>/assets/` (a plain task becomes a folder task), print the Markdown link |
+| `attach <area>/<slug> --clipboard\|--latest[=<folder>] [--name=n] [--no-index]` | the same for the image on the clipboard (PNG) or the newest image of the screenshot folder(s) (`attach.screenshot_dirs`) modified within `attach.max_age_s` (300 s); named `<slug>-<date>-<HHMM>.<ext>`, a taken name gets `-2`; older: an error that names the file, nothing guessed |
 | `folderize <area>/<slug> [--no-index]` | turn a plain task file into a folder task |
 | `set <area>/<slug> key=value ... [--no-index]` | change frontmatter; an empty value removes the key |
 | `done <area>/<slug> [--commits=repo@sha,...] [--done-in=text] [--date=YYYY-MM-DD] [--no-index]` | finish and move to `Backlog/` |

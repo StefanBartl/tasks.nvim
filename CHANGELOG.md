@@ -7,6 +7,13 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- `attach` without a file: `attach <id> --clipboard` stores the image on the clipboard, `attach <id> --latest[=<folder>]`
+  the newest image of the screenshot folders (config `attach.screenshot_dirs`, `attach.max_age_s`, default 300 s; older: asked
+  about, not guessed). `:Tasks attach <id> from=clipboard|latest [dir=]` does the same and puts the link at the cursor of the
+  open task (else in the `+` register). The copy is named `<slug>-<date>-<HHMM>.<ext>`, a taken name gets a counter. Platform
+  access is `lib.nvim.clipboard_image` and `lib.nvim.fs.latest_file`. `check` reports `asset-unused` (warning) for an image
+  in `assets/` the task never mentions. Not yet: the operation in the `ops` contract and the entries in the new-task form,
+  the dashboard and the desktop app.
 - Frontmatter key `commits`: every commit made for a task, `repo@sha` each (7-40 hex digits), so a finished task
   can be traced back to its code. `done` takes `--commits=repo@sha,...` (`commits=` in `:Tasks done`, `commits` in the
   `done` operation) and adds them to the task's own list; `set <id> commits=[...]` replaces the list; `check` reports a

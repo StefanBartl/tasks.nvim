@@ -34,6 +34,7 @@ local SCHEMA = {
   lists = "lists",
   steps = { ask_finish = "boolean" },
   reminders = { on_start = "boolean" },
+  attach = { screenshot_dirs = "string_list", max_age_s = "posint" },
   completion = { finished = "finished_window" },
   keys = { dashboard = "keymap", dashboard_input = "keymap", form = "keymap" },
 }

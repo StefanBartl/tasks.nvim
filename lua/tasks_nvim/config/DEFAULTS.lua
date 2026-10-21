@@ -24,6 +24,10 @@
 ---@class Tasks.RemindersConfig
 ---@field on_start boolean  One line at startup when reminders (`remind:`) are due (a moment later, once per session, only with a UI; `false` turns it off).
 
+---@class Tasks.AttachConfig
+---@field screenshot_dirs string[]  Folders `attach --latest` looks into (empty: the usual screenshot folders of the system, see `tasks_nvim.attach_source`).
+---@field max_age_s integer         `attach --latest` only takes a file modified within this many seconds (default 300), otherwise it asks.
+
 ---@class Tasks.CompletionConfig
 ---@field finished boolean|integer  Which finished tasks `<Tab>` offers for `:Tasks open` and `preview`: `true` all of them, `false` none, a number only those finished in the last N days (a task of any age can still be typed in full).
 
@@ -60,6 +64,7 @@
 ---@field lists table<string, Tasks.ListDef>  Named lists (a filter combination plus a sort order): `{ ["my-list"] = { effort = "<=S", value = ">=4", sort = "roi" } }`. See `tasks_nvim.lists`.
 ---@field steps Tasks.StepsConfig
 ---@field reminders Tasks.RemindersConfig
+---@field attach Tasks.AttachConfig
 ---@field completion Tasks.CompletionConfig
 ---@field keys Tasks.KeysConfig
 
@@ -77,6 +82,7 @@ return {
   lists = {},
   steps = { ask_finish = false },
   reminders = { on_start = true },
+  attach = { screenshot_dirs = {}, max_age_s = 300 },
   completion = { finished = true },
   keys = {
     dashboard = {
