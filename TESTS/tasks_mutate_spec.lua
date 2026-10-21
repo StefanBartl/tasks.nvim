@@ -362,6 +362,14 @@ return function(H)
   )
   assert(mutate.set("lib.nvim/target", { tags = "[a, b]" }, o))
   eq(scan.find("lib.nvim/target", { root = root }).tags, { "a", "b" }, "same for tags")
+  assert(mutate.set("lib.nvim/target", { commits = "[lib.nvim@abc1234, tasks.nvim@def5678]" }, o))
+  eq(
+    scan.find("lib.nvim/target", { root = root }).commits,
+    { "lib.nvim@abc1234", "tasks.nvim@def5678" },
+    "commits are a list like tags"
+  )
+  local bad_commit = mutate.set("lib.nvim/target", { commits = { "lib.nvim@abc1234]" } }, o)
+  eq(bad_commit, nil, "a bracket in a commit would break its line")
   assert(mutate.set("lib.nvim/target", { done_in = "see #7" }, o))
   eq(scan.find("lib.nvim/target", { root = root }).done_in, "see #7")
   local bad_tag = mutate.set("lib.nvim/target", { tags = { "a #b" } }, o)

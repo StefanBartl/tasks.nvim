@@ -614,7 +614,8 @@ local function normalize_patch(patch, opts)
       or key == "done_in"
       or key == "commits"
     then
-      local list, err = string_list(value, key, key == "tags")
+      -- tags and commits are single tokens: a bracket, quote or comma in one would break the line it is written on
+      local list, err = string_list(value, key, key == "tags" or key == "commits")
       if not list then
         return nil, err
       end

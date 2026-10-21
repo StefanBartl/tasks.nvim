@@ -35,12 +35,14 @@ return function(H)
   local function finished(title, extra)
     local made =
       assert(mutate.new("lib.nvim", vim.tbl_extend("force", o, { title = title }, extra or {})))
-    assert(
-      mutate.done(
-        made.id,
-        vim.tbl_extend("force", o, { done_in = "lib.nvim@abc1234", remind = "2026-12-01" })
-      )
-    )
+    assert(mutate.done(
+      made.id,
+      vim.tbl_extend("force", o, {
+        done_in = "lib.nvim@abc1234",
+        commits = "lib.nvim@abc1234",
+        remind = "2026-12-01",
+      })
+    ))
     return made.id
   end
 
@@ -72,6 +74,7 @@ return function(H)
   local text = H.read(open.path)
   lacks(text, "done_in:")
   lacks(text, "remind:")
+  has(text, "commits: [lib.nvim@abc1234]") -- the work was done: the commits stay with the task
   has(text, "updated: " .. F.TODAY)
   has(text, "title: Came back")
   eq(fsio.is_file(done_path), false, "the finished file is gone")
