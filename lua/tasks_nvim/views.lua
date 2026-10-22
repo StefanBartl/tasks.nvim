@@ -325,6 +325,33 @@ function M.def_of(view)
   }
 end
 
+---The files of the views, for the `rev` of the vault (a view changed elsewhere, by a pull say, is a new state of it):
+---`{ id, path }` for every file with the name of a view, sorted by id; a folder that leads out of the vault is one entry
+---without a path (it is not read).
+---@param root string
+---@return { id: string, path: string|nil }[]
+function M.files(root)
+  local out = {}
+  for _, area in ipairs(vault.areas(root)) do
+    local dir = M.dir(root, area.name)
+    if fsio.is_dir(dir) then
+      if leaves(root, area.name) then
+        out[#out + 1] = { id = area.name .. "/views" }
+      else
+        local names = vim.fn.readdir(dir)
+        table.sort(names)
+        for _, name in ipairs(names) do
+          local slug = name:match("^(.+)%.md$")
+          if slug and vault.valid_slug(slug) then
+            out[#out + 1] = { id = area.name .. "/" .. slug, path = dir .. "/" .. name }
+          end
+        end
+      end
+    end
+  end
+  return out
+end
+
 ---Every view of the vault, by id, and what could not be read (a file with a problem is no view but a line in the list of
 ---problems, and never hides the others).
 ---@param root string

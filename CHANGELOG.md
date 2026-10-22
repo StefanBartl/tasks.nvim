@@ -61,6 +61,9 @@ the version is not tagged yet (the repository is not published).
 
 ### Changed
 
+- Contract `tasks-export/1`: the `rev` of a document also covers the files of the saved views (`<area>/ROADMAP/views/*.md`):
+  a view changed outside (a pull) is a new state of the vault, so that a reader that shows the views learns of it from the
+  `rev` (the desktop hub's watcher reports the folder). The shape of the documents is unchanged; goldens with a new `rev`.
 - A `--to=file:` target that exists already is a question, not an error (UI-05): `:Tasks list`, `plan`, `quickwins`,
   `template` and `folder --list` ask "... already exists. Overwrite it?" (`ui.kit.confirm`, `vim.ui.select` without
   ui.nvim) instead of "pass --force to overwrite it"; a no keeps the file, `--force` skips the question, as the

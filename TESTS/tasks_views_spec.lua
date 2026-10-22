@@ -253,6 +253,18 @@ return function(H)
   eq({ by_cross.ok, by_cross.outcome }, { true, "created" }, vim.inspect(by_cross))
   has(H.read(path_of(by_cross.id)), "group_by: cross")
 
+  -- a view is part of the state of the vault: a file changed outside (a pull) is a new `rev`, so that a reader that
+  -- shows the views learns of it; the documents read on that state name the same one
+  local function rev_of(method)
+    return vim.json.decode((api.call(method, nil, { root = root, today = F.TODAY }))).rev
+  end
+  local before = rev_of("snapshot")
+  eq(rev_of("snapshot"), before)
+  H.write(path_of(by_cross.id), H.read(path_of(by_cross.id)) .. "\nChanged on another machine.\n")
+  local after = rev_of("snapshot")
+  ok(after ~= before, "a changed view file is a new rev")
+  eq({ rev_of("links"), rev_of("groupings") }, { after, after })
+
   -- refused: a view that does not hold together, an area that is not there, a name that leads out of the folder
   local function refused(op, code, needle)
     local r = one(op)

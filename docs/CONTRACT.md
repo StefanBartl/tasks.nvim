@@ -252,7 +252,7 @@ behind); a request is at most 256 KiB plus its head.
 | | |
 |---|---|
 | `etag` (a task) | `sha256:` and the first 16 hex digits of the SHA-256 of the **bytes** of the task file as they were parsed. A later write compares against it; there is no second read, so no race between reading and hashing. A file that was not read has none. |
-| `rev` (`snapshot`, `list`, `task`) | what the document's content stood on: `rev:` and six hex digits over the id and `etag` of the tasks in the document, of every plan file, and of the unlisted files. The same request with the same `rev` found the same files. |
+| `rev` (`snapshot`, `list`, `task`) | what the document's content stood on: `rev:` and six hex digits over the id and `etag` of the tasks in the document, of every plan file, of the unlisted files, and of every file of a saved view (`<area>/ROADMAP/views/*.md`: a view changed outside, by a pull say, is a new `rev`, so that a reader that shows the views learns of it). The same request with the same `rev` found the same files. |
 | `digest` (every document that comes from a scan) | `sha256:` and 16 hex digits of the compact document **without `generated_at` and `engine`**. Two runs on an unchanged vault give the same digest, whenever and by whichever build of the engine they ran. |
 
 ## Errors

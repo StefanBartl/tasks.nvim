@@ -460,7 +460,8 @@ local function areas_of(view)
   return out
 end
 
----`rev`: what the vault looked like, from every task and plan file by id and version tag.
+---`rev`: what the vault looked like, from every task, plan and view file by id and version tag (a view is no task, but a
+---reader that shows the saved views learns from a new `rev` that one changed).
 ---@param view Tasks.ContractView
 ---@param entries table[]
 ---@return string
@@ -474,6 +475,9 @@ local function rev_of(view, entries)
   end
   for _, u in ipairs(view.unlisted) do
     lines[#lines + 1] = "unlisted:" .. u.id .. "\t" .. u.status
+  end
+  for _, f in ipairs(require("tasks_nvim.views").files(view.root)) do
+    lines[#lines + 1] = "view:" .. f.id .. "\t" .. (f.path and etag_of(f.path) or "")
   end
   return builder.rev_of(lines)
 end

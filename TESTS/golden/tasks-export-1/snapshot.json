@@ -46,7 +46,7 @@
     "listed": 14,
     "unlisted": 2
   },
-  "digest": "sha256:deba01cbf3673c21",
+  "digest": "sha256:ef0d34affc5fb681",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -160,7 +160,7 @@
       "title": "Old and done"
     }
   ],
-  "rev": "rev:a9077a",
+  "rev": "rev:01922c",
   "schema": 1,
   "tasks": [
     {
