@@ -274,17 +274,20 @@ return function(H)
   eq({ by_cross.ok, by_cross.outcome }, { true, "created" }, vim.inspect(by_cross))
   has(H.read(path_of(by_cross.id)), "group_by: cross")
 
-  -- a view is part of the state of the vault: a file changed outside (a pull) is a new `rev`, so that a reader that
-  -- shows the views learns of it; the documents read on that state name the same one
-  local function rev_of(method)
-    return vim.json.decode((api.call(method, nil, { root = root, today = F.TODAY }))).rev
+  -- a view changed outside (a pull) is a new `views_rev` of the snapshot - the one `tasks.views` names - and changes its
+  -- digest, so that a reader that shows the views learns of it; the `rev` of the tasks stays, and no other document
+  -- has to be asked again
+  local function doc_of(method)
+    return vim.json.decode((api.call(method, nil, { root = root, today = F.TODAY })))
   end
-  local rev_before = rev_of("snapshot")
-  eq(rev_of("snapshot"), rev_before)
+  local snap_before = doc_of("snapshot")
+  eq(snap_before.views_rev, doc_of("views").rev)
   H.write(path_of(by_cross.id), H.read(path_of(by_cross.id)) .. "\nChanged on another machine.\n")
-  local rev_after = rev_of("snapshot")
-  ok(rev_after ~= rev_before, "a changed view file is a new rev")
-  eq({ rev_of("links"), rev_of("groupings") }, { rev_after, rev_after })
+  local snap_after = doc_of("snapshot")
+  ok(snap_after.views_rev ~= snap_before.views_rev, "a changed view file is a new views_rev")
+  ok(snap_after.digest ~= snap_before.digest, "and a new digest of the snapshot")
+  eq(snap_after.views_rev, doc_of("views").rev)
+  eq({ snap_after.rev, doc_of("links").rev }, { snap_before.rev, snap_before.rev })
 
   -- refused: a view that does not hold together, an area that is not there, a name that leads out of the folder
   local function refused(op, code, needle)

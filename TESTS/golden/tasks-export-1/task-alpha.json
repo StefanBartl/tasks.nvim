@@ -1,7 +1,7 @@
 {
   "body": "\nThe body of alpha.\n\n## Plan\n\n- [x] 1. first\n- [ ] 2. second\n- [ ] 3. third (dropped)\n",
   "body_truncated": false,
-  "digest": "sha256:a52c15874cedc482",
+  "digest": "sha256:e99ce2a7e3af461c",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -10,7 +10,7 @@
   "generated_at": "2026-01-01T00:00:00Z",
   "kind": "tasks.task",
   "plugin": "tasks.nvim",
-  "rev": "rev:abeff6",
+  "rev": "rev:9f2ae5",
   "schema": 1,
   "steps": [
     {

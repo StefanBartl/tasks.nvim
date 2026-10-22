@@ -460,8 +460,7 @@ local function areas_of(view)
   return out
 end
 
----`rev`: what the vault looked like, from every task, plan and view file by id and version tag (a view is no task, but a
----reader that shows the saved views learns from a new `rev` that one changed).
+---`rev`: what the vault looked like, from every task and plan file by id and version tag.
 ---@param view Tasks.ContractView
 ---@param entries table[]
 ---@return string
@@ -476,8 +475,18 @@ local function rev_of(view, entries)
   for _, u in ipairs(view.unlisted) do
     lines[#lines + 1] = "unlisted:" .. u.id .. "\t" .. u.status
   end
-  for _, f in ipairs(require("tasks_nvim.views").files(view.root)) do
-    lines[#lines + 1] = "view:" .. f.id .. "\t" .. (f.path and etag_of(f.path) or "")
+  return builder.rev_of(lines)
+end
+
+---`views_rev`: what the saved views looked like, from every file of a view by id and version tag (a folder that leads out
+---of the vault is one line, not read). The `rev` of `tasks.views`, and in the snapshot: a view changed outside (a pull)
+---changes the snapshot's digest without a new `rev`, so that a reader learns of it and asks no other document again.
+---@param root string
+---@return string
+local function views_rev(root)
+  local lines = {}
+  for _, f in ipairs(require("tasks_nvim.views").files(root)) do
+    lines[#lines + 1] = f.id .. "\t" .. (f.path and etag_of(f.path) or "")
   end
   return builder.rev_of(lines)
 end
@@ -582,6 +591,7 @@ function M.build_snapshot(opts)
     quick_wins = vim.list_slice(sums.quick_wins, 1),
     unestimated = vim.list_slice(sums.unestimated, 1),
   })
+  doc.views_rev = views_rev(view.root)
   return seal(doc, rev_of(view, entries)), nil
 end
 
@@ -1867,9 +1877,8 @@ function M.views(opts)
   end
   local views = require("tasks_nvim.views")
   local list, problems = views.all(root)
-  local lines, items = {}, {}
+  local items = {}
   for _, v in ipairs(list) do
-    lines[#lines + 1] = v.id .. "\t" .. v.etag
     local select = {}
     for _, s in ipairs(views.SELECT) do
       select[s.name] = json.memo(vim.deepcopy(v.select[s.name]))
@@ -1891,14 +1900,13 @@ function M.views(opts)
   end
   local notes = {}
   for _, p in ipairs(problems) do
-    lines[#lines + 1] = "problem:" .. p.id
     notes[#notes + 1] =
       json.object({ id = p.id, file = p.file, message = clip(redact(root, p.message), 600) })
   end
   local doc = M.head("tasks.views", root)
   doc.views = json.memo(items)
   doc.problems = json.memo(notes)
-  return seal(doc, builder.rev_of(lines)), nil
+  return seal(doc, views_rev(root)), nil
 end
 
 ---What finishing a task would do, written down: the target, the README row, the steps, the plan it closes, the

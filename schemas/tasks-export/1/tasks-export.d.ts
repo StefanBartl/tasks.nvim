@@ -71,6 +71,10 @@ export type Digest = string;
 export type Snapshot = Head & {
   kind: "tasks.snapshot";
   rev: Rev;
+  /**
+   * What the vault looked like: `rev:` and 6 hex digits, from every task by id and etag.
+   */
+  views_rev?: string;
   digest: Digest;
   counts: {
     listed: number;

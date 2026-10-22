@@ -1,5 +1,5 @@
 {
-  "digest": "sha256:60842483f87ca035",
+  "digest": "sha256:b8cc9e6f2405106b",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -15,7 +15,7 @@
       "message": "display 'cube' is unknown (expected columns, list, matrix)"
     }
   ],
-  "rev": "rev:e11279",
+  "rev": "rev:ecf754",
   "schema": 1,
   "vault": {
     "id": "vault"

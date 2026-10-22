@@ -646,6 +646,10 @@
         "rev": {
           "$ref": "#/$defs/Rev"
         },
+        "views_rev": {
+          "description": "What the saved views looked like: the `rev` of `tasks.views`. A view changed outside changes it (and the digest), not `rev`: a reader that shows the views reads them again when it differs from the one it read.",
+          "$ref": "#/$defs/Rev"
+        },
         "digest": {
           "$ref": "#/$defs/Digest"
         },

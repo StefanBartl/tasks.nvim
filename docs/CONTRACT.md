@@ -97,6 +97,7 @@ only what is listed), `limits` (`title`, `summary`, `body_bytes`, `list_items`, 
 | `tasks` | every open task, in the order a person would work in (below) |
 | `reminders` | the **finished** tasks that carry a reminder (`remind`): `{ id, area, title, remind, etag, done_in? }`, the oldest date first, at most 100 (a light scan of the Backlog; a `Backlog/<bucket>` folder that leads out of the vault is not read and is named in `incomplete`). The open ones are in `tasks` |
 | `incomplete` | folders that could not be read (relative paths): the document is what could be read, and says so |
+| `views_rev` | what the saved views looked like (`<area>/ROADMAP/views/*.md` by id and `etag`): the `rev` of `tasks.views`. A view changed outside (a pull) changes it and the digest, not `rev`: a reader that shows the views reads them again when it differs, and asks no other document again |
 
 A **task entry** (`tasks[]`, `items[]`, `task`) has: `id`, `area`, `slug`, `title`, `status`, `kind`, `prio`, `order`,
 `effort`, `effort_days`, `value`, `roi`, `actor`, `actor_written`, `severity`, `created`, `updated`, `plan`, `phase`,
@@ -252,7 +253,7 @@ behind); a request is at most 256 KiB plus its head.
 | | |
 |---|---|
 | `etag` (a task) | `sha256:` and the first 16 hex digits of the SHA-256 of the **bytes** of the task file as they were parsed. A later write compares against it; there is no second read, so no race between reading and hashing. A file that was not read has none. |
-| `rev` (`snapshot`, `list`, `task`) | what the document's content stood on: `rev:` and six hex digits over the id and `etag` of the tasks in the document, of every plan file, of the unlisted files, and of every file of a saved view (`<area>/ROADMAP/views/*.md`: a view changed outside, by a pull say, is a new `rev`, so that a reader that shows the views learns of it). The same request with the same `rev` found the same files. |
+| `rev` (`snapshot`, `list`, `task`) | what the document's content stood on: `rev:` and six hex digits over the id and `etag` of the tasks in the document, of every plan file, and of the unlisted files. The same request with the same `rev` found the same files. |
 | `digest` (every document that comes from a scan) | `sha256:` and 16 hex digits of the compact document **without `generated_at` and `engine`**. Two runs on an unchanged vault give the same digest, whenever and by whichever build of the engine they ran. |
 
 ## Errors

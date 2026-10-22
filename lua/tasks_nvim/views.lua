@@ -325,7 +325,7 @@ function M.def_of(view)
   }
 end
 
----The files of the views, for the `rev` of the vault (a view changed elsewhere, by a pull say, is a new state of it):
+---The files of the views, for their `views_rev` (a view changed elsewhere, by a pull say, is a new state of the views):
 ---`{ id, path }` for every file with the name of a view, sorted by id; a folder that leads out of the vault is one entry
 ---without a path (it is not read).
 ---@param root string

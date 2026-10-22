@@ -7,6 +7,9 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Contract `tasks-export/1`: `views_rev` in `tasks.snapshot`, what the saved views looked like (the `rev` of `tasks.views`,
+  from every file of a view): a view changed outside (a pull) changes it and the digest, not `rev`, so that a reader that
+  shows the views learns of it and asks no other document again (the desktop hub's watcher reports the folder).
 - `check` reports `view-invalid` (warning) for a file of a saved view that is no view (`<area>/ROADMAP/views/*.md`: a
   field the engine does not have, no frontmatter, a link, a folder that leads out of the vault), with the file and the
   reason.
@@ -67,9 +70,6 @@ the version is not tagged yet (the repository is not published).
 - Contract `tasks-ops/1`: `view_delete` needs `if_match`, the version of the view that was read (`invalid_argument`
   without it), as `view_save` does to replace one: a view is shared by every machine of the vault, and a delete without
   it could take away a change made elsewhere. The schema asks it of an inverse `view_delete`.
-- Contract `tasks-export/1`: the `rev` of a document also covers the files of the saved views (`<area>/ROADMAP/views/*.md`):
-  a view changed outside (a pull) is a new state of the vault, so that a reader that shows the views learns of it from the
-  `rev` (the desktop hub's watcher reports the folder). The shape of the documents is unchanged; goldens with a new `rev`.
 - A `--to=file:` target that exists already is a question, not an error (UI-05): `:Tasks list`, `plan`, `quickwins`,
   `template` and `folder --list` ask "... already exists. Overwrite it?" (`ui.kit.confirm`, `vim.ui.select` without
   ui.nvim) instead of "pass --force to overwrite it"; a no keeps the file, `--force` skips the question, as the
