@@ -353,7 +353,8 @@ function M.files(root)
 end
 
 ---Every view of the vault, by id, and what could not be read (a file with a problem is no view but a line in the list of
----problems, and never hides the others).
+---problems, and never hides the others). A problem carries the `etag` of the bytes read when there were any: with the
+---views' own, the `rev` of `tasks.views` is made of what was read, not of a second look at the files.
 ---@param root string
 ---@return table[] views
 ---@return { id: string, file: string, message: string }[] problems
@@ -375,11 +376,17 @@ function M.all(root)
         local slug = name:match("^(.+)%.md$")
         if slug and vault.valid_slug(slug) then
           local path = dir .. "/" .. name
-          local view, problem
+          local view, problem, etag
           if fsio.is_link(path) then
             problem = "is a symbolic link: not read"
           else
-            view, problem = M.read_file(path, area.name, slug)
+            local text, rerr = fsio.read(path)
+            if not text then
+              problem = "cannot read: " .. tostring(rerr)
+            else
+              etag = fsio.etag(text)
+              view, problem = M.parse_text(text, area.name, slug, path)
+            end
           end
           if view then
             views[#views + 1] = view
@@ -388,6 +395,7 @@ function M.all(root)
               id = area.name .. "/" .. slug,
               file = ("%s/ROADMAP/views/%s"):format(area.name, name),
               message = tostring(problem),
+              etag = etag,
             }
           end
         end

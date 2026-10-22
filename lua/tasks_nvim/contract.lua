@@ -1877,8 +1877,11 @@ function M.views(opts)
   end
   local views = require("tasks_nvim.views")
   local list, problems = views.all(root)
-  local items = {}
+  -- The rev of what was read (the same lines as `views_rev`): a file changed after the read must not stand in it, or a
+  -- reader would take this list for the newer state.
+  local lines, items = {}, {}
   for _, v in ipairs(list) do
+    lines[#lines + 1] = v.id .. "\t" .. v.etag
     local select = {}
     for _, s in ipairs(views.SELECT) do
       select[s.name] = json.memo(vim.deepcopy(v.select[s.name]))
@@ -1900,13 +1903,14 @@ function M.views(opts)
   end
   local notes = {}
   for _, p in ipairs(problems) do
+    lines[#lines + 1] = p.id .. "\t" .. (p.etag or "")
     notes[#notes + 1] =
       json.object({ id = p.id, file = p.file, message = clip(redact(root, p.message), 600) })
   end
   local doc = M.head("tasks.views", root)
   doc.views = json.memo(items)
   doc.problems = json.memo(notes)
-  return seal(doc, views_rev(root)), nil
+  return seal(doc, builder.rev_of(lines)), nil
 end
 
 ---What finishing a task would do, written down: the target, the README row, the steps, the plan it closes, the

@@ -288,6 +288,30 @@ return function(H)
   ok(snap_after.digest ~= snap_before.digest, "and a new digest of the snapshot")
   eq(snap_after.views_rev, doc_of("views").rev)
   eq({ snap_after.rev, doc_of("links").rev }, { snap_before.rev, snap_before.rev })
+  -- the rev of `tasks.views` is that of what it read: a file changed after the read (a pull at that moment) leaves the
+  -- document behind the snapshot, so that a reader asks again
+  local all = views.all
+  views.all = function(r)
+    local list, problems = all(r)
+    H.write(path_of(by_cross.id), H.read(path_of(by_cross.id)) .. "\nChanged during the read.\n")
+    return list, problems
+  end
+  local read_then_changed = doc_of("views")
+  views.all = all
+  ok(
+    read_then_changed.rev ~= doc_of("snapshot").views_rev,
+    "the rev of the views is of what was read"
+  )
+  eq(doc_of("views").rev, doc_of("snapshot").views_rev)
+  -- a file that is no view counts by its version too, in both
+  local broken_again = root .. "/lib.nvim/ROADMAP/views/broken-again.md"
+  H.write(broken_again, "---\ntitle: Broken\ndisplay: cube\ngroup_by: status\n---\n")
+  local with_broken = doc_of("views").rev
+  eq(with_broken, doc_of("snapshot").views_rev)
+  H.write(broken_again, "---\ntitle: Broken\ndisplay: sphere\ngroup_by: status\n---\n")
+  ok(doc_of("views").rev ~= with_broken, "a broken file changed is a new rev of the views")
+  eq(doc_of("views").rev, doc_of("snapshot").views_rev)
+  os.remove(broken_again)
 
   -- refused: a view that does not hold together, an area that is not there, a name that leads out of the folder
   local function refused(op, code, needle)
