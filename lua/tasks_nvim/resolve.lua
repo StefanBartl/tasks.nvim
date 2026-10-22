@@ -31,14 +31,14 @@ local M = {}
 ---@class Tasks.ResolveTarget
 ---@field kind "task"|"done"  # an open task in `ROADMAP/tasks`, or a finished one in `Backlog/`
 ---@field id string           # `<area>/<slug>`
----@field path string         # the task file, absolute, forward slashes
+---@field path string         # the task file, forward slashes; absolute when the vault was given absolute
 ---@field line integer        # 1-based line to land on (the first line of the file)
 ---@field title string        # the frontmatter title, or the slug
 ---@field root string         # the vault the target is in
 
 ---Options of `resolve` and `resolve_at`.
 ---@class Tasks.ResolveOpts
----@field roots? string[]  # Vaults to look in, in order; without it the configured vault (`setup`, `$TASKS_VAULT`).
+---@field roots? string[]  # Vaults to look in, in order. Absent or empty: the configured vault (`setup`, `$TASKS_VAULT`). Given: only these -- an entry that is no directory is skipped, and a list of only such entries answers nothing (no fallback).
 
 ---Characters a run of path-like text is made of: what an area, a slug and the `/` between them can hold.
 local RUN = "[%w_.%-/]"
@@ -63,8 +63,9 @@ end
 
 ---The task id at byte column `col` of `line`, as text: the id, and where it starts and ends (1-based, inclusive).
 ---
---- The id is the whole run of path characters around `col`, with trailing dots taken off (an id at the end of a
---- sentence) and only when it has the shape of `<area>/<slug>` (`vault.parse_id`): one `/`, a valid area, a
+--- The id is the whole run of path characters around `col`, with trailing `.` and `_` taken off (the end of a
+--- sentence, Markdown emphasis) and leading `_` too (`_lib.nvim/x_`), and only when it has the shape of
+--- `<area>/<slug>` (`vault.parse_id`): one `/`, a valid area, a
 --- kebab-case slug. A wikilink (`[[id]]`, `[[id|Text]]`) and backticks need nothing of their own: neither `[`, `|` nor
 --- `` ` `` is part of the run. Whether the task exists is `resolve`'s question.
 ---@param line string
@@ -104,7 +105,7 @@ end
 ---@param opts? Tasks.ResolveOpts
 ---@return string[]
 local function roots_of(opts)
-  if opts and type(opts.roots) == "table" and #opts.roots > 0 then
+  if type(opts) == "table" and type(opts.roots) == "table" and #opts.roots > 0 then
     local fsio = require("tasks_nvim.fsio")
     local out = {}
     for _, r in ipairs(opts.roots) do
@@ -130,6 +131,11 @@ end
 ---
 --- `token` is an id (`<area>/<slug>`), also as a wikilink (`[[<area>/<slug>]]`, an alias or heading after it is
 --- ignored). Anything else, and an id no vault knows, gives an empty list.
+---
+--- Two limits that come from `scan`, not from here: of a slug finished twice only the first finished file is a target
+--- (`find_done` stops at its first hit), and a task that exists as a file and as a folder is no target at all (`check`
+--- reports it). Each call lists the area's two Backlog folders, a few milliseconds on a vault of hundreds of tasks; a
+--- caller asking on every cursor pause may wrap it in `fsio.read_scope`.
 ---@param token string
 ---@param opts? Tasks.ResolveOpts
 ---@return Tasks.ResolveTarget[]
@@ -198,7 +204,14 @@ end
 ---@return string|nil token
 function M.resolve_at(buf, row, col, opts)
   buf = (buf == nil or buf == 0) and vim.api.nvim_get_current_buf() or buf
-  if not vim.api.nvim_buf_is_valid(buf) then
+  -- A row below 1 would be a negative index to `nvim_buf_get_lines`, which counts from the end: `-1` is the LAST line.
+  if
+    type(buf) ~= "number"
+    or type(row) ~= "number"
+    or type(col) ~= "number"
+    or row < 1
+    or not vim.api.nvim_buf_is_valid(buf)
+  then
     return {}, nil
   end
   local line = vim.api.nvim_buf_get_lines(buf, row - 1, row, false)[1]

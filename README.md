@@ -186,12 +186,14 @@ resolve.resolve_at(0, row, col)                           --> targets, token  (r
 resolve.resolve("lib.nvim/alpha", { roots = { vault_a, vault_b } })  -- several vaults, in order
 ```
 
-- **Only an id the vault knows is one.** The token is the whole run of path characters around the column, so
-  `lua/gopath/init.lua` is a path, not the id `lua/gopath`; and a candidate only resolves when its area exists in the
+- **Only an id the vault knows is one.** The token is the whole run of path characters around the column (trailing
+  `.` and `_`, and leading `_`, taken off: the end of a sentence, Markdown emphasis), so `lua/gopath/init.lua` is a
+  path, not the id `lua/gopath`; and a candidate only resolves when its area exists in the
   vault (spelled exactly) and the task is there. Anything else is an empty list, never an error.
 - **Every target.** An open task (`kind = "task"`) and a finished one of the same slug (`kind = "done"`, in
   `Backlog/`) are both returned, open first, and so is the same id in several vaults (`opts.roots`). Without
-  `roots` the configured vault is asked (`setup({ vault = ... })`, `$TASKS_VAULT`).
+  `roots` (or with an empty list) the configured vault is asked (`setup({ vault = ... })`, `$TASKS_VAULT`); with it,
+  only the vaults named there, an entry that is no directory skipped.
 - A wikilink (`[[lib.nvim/alpha|Alpha]]`) resolves like the id inside it, and backticks around an id are no part of
   it.
 - Group symbols (a group named in text, resolved to where it is explained) are planned; their written form is not

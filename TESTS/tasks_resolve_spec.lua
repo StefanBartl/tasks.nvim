@@ -154,4 +154,20 @@ return function(H)
   wikilinks.build_index = real_build
   eq(#linker, 1, "the linking task resolves")
   eq(built, 0, "no vault index was built for its links")
+
+  -- ── second review: never an error, whatever a caller hands in ──────────
+  eq(resolve.resolve("lib.nvim/alpha", 5), {}, "opts that are no table")
+  local guard = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(guard, 0, -1, false, { "nothing", "last: lib.nvim/alpha" })
+  local below, below_tok = resolve.resolve_at(guard, -1, 8, { roots = { root } })
+  eq({ below, below_tok }, { {} }, "row -1 is no row, not the last line")
+  eq({ resolve.resolve_at(guard, 0, 8, { roots = { root } }) }, { {} }, "row 0")
+  vim.api.nvim_buf_delete(guard, { force = true })
+  eq({ resolve.resolve_at("x", 1, 0) }, { {} }, "a buffer that is no number")
+  eq({ resolve.resolve_at(nil, "1", 0) }, { {} }, "a row that is no number")
+  eq(
+    resolve.resolve("lib.nvim/alpha", { roots = { "", root .. "/no-such-dir" } }),
+    {},
+    "only unusable roots: nothing, and no fallback to the configured vault"
+  )
 end
