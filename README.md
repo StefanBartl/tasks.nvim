@@ -35,6 +35,7 @@ sessions that run without an editor. Nothing is stored anywhere but in the files
 - [Quickstart](#quickstart)
 - [Configuration](#configuration)
 - [Headless](#headless)
+- [For other plugins: task ids in any text](#for-other-plugins-task-ids-in-any-text)
 - [Documentation](#documentation)
 - [Tests](#tests)
 - [License](#license)
@@ -169,6 +170,32 @@ nvim --headless -u NONE -l scripts/tasks-html.lua --out=tasks.html   # one-file 
 The CI gate can *run* `<vault>/TOOLS/scripts/md_lint.lua`, code that lives in the vault, so it refuses to until
 you pass `--trust-vault-lint` (or `--md-lint=<your own copy>`, or `--no-lint`; [docs/ENGINE.md](docs/ENGINE.md)). A finished task needs `<area>/Backlog/README.md` to get its row; without
 the file `done` says so and moves the task anyway.
+
+## For other plugins: task ids in any text
+
+A task id (`<area>/<slug>`) written outside the vault, in a to-do list, a commit message or a code comment, can be
+resolved to the task file. `require("tasks_nvim.resolve")` is UI-free and opens nothing; gopath.nvim uses it to jump
+to the task under the cursor.
+
+```lua
+local resolve = require("tasks_nvim.resolve")
+
+resolve.token_at("todo: lib.nvim/alpha, then more", 10)  --> "lib.nvim/alpha", 7, 20
+resolve.resolve("lib.nvim/alpha")                         --> { { kind = "task", id, path, line = 1, title, root } }
+resolve.resolve_at(0, row, col)                           --> targets, token  (row 1-based, col 0-based)
+resolve.resolve("lib.nvim/alpha", { roots = { vault_a, vault_b } })  -- several vaults, in order
+```
+
+- **Only an id the vault knows is one.** The token is the whole run of path characters around the column, so
+  `lua/gopath/init.lua` is a path, not the id `lua/gopath`; and a candidate only resolves when its area exists in the
+  vault (spelled exactly) and the task is there. Anything else is an empty list, never an error.
+- **Every target.** An open task (`kind = "task"`) and a finished one of the same slug (`kind = "done"`, in
+  `Backlog/`) are both returned, open first, and so is the same id in several vaults (`opts.roots`). Without
+  `roots` the configured vault is asked (`setup({ vault = ... })`, `$TASKS_VAULT`).
+- A wikilink (`[[lib.nvim/alpha|Alpha]]`) resolves like the id inside it, and backticks around an id are no part of
+  it.
+- Group symbols (a group named in text, resolved to where it is explained) are planned; their written form is not
+  decided yet.
 
 ## Documentation
 

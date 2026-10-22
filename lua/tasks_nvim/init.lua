@@ -19,6 +19,8 @@
 ---  - `ci`     the vault gate for pipelines (check + index --check + md_lint)
 ---  - `batch`  several `set` / `done` in one go, the index regenerated once per area
 ---  - `cli`    the command-line front end
+---  - `resolve`  a task id in any text (`token_at`), resolved to where the task is (`resolve`, `resolve_at`); for
+---    other plugins such as gopath.nvim and hover.nvim
 ---
 --- Not its job: prompts, pickers, notifications, key bindings.
 
@@ -88,6 +90,7 @@ local SUBMODULES = {
   ci = true,
   cli = true,
   batch = true,
+  resolve = true,
 }
 
 return setmetatable(M, {
