@@ -42,6 +42,9 @@
 ---    `conflict`; a name that is free is made); the answer has an `inverse`
 ---  - `view_delete` { id, if_match }: delete a saved view, on the version read (a view is shared by every machine of the
 ---    vault: a delete without it could take away a change made elsewhere); the answer has an `inverse` (the view made again)
+---  - `attach` { id, from, name? }: the clipboard image (`from` `clipboard`) or the newest screenshot of the configured folders
+---    (`latest`) becomes an asset of the task (a plain task becomes a folder task); the answer has `asset`, `link` and no
+---    `inverse`. A request names no path of this machine; a dry run reads neither the clipboard nor a folder
 ---
 --- Rules the door keeps:
 ---  - **the shape is checked first**, for the whole request: an unknown operation or field, a wrong type, too many
@@ -112,6 +115,7 @@ M.OPS = {
   "set_body",
   "view_save",
   "view_delete",
+  "attach",
 }
 
 ---Longest `client_op_id`.
@@ -158,6 +162,7 @@ local FIELDS = {
     if_match = "string",
   },
   view_delete = { id = "string", if_match = "string" },
+  attach = { id = "string", from = "string", name = "string" },
   plan_new = {
     area = "string",
     title = "string",
@@ -274,6 +279,7 @@ end
 ---@field dry boolean
 ---@field touched table<string, boolean>   # Areas whose index must be written.
 ---@field claimed table<string, string>   # A dry run: the new id an earlier `move_area` of the request takes -> its old id.
+---@field attach? Tasks.AttachSourceOpts   # Specs: a fake clipboard, the folders to look into; never from a request.
 
 ---A failure from `mutate` whose reason has no code: its validation messages are all about the request.
 ---@param ctx Tasks.OpsCtx
@@ -1078,6 +1084,60 @@ local function do_view_delete(op, ctx)
   return entry
 end
 
+---`attach` { id, from, name? }: the clipboard image or the newest screenshot becomes an asset of the task.
+---The folders are the ones of the configuration (`attach.screenshot_dirs`): a request names no path of this machine.
+---A dry run checks the request and the task and reads neither the clipboard nor a folder.
+---@param op table
+---@param ctx Tasks.OpsCtx
+---@return table entry
+local function do_attach(op, ctx)
+  if op.id == nil then
+    return refuse("invalid_argument", "attach needs id")
+  end
+  if op.from ~= "clipboard" and op.from ~= "latest" then
+    return refuse("invalid_argument", "attach needs from: 'clipboard' or 'latest'")
+  end
+  local task, ferr = scan.find(op.id, { root = ctx.root })
+  if not task then
+    return mutate_failure(ctx, ferr)
+  end
+  local entry = {
+    ok = true,
+    id = task.id,
+    outcome = ctx.dry and "would_change" or "changed",
+    etag_before = etag_of_file(task.path),
+    changed_ids = {},
+  }
+  if ctx.dry then
+    return entry
+  end
+  local r, err = require("tasks_nvim.attach_source").attach(
+    task.id,
+    op.from,
+    vim.tbl_extend(
+      "force",
+      { root = ctx.root, today = ctx.today, index = false },
+      ctx.attach or {},
+      {
+        name = op.name,
+      }
+    )
+  )
+  if not r then
+    return mutate_failure(ctx, err)
+  end
+  entry.etag_after = etag_of_file(r.path)
+  entry.changed_ids = { r.id }
+  entry.file = rel(ctx, r.path)
+  entry.asset = r.rel
+  entry.link = r.link
+  if r.updated_err then
+    entry.notes = { "updated was not set: " .. contract.redact(ctx.root, r.updated_err) }
+  end
+  ctx.touched[task.area] = true
+  return entry
+end
+
 ---@type table<string, fun(op: table, ctx: Tasks.OpsCtx): table>
 local HANDLERS = {
   set = do_set,
@@ -1092,6 +1152,7 @@ local HANDLERS = {
   set_body = do_set_body,
   view_save = do_view_save,
   view_delete = do_view_delete,
+  attach = do_attach,
 }
 
 -- ── the request ──────────────────────────────────────────────────────────────
@@ -1110,7 +1171,7 @@ door = contract_ops.make({
   limits = { batch_ops = contract.LIMITS.batch_ops, client_op_id = M.MAX_CLIENT_OP_ID },
   patterns = contract.ERROR_PATTERNS,
   ---@param params table
-  ---@param opts { root?: string, today?: string }
+  ---@param opts { root?: string, today?: string, attach?: Tasks.AttachSourceOpts }
   ---@return Tasks.OpsCtx|nil ctx
   ---@return Tasks.ContractError|string|nil err
   context = function(params, opts)
@@ -1122,7 +1183,14 @@ door = contract_ops.make({
     if not model.is_date(today) then
       return nil, errors.fail("invalid_argument", "today is not a date (YYYY-MM-DD)")
     end
-    return { root = root, today = today, dry = params.dry_run == true, touched = {}, claimed = {} }
+    return {
+      root = root,
+      today = today,
+      dry = params.dry_run == true,
+      touched = {},
+      claimed = {},
+      attach = opts.attach,
+    }
   end,
   ---The index of every area that changed, once.
   ---@param ctx Tasks.OpsCtx
@@ -1155,7 +1223,7 @@ door = contract_ops.make({
 
 ---Run a request and answer it with a `tasks.result` document.
 ---@param params { client_op_id?: string, dry_run?: boolean, ops?: table[] }  # The request without its `schema`.
----@param opts? { root?: string, today?: string }
+---@param opts? { root?: string, today?: string, attach?: Tasks.AttachSourceOpts }
 ---@return table|nil doc
 ---@return Lib.Contract.Error|Tasks.ContractError|string|nil err
 function M.run(params, opts)

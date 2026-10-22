@@ -2,6 +2,7 @@
   "capabilities": [
     "append_note",
     "areas",
+    "attach",
     "bodies",
     "check",
     "done_preview",

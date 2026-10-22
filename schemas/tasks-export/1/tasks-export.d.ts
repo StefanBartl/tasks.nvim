@@ -893,7 +893,8 @@ export interface ResultEntry {
     | "reopen"
     | "set_body"
     | "view_save"
-    | "view_delete";
+    | "view_delete"
+    | "attach";
   id?: string;
   ok: boolean;
   /**
@@ -943,6 +944,14 @@ export interface ResultEntry {
    * `plan_new`: the slug asked for was taken, so another one was chosen.
    */
   renamed?: boolean;
+  /**
+   * `attach`: the path of the new asset below the task folder, e.g. `assets/shot.png`.
+   */
+  asset?: string;
+  /**
+   * `attach`: the Markdown that links the asset (an image gets `![name](path)`), to put into the task.
+   */
+  link?: string;
   writes?: number;
   to?: string;
   steps_ticked?: number;

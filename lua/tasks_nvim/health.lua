@@ -123,6 +123,31 @@ function M.check()
   else
     info("git not found -- `--stale=refs` uses file modification times")
   end
+  -- `attach` without a file: the tool that reads the clipboard image, and the folders the newest screenshot is looked for in
+  local clip_ok, clip = pcall(require, "lib.nvim.clipboard_image")
+  if clip_ok and type(clip.tool) == "function" then
+    local tool, why = clip.tool()
+    if tool then
+      ok(("%s -- `attach --clipboard` reads the clipboard image"):format(tool))
+    else
+      info(("no clipboard image tool -- `attach --clipboard` is not available (%s)"):format(why))
+    end
+  else
+    info("lib.nvim.clipboard_image not found -- `attach --clipboard` is not available")
+  end
+  local dirs = require("tasks_nvim.attach_source").screenshot_dirs()
+  local found = vim.tbl_filter(function(dir)
+    return vim.fn.isdirectory(vim.fn.expand(dir)) == 1
+  end, dirs)
+  if #found > 0 then
+    ok("screenshot folders for `attach --latest`: " .. table.concat(found, ", "))
+  else
+    info(
+      "no screenshot folder exists ("
+        .. table.concat(dirs, ", ")
+        .. ") -- set `attach.screenshot_dirs`"
+    )
+  end
   if pcall(require, "mdview") then
     ok("mdview.nvim -- browser preview (`:Tasks preview`, `--to=mdview`)")
   else

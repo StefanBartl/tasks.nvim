@@ -2459,7 +2459,7 @@
           "minimum": 1
         },
         "op": {
-          "enum": ["set", "new", "reorder", "done", "move_area", "plan_new", "tick_step", "append_note", "reopen", "set_body", "view_save", "view_delete"]
+          "enum": ["set", "new", "reorder", "done", "move_area", "plan_new", "tick_step", "append_note", "reopen", "set_body", "view_save", "view_delete", "attach"]
         },
         "id": {
           "type": "string"
@@ -2541,6 +2541,14 @@
         "renamed": {
           "description": "`plan_new`: the slug asked for was taken, so another one was chosen.",
           "type": "boolean"
+        },
+        "asset": {
+          "description": "`attach`: the path of the new asset below the task folder, e.g. `assets/shot.png`.",
+          "type": "string"
+        },
+        "link": {
+          "description": "`attach`: the Markdown that links the asset (an image gets `![name](path)`), to put into the task.",
+          "type": "string"
         },
         "writes": {
           "type": "integer",

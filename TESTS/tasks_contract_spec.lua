@@ -66,6 +66,7 @@ return function(H)
   local expected_caps = api.methods()
   for _, feature in ipairs({
     "append_note",
+    "attach",
     "eff_prio",
     "etag",
     "if_match",
