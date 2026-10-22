@@ -2051,7 +2051,7 @@
       "unevaluatedProperties": false
     },
     "Groupings": {
-      "description": "tasks.groupings: the fields the open tasks can be grouped by, with the values each can have and how a reader writes it. `status`, `prio`, `actor`, `kind`, `effort` and `value` are the model's; `tags`, `plan` and `phase` are the ones the open tasks name (at most 200, `truncated` says the rest); `area` is the areas of the vault; `state` is derived. `mode` says which operation writes the field: `set` (a field of the file), `tags` (the list of tags: leaving one and taking another is one `set` of the whole list) or `move_area`; a field without `mode` is read only. The same `rev` as the snapshot of the same vault.",
+      "description": "tasks.groupings: the fields the open tasks can be grouped by, with the values each can have and how a reader writes it. `status`, `prio`, `actor`, `kind`, `effort` and `value` are the model's; `tags`, `plan` and `phase` are the ones the open tasks name (at most 200, `truncated` says the rest); `area` is the areas of the vault; `state` and `cross` are derived (`cross`: `several` for a task `tasks.links` names among the tasks that touch two or more areas, else `one`). `mode` says which operation writes the field: `set` (a field of the file), `tags` (the list of tags: leaving one and taking another is one `set` of the whole list) or `move_area`; a field without `mode` is read only. The same `rev` as the snapshot of the same vault.",
       "allOf": [
         {
           "$ref": "#/$defs/Head"
@@ -2098,7 +2098,8 @@
                   "plan",
                   "phase",
                   "area",
-                  "state"
+                  "state",
+                  "cross"
                 ]
               },
               "values": {
@@ -2184,7 +2185,7 @@
       "additionalProperties": false
     },
     "GroupField": {
-      "enum": ["status", "prio", "actor", "kind", "effort", "value", "tags", "plan", "phase", "area", "state"]
+      "enum": ["status", "prio", "actor", "kind", "effort", "value", "tags", "plan", "phase", "area", "state", "cross"]
     },
     "ViewSelect": {
       "description": "Which tasks a view shows: every list narrows (an empty list does not), `query` is a word the title must hold.",

@@ -1,5 +1,5 @@
 {
-  "digest": "sha256:3b05061bb8602588",
+  "digest": "sha256:a438513da730b7a2",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -145,6 +145,16 @@
         "freed",
         "parked",
         "unknown"
+      ],
+      "writable": false
+    },
+    {
+      "field": "cross",
+      "truncated": false,
+      "value_type": "string",
+      "values": [
+        "several",
+        "one"
       ],
       "writable": false
     }

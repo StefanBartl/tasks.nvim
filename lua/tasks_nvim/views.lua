@@ -29,6 +29,7 @@ M.GROUP_FIELDS = {
   "phase",
   "area",
   "state",
+  "cross",
 }
 
 ---The selection of a view: its name, the frontmatter key, and what the entries are checked against.

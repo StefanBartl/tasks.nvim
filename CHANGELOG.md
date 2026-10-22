@@ -7,6 +7,10 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Contract `tasks-export/1`: the grouping `cross` in `tasks.groupings` (after `state`, derived, read only, values `several` and
+  `one`): whether a task connects areas, `several` for a task `tasks.links` names among the tasks that touch two or more
+  areas. A saved view may group by it (`group_by: cross`). Schema, golden and types; spec of the field and of a view
+  grouped by it.
 - `attach` without a file: `attach <id> --clipboard` stores the image on the clipboard, `attach <id> --latest[=<folder>]`
   the newest image of the screenshot folders (config `attach.screenshot_dirs`, `attach.max_age_s`, default 300 s; older: asked
   about, not guessed). `:Tasks attach <id> from=clipboard|latest [dir=]` does the same and puts the link at the cursor of the

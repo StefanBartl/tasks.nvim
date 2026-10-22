@@ -482,14 +482,26 @@ export type Links = Head & {
   incomplete: string[];
 };
 /**
- * tasks.groupings: the fields the open tasks can be grouped by, with the values each can have and how a reader writes it. `status`, `prio`, `actor`, `kind`, `effort` and `value` are the model's; `tags`, `plan` and `phase` are the ones the open tasks name (at most 200, `truncated` says the rest); `area` is the areas of the vault; `state` is derived. `mode` says which operation writes the field: `set` (a field of the file), `tags` (the list of tags: leaving one and taking another is one `set` of the whole list) or `move_area`; a field without `mode` is read only. The same `rev` as the snapshot of the same vault.
+ * tasks.groupings: the fields the open tasks can be grouped by, with the values each can have and how a reader writes it. `status`, `prio`, `actor`, `kind`, `effort` and `value` are the model's; `tags`, `plan` and `phase` are the ones the open tasks name (at most 200, `truncated` says the rest); `area` is the areas of the vault; `state` and `cross` are derived (`cross`: `several` for a task `tasks.links` names among the tasks that touch two or more areas, else `one`). `mode` says which operation writes the field: `set` (a field of the file), `tags` (the list of tags: leaving one and taking another is one `set` of the whole list) or `move_area`; a field without `mode` is read only. The same `rev` as the snapshot of the same vault.
  */
 export type Groupings = Head & {
   kind: "tasks.groupings";
   rev: Rev;
   digest: Digest;
   fields: {
-    field: "status" | "prio" | "actor" | "kind" | "effort" | "value" | "tags" | "plan" | "phase" | "area" | "state";
+    field:
+      | "status"
+      | "prio"
+      | "actor"
+      | "kind"
+      | "effort"
+      | "value"
+      | "tags"
+      | "plan"
+      | "phase"
+      | "area"
+      | "state"
+      | "cross";
     values: string[];
     truncated: boolean;
     writable: boolean;
@@ -513,7 +525,7 @@ export type Views = Head & {
   }[];
 };
 export type GroupField =
-  "status" | "prio" | "actor" | "kind" | "effort" | "value" | "tags" | "plan" | "phase" | "area" | "state";
+  "status" | "prio" | "actor" | "kind" | "effort" | "value" | "tags" | "plan" | "phase" | "area" | "state" | "cross";
 /**
  * tasks.donepreview: what finishing a task would do, with nothing written, and the `confirm` token that `done` needs for exactly this version of the file.
  */
@@ -837,7 +849,8 @@ export interface View {
   /**
    * The field of the rows of a matrix (never the field of the columns).
    */
-  group_by2?: "status" | "prio" | "actor" | "kind" | "effort" | "value" | "tags" | "plan" | "phase" | "area" | "state";
+  group_by2?:
+    "status" | "prio" | "actor" | "kind" | "effort" | "value" | "tags" | "plan" | "phase" | "area" | "state" | "cross";
   /**
    * The groups that are folded (the values as `tasks.groupings` names them).
    */

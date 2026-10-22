@@ -1780,7 +1780,8 @@ end
 ---The fields the open tasks can be grouped by, with the values each can have and how a reader writes it. A reader that
 ---draws groups (columns, a grouped list, a matrix) and lets a task be dragged from one group to another asks this, so
 ---that the page names no field and no value itself: `status`, `prio`, `actor`, `kind`, `effort`, `value` come from the
----model, `tags`, `plan` and `phase` from the open tasks, `area` from the vault; `state` is derived and cannot be written.
+---model, `tags`, `plan` and `phase` from the open tasks, `area` from the vault; `state` and `cross` are derived and cannot be
+---written (`cross`: `several` for a task `tasks.links` names among the tasks that touch two or more areas, else `one`).
 ---`mode` says which operation writes it (`set` for a field of the file, `tags` for the list of tags - leaving one and
 ---taking another is one `set` of the whole list - and `move_area` for the area); a field without `mode` is read only.
 ---The same `rev` as the snapshot of the same vault.
@@ -1838,6 +1839,8 @@ function M.groupings(opts)
   table.sort(areas)
   add("area", areas, "move_area")
   add("state", { "ready", "decision", "waiting", "stuck", "freed", "parked", "unknown" }, nil)
+  -- Whether a task connects areas: the reader takes it from `tasks.links` (its `tasks`), which says it for this state.
+  add("cross", { "several", "one" }, nil)
   local entries = vim.tbl_map(function(t)
     return { id = t.id, etag = t.etag or etag_of(t.path) }
   end, view.open)

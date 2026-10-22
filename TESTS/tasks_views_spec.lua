@@ -244,6 +244,15 @@ return function(H)
   eq({ dry_delete.ok, dry_delete.outcome }, { true, "would_delete" }, vim.inspect(dry_delete))
   ok(H.exists(path_of(victim)))
 
+  -- a view grouped by whether a task connects areas (`cross`, a derived field of `tasks.groupings`) is a view like any
+  local by_cross = one({
+    op = "view_save",
+    area = "lib.nvim",
+    view = { title = "By connection", display = "columns", group_by = "cross" },
+  })
+  eq({ by_cross.ok, by_cross.outcome }, { true, "created" }, vim.inspect(by_cross))
+  has(H.read(path_of(by_cross.id)), "group_by: cross")
+
   -- refused: a view that does not hold together, an area that is not there, a name that leads out of the folder
   local function refused(op, code, needle)
     local r = one(op)

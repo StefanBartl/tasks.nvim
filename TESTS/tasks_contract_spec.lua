@@ -384,6 +384,7 @@ return function(H)
       "phase",
       "area",
       "state",
+      "cross",
     })
     -- the model's fields: their words, and that a reader writes them with `set`
     eq(
@@ -399,6 +400,8 @@ return function(H)
     eq({ by.tags.mode, by.tags.multi }, { "tags", true })
     eq({ by.area.mode, by.area.writable }, { "move_area", true })
     eq({ by.state.mode, by.state.writable }, { nil, false })
+    -- whether a task connects areas: derived (from `tasks.links`), read only, two words
+    eq({ by.cross.values, by.cross.mode, by.cross.writable }, { { "several", "one" }, nil, false })
     -- what comes from the vault is what the open tasks name, once each and sorted
     local tags, plans, phases = {}, {}, {}
     for _, t in ipairs(state_doc.tasks) do
