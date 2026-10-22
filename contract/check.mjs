@@ -116,6 +116,7 @@ mutate("a view drawn in a way the engine does not have", "views", (d) => (d.view
 mutate("a view grouped by a field the engine does not have", "views", (d) => (d.views[0].group_by = "colour"));
 mutate("a view without the version of its file", "views", (d) => delete d.views[0].etag);
 mutate("an inverse of a view that is neither a save nor a delete", "result-views", (d) => (d.results[0].inverse.op = "view_rename"));
+mutate("an inverse delete of a view without the version it deletes", "result-views", (d) => delete d.results[0].inverse.if_match);
 mutate("an order by a word the engine does not have", "order-roi", (d) => (d.sort = "sideways"));
 mutate(
   "a conflict group as a tuple",

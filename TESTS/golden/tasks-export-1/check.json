@@ -1,6 +1,6 @@
 {
   "areas": 1,
-  "digest": "sha256:665b8282a5e7089f",
+  "digest": "sha256:688b3c368b08524b",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -70,6 +70,13 @@
       "id": "lib.nvim/epsilon",
       "message": "lib.nvim/epsilon waits on lib.nvim/delta, which is parked",
       "severity": "warn"
+    },
+    {
+      "area": "lib.nvim",
+      "code": "view-invalid",
+      "file": "lib.nvim/ROADMAP/views/broken.md",
+      "message": "not a view: display 'cube' is unknown (expected columns, list, matrix)",
+      "severity": "warn"
     }
   ],
   "generated_at": "2026-01-01T00:00:00Z",
@@ -81,10 +88,10 @@
   "rev": "rev:01922c",
   "schema": 1,
   "tasks": 15,
-  "total": 8,
+  "total": 9,
   "truncated": false,
   "vault": {
     "id": "vault"
   },
-  "warnings": 2
+  "warnings": 3
 }

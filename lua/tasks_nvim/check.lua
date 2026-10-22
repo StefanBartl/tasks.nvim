@@ -90,6 +90,32 @@ local function add(list, severity, code, task, message)
   }
 end
 
+---The files of the saved views that are no view (`<area>/ROADMAP/views/*.md`: a field the engine does not have, no
+---frontmatter, a link, a folder that leads out of the vault): a warning each, with the file and the reason. A view is no
+---task: a broken one does not fail the run (the document `tasks.views` names it as a problem as well).
+---@param findings Tasks.Finding[]
+---@param root string
+---@param names string[]  # the areas checked
+local function view_findings(findings, root, names)
+  local checked = {}
+  for _, n in ipairs(names) do
+    checked[n] = true
+  end
+  local _, problems = require("tasks_nvim.views").all(root)
+  for _, p in ipairs(problems) do
+    local area = p.id:match("^([^/]+)/")
+    if area and checked[area] then
+      add(
+        findings,
+        "warn",
+        "view-invalid",
+        { area = area, path = root .. "/" .. p.file },
+        "not a view: " .. p.message
+      )
+    end
+  end
+end
+
 ---@param a Tasks.Finding
 ---@param b Tasks.Finding
 ---@return boolean
@@ -584,6 +610,7 @@ function M.run(opts)
 
   plan_findings(findings, open_ids, names, scan_opts, is_finished)
   plan_file_findings(findings, open_ids, names, scan_opts, is_finished)
+  view_findings(findings, root, names)
 
   table.sort(findings, finding_less)
   local errors, warnings = 0, 0

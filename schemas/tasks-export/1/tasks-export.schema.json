@@ -2355,7 +2355,14 @@
           "$ref": "#/$defs/Etag"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "if": {
+        "properties": { "op": { "const": "view_delete" } }
+      },
+      "then": {
+        "properties": { "if_match": { "$ref": "#/$defs/Etag" } },
+        "required": ["if_match"]
+      }
     },
     "MovePlan": {
       "description": "What moving a task to another area would do and break (stage 1 of `move_area`: a report, nothing is written).",

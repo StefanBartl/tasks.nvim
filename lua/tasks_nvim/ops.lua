@@ -40,7 +40,8 @@
 ---    `area` alone a new view is made under a name taken from the title, with `id` (`<area>/<slug>`, or `area` and `slug`) the
 ---    view of that name is replaced, and only on the version the caller read (`if_match`: a view that exists and no tag is a
 ---    `conflict`; a name that is free is made); the answer has an `inverse`
----  - `view_delete` { id, if_match? }: delete a saved view; the answer has an `inverse` (the view made again)
+---  - `view_delete` { id, if_match }: delete a saved view, on the version read (a view is shared by every machine of the
+---    vault: a delete without it could take away a change made elsewhere); the answer has an `inverse` (the view made again)
 ---
 --- Rules the door keeps:
 ---  - **the shape is checked first**, for the whole request: an unknown operation or field, a wrong type, too many
@@ -1051,6 +1052,12 @@ end
 local function do_view_delete(op, ctx)
   if op.id == nil then
     return refuse("invalid_argument", "view_delete needs id")
+  end
+  if op.if_match == nil then
+    return refuse(
+      "invalid_argument",
+      "view_delete needs if_match (the version of the view that was read)"
+    )
   end
   local views = require("tasks_nvim.views")
   local r, err, info = views.delete(ctx.root, op.id, { if_match = op.if_match, dry_run = ctx.dry })

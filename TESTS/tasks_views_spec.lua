@@ -204,6 +204,24 @@ return function(H)
   end
   eq(problem_ids, { "lib.nvim/broken", "lib.nvim/no-frontmatter" })
   eq(#with_problems.views, 4, "the views that can be read are all there")
+  -- `tasks check` names them too: a warning each, with the file and the reason (a view is no task: the run passes)
+  local checked = assert(require("tasks_nvim.check").run({ root = root }))
+  local invalid = {}
+  for _, f in ipairs(checked.findings) do
+    if f.code == "view-invalid" then
+      eq({ f.severity, f.area }, { "warn", "lib.nvim" })
+      invalid[#invalid + 1] = vim.fs.basename(f.path)
+      if vim.fs.basename(f.path) == "broken.md" then
+        has(f.message, "cube")
+      end
+    end
+  end
+  eq(invalid, { "broken.md", "no-frontmatter.md" })
+  local only_cascade =
+    assert(require("tasks_nvim.check").run({ root = root, area = "cascade.nvim" }))
+  for _, f in ipairs(only_cascade.findings) do
+    ok(f.code ~= "view-invalid", "a check of another area names no view of lib.nvim")
+  end
   -- and it can be replaced by a good one on the version it has
   local mended = one({
     op = "view_save",
@@ -240,7 +258,10 @@ return function(H)
   local keep = one({ op = "view_delete", id = victim, if_match = "sha256:0000000000000000" })
   eq({ keep.ok, keep.error.code }, { false, "conflict" }, vim.inspect(keep))
   ok(H.exists(path_of(victim)))
-  local dry_delete = one({ op = "view_delete", id = victim }, { dry_run = true })
+  local dry_delete = one(
+    { op = "view_delete", id = victim, if_match = etag(victim) },
+    { dry_run = true }
+  )
   eq({ dry_delete.ok, dry_delete.outcome }, { true, "would_delete" }, vim.inspect(dry_delete))
   ok(H.exists(path_of(victim)))
 
@@ -321,10 +342,19 @@ return function(H)
   )
   refused({ op = "view_save", area = "lib.nvim" }, "invalid_argument")
   refused({ op = "view_save", view = BY_STATUS }, "invalid_argument")
-  refused({ op = "view_delete", id = "lib.nvim/never-made-either" }, "not_found")
-  refused({ op = "view_delete", id = "../x" }, "not_found")
-  refused({ op = "view_delete", id = "lib.nvim/../../x" }, "not_found")
+  refused(
+    { op = "view_delete", id = "lib.nvim/never-made-either", if_match = "sha256:0000000000000000" },
+    "not_found"
+  )
+  refused({ op = "view_delete", id = "../x", if_match = "sha256:0000000000000000" }, "not_found")
+  refused(
+    { op = "view_delete", id = "lib.nvim/../../x", if_match = "sha256:0000000000000000" },
+    "not_found"
+  )
   refused({ op = "view_delete" }, "invalid_argument")
+  -- a view is deleted only on the version read: without it nothing is touched
+  refused({ op = "view_delete", id = victim }, "invalid_argument", "if_match")
+  ok(H.exists(path_of(victim)))
   local too_many = {}
   for i = 1, views.MAX_LIST + 1 do
     too_many[i] = "t" .. i
@@ -424,7 +454,11 @@ return function(H)
       ok(v.area ~= "ALL", "no view is read through the link")
     end
     refused({ op = "view_save", area = "ALL", view = BY_STATUS }, "forbidden", "leaves the vault")
-    refused({ op = "view_delete", id = "ALL/leak" }, "forbidden", "leaves the vault")
+    refused(
+      { op = "view_delete", id = "ALL/leak", if_match = "sha256:0000000000000000" },
+      "forbidden",
+      "leaves the vault"
+    )
     ok(H.exists(outside .. "/leak.md"), "the file outside is still there")
     ok(not H.exists(outside .. "/by-status.md"), "nothing was written outside")
     uv.fs_unlink(linked_dir)
@@ -451,7 +485,11 @@ return function(H)
       view = BY_STATUS,
       if_match = "sha256:0000000000000000",
     }, "forbidden", "symbolic link")
-    refused({ op = "view_delete", id = "lib.nvim/linked" }, "forbidden", "symbolic link")
+    refused(
+      { op = "view_delete", id = "lib.nvim/linked", if_match = "sha256:0000000000000000" },
+      "forbidden",
+      "symbolic link"
+    )
     eq(H.read(outside .. "/leak.md"), LEAK, "the target is as it was")
     uv.fs_unlink(file_link)
   end

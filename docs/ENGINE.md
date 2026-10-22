@@ -271,6 +271,7 @@ finished task with the same id under another date, is refused.
 | `slug-conflict` | the same slug exists as a file and as a folder task |
 | `asset-dangling` (warning) | a folder task links `assets/<file>` that is not there |
 | `asset-unused` (warning) | a folder task has an image in `assets/` that its text never mentions |
+| `view-invalid` (warning) | a file of a saved view (`<area>/ROADMAP/views/*.md`) is no view: a field or value the engine does not have, no frontmatter, a symbolic link, or a folder of views that leads out of the vault (the reason is in the message; `tasks.views` lists it under `problems`) |
 | `index-stale`, `index-error` | `ROADMAP/TASKS.md` is missing, outdated or left over / could not be checked |
 | `bad-blocked-by`, `blocked-by-self`, `blocked-by-dangling` | the blocker is malformed, the task itself, or exists nowhere |
 | `blocked-by-done` (warning) | the blocker is already finished |

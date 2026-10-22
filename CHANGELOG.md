@@ -7,6 +7,9 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- `check` reports `view-invalid` (warning) for a file of a saved view that is no view (`<area>/ROADMAP/views/*.md`: a
+  field the engine does not have, no frontmatter, a link, a folder that leads out of the vault), with the file and the
+  reason.
 - Contract `tasks-export/1`: the grouping `cross` in `tasks.groupings` (after `state`, derived, read only, values `several` and
   `one`): whether a task connects areas, `several` for a task `tasks.links` names among the tasks that touch two or more
   areas. A saved view may group by it (`group_by: cross`). Schema, golden and types; spec of the field and of a view
@@ -61,6 +64,9 @@ the version is not tagged yet (the repository is not published).
 
 ### Changed
 
+- Contract `tasks-ops/1`: `view_delete` needs `if_match`, the version of the view that was read (`invalid_argument`
+  without it), as `view_save` does to replace one: a view is shared by every machine of the vault, and a delete without
+  it could take away a change made elsewhere. The schema asks it of an inverse `view_delete`.
 - Contract `tasks-export/1`: the `rev` of a document also covers the files of the saved views (`<area>/ROADMAP/views/*.md`):
   a view changed outside (a pull) is a new state of the vault, so that a reader that shows the views learns of it from the
   `rev` (the desktop hub's watcher reports the folder). The shape of the documents is unchanged; goldens with a new `rev`.

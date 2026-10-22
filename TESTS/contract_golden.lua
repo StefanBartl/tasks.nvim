@@ -138,7 +138,7 @@ G.cases = {
             id = "lib.nvim/prio-by-actor",
             if_match = view_etag("lib.nvim/prio-by-actor"),
           },
-          { op = "view_delete", id = "lib.nvim/not-there" },
+          { op = "view_delete", id = "lib.nvim/not-there", if_match = "sha256:0000000000000000" },
         },
       })
     end,
