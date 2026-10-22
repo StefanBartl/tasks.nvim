@@ -258,12 +258,12 @@ return function(H)
   local function rev_of(method)
     return vim.json.decode((api.call(method, nil, { root = root, today = F.TODAY }))).rev
   end
-  local before = rev_of("snapshot")
-  eq(rev_of("snapshot"), before)
+  local rev_before = rev_of("snapshot")
+  eq(rev_of("snapshot"), rev_before)
   H.write(path_of(by_cross.id), H.read(path_of(by_cross.id)) .. "\nChanged on another machine.\n")
-  local after = rev_of("snapshot")
-  ok(after ~= before, "a changed view file is a new rev")
-  eq({ rev_of("links"), rev_of("groupings") }, { after, after })
+  local rev_after = rev_of("snapshot")
+  ok(rev_after ~= rev_before, "a changed view file is a new rev")
+  eq({ rev_of("links"), rev_of("groupings") }, { rev_after, rev_after })
 
   -- refused: a view that does not hold together, an area that is not there, a name that leads out of the folder
   local function refused(op, code, needle)
