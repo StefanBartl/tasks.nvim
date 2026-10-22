@@ -103,6 +103,11 @@ function M.root(opts)
   if not candidate or candidate == "" then
     return nil, "vault not found: call setup({ vault = <dir> }), set $TASKS_VAULT, or pass --vault"
   end
+  -- A NUL cuts the path for libuv (`fs_stat` sees what is before it) but not for Lua: the
+  -- vault would look like a directory, and a walk below it rescans that directory for ever.
+  if candidate:find("\0", 1, true) then
+    return nil, "vault path holds a NUL byte"
+  end
   candidate = fsio.norm(candidate)
   if not fsio.is_dir(candidate) then
     return nil, "vault is not a directory: " .. candidate

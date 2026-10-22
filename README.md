@@ -192,7 +192,7 @@ resolve.resolve("lib.nvim/alpha", { roots = { vault_a, vault_b } })  -- several 
   vault (spelled exactly) and the task is there. Anything else is an empty list, never an error.
 - **Every target.** An open task (`kind = "task"`) and a finished one of the same slug (`kind = "done"`, in
   `Backlog/`) are both returned, open first, and so is the same id in several vaults (`opts.roots`). Without
-  `roots` (or with an empty list) the configured vault is asked (`setup({ vault = ... })`, `$TASKS_VAULT`); with it,
+  `roots` (or with an empty list, or a value that is no list) the configured vault is asked (`setup({ vault = ... })`, `$TASKS_VAULT`); with it,
   only the vaults named there, an entry that is no directory skipped.
 - A wikilink (`[[lib.nvim/alpha|Alpha]]`) resolves like the id inside it, and backticks around an id are no part of
   it.

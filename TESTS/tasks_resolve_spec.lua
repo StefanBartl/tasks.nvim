@@ -170,4 +170,31 @@ return function(H)
     {},
     "only unusable roots: nothing, and no fallback to the configured vault"
   )
+
+  -- ── third review ───────────────────────────────────────────────────────
+  local tb = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(tb, 0, -1, false, { "see lib.nvim/alpha", "two" })
+  eq({ resolve.resolve_at(tb, 1.5, 6, { roots = { root } }) }, { {} }, "a fractional row")
+  eq({ resolve.resolve_at(tb, math.huge, 6, { roots = { root } }) }, { {} }, "an infinite row")
+  eq(
+    { resolve.resolve_at(tb, 1e300, 6, { roots = { root } }) },
+    { {} },
+    "a row too large for an integer"
+  )
+  eq({ resolve.resolve_at(tb, 3, 0, { roots = { root } }) }, { {} }, "a row past the last line")
+  eq({ resolve.resolve_at(tb, 1, -1, { roots = { root } }) }, { {} }, "a negative column")
+  vim.api.nvim_buf_delete(tb, { force = true })
+  eq(token("see lib.nvim/alpha", 6.5), {}, "a fractional column is no column")
+  eq(
+    resolve.resolve("lib.nvim/alpha", { roots = { root .. "\0x" } }),
+    {},
+    "a root with a NUL byte is refused (it walked the vault for ever before)"
+  )
+  eq(
+    select(1, require("tasks_nvim.vault").root({ root = root .. "\0x" })),
+    nil,
+    "and vault.root refuses it"
+  )
+  eq(token(("a"):rep(300) .. "/x", 5), {}, "a run longer than any id is no id")
+  eq(token("see lib.nvim/alpha", 6)[1], "lib.nvim/alpha", "an ordinary id still is one")
 end

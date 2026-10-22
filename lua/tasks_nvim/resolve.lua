@@ -38,7 +38,7 @@ local M = {}
 
 ---Options of `resolve` and `resolve_at`.
 ---@class Tasks.ResolveOpts
----@field roots? string[]  # Vaults to look in, in order. Absent or empty: the configured vault (`setup`, `$TASKS_VAULT`). Given: only these -- an entry that is no directory is skipped, and a list of only such entries answers nothing (no fallback).
+---@field roots? string[]  # Vaults to look in, in order (the same vault named twice is asked once). Absent, empty, or no list at all (a single string): the configured vault (`setup`, `$TASKS_VAULT`). A list: only these -- an entry that is no directory is skipped, and a list of only such entries answers nothing (no fallback).
 
 ---Characters a run of path-like text is made of: what an area, a slug and the `/` between them can hold.
 local RUN = "[%w_.%-/]"
@@ -47,6 +47,11 @@ local RUN = "[%w_.%-/]"
 ---@param col integer 1-based
 ---@return integer|nil s
 ---@return integer|nil e
+---The longest run that can still be an id, in bytes. An area and a slug are names, not paragraphs; a
+---minified script or a base64 blob under the cursor is a run of megabytes, and walking it byte by byte
+---under a hover's every pause would be felt.
+local MAX_RUN = 256
+
 local function run_around(line, col)
   if col < 1 or col > #line or not line:sub(col, col):match(RUN) then
     return nil, nil
@@ -54,9 +59,15 @@ local function run_around(line, col)
   local s, e = col, col
   while s > 1 and line:sub(s - 1, s - 1):match(RUN) do
     s = s - 1
+    if e - s >= MAX_RUN then
+      return nil, nil
+    end
   end
   while e < #line and line:sub(e + 1, e + 1):match(RUN) do
     e = e + 1
+    if e - s >= MAX_RUN then
+      return nil, nil
+    end
   end
   return s, e
 end
@@ -74,7 +85,9 @@ end
 ---@return integer|nil s
 ---@return integer|nil e
 function M.token_at(line, col)
-  if type(line) ~= "string" or type(col) ~= "number" then
+  -- `col % 1 ~= 0`: a fraction is no column (`string.sub` would cut it and answer for one), and NaN
+  -- and the infinities fail it too.
+  if type(line) ~= "string" or type(col) ~= "number" or col % 1 ~= 0 then
     return nil
   end
   local s, e = run_around(line, col)
@@ -210,8 +223,13 @@ function M.resolve_at(buf, row, col, opts)
     or type(row) ~= "number"
     or type(col) ~= "number"
     or row < 1
+    or row % 1 ~= 0
     or not vim.api.nvim_buf_is_valid(buf)
   then
+    return {}, nil
+  end
+  -- Past the last line: `nvim_buf_get_lines` would refuse a row too large for an integer (`1e300`).
+  if row > vim.api.nvim_buf_line_count(buf) then
     return {}, nil
   end
   local line = vim.api.nvim_buf_get_lines(buf, row - 1, row, false)[1]
