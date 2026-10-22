@@ -453,6 +453,15 @@ function M.save(root, area, def, opts)
     local ok, err = fsio.create_exclusive(path, text)
     if not ok then
       if fsio.is_exists(err) then
+        -- A name this call chose was taken between the look and the create: choose the next free one (a few times).
+        if opts.slug == nil and (opts._attempt or 0) < 5 then
+          return M.save(
+            root,
+            area,
+            def,
+            vim.tbl_extend("force", opts, { _attempt = (opts._attempt or 0) + 1 })
+          )
+        end
         return nil, "the view exists now: " .. id, { code = "conflict", id = id }
       end
       return nil, "cannot create " .. path .. ": " .. tostring(err)

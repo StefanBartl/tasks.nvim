@@ -352,6 +352,29 @@ return function(H)
     end
   end
 
+  -- a name chosen for a new view that another writer takes first is not a failure: the next free name is made
+  do
+    local real = fsio.create_exclusive
+    local raced = false
+    fsio.create_exclusive = function(path, content)
+      if not raced then
+        raced = true
+        real(path, "---\ntitle: Taken first\n---\n")
+      end
+      return real(path, content)
+    end
+    local ok_call, entry_or_err = pcall(one, {
+      op = "view_save",
+      area = "lib.nvim",
+      view = { title = "Race", display = "list", group_by = "status" },
+    })
+    fsio.create_exclusive = real
+    ok(ok_call, tostring(entry_or_err))
+    eq({ entry_or_err.ok, entry_or_err.id }, { true, "lib.nvim/race-2" }, vim.inspect(entry_or_err))
+    has(H.read(path_of("lib.nvim/race")), "Taken first")
+    has(H.read(path_of("lib.nvim/race-2")), "title: Race")
+  end
+
   -- a folder of views that leads out of the vault (a junction or a link) is neither read nor written nor emptied
   local uv = vim.uv or vim.loop
   local outside = H.tmpdir() .. "/outside-views"
