@@ -583,15 +583,15 @@ function M.find_done_all(id, opts)
       end
     end
   end
-  -- The name of a finished file (and of the folder of a folder task) starts with its date: the newest is the largest
-  -- name; the whole path breaks a tie (the same day in FEATURES and in TASKS).
-  local function name_of(t)
-    return fsio.norm(t.path):match("([^/]*)$") or t.path
+  -- The day it was finished: the date the name of the file starts with, or that of its folder (a folder task whose
+  -- file was not renamed). An undated one (made by hand) comes last; the whole path breaks a tie.
+  local function day_of(t)
+    return model.done_date(t.path) or model.done_date(vim.fs.dirname(t.path)) or ""
   end
   table.sort(found, function(a, b)
-    local na, nb = name_of(a), name_of(b)
-    if na ~= nb then
-      return na > nb
+    local da, db = day_of(a), day_of(b)
+    if da ~= db then
+      return da > db
     end
     return a.path > b.path
   end)

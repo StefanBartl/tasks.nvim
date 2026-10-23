@@ -422,9 +422,12 @@ function M.new(area, opts)
   -- the target as an id (a wikilink resolved), written as typed when it was a wikilink, else in the form `links`
   -- asks for (`tasks_nvim.wikilinks.render`), like `plan` / `after` of `new`
   local target_text
+  -- One link index for the target and for the ambiguity of the new slug (it leaves the new id out either way).
+  local link_resolver = opts.link_resolver
   if opts.target ~= nil then
     local raw = vim.trim(tostring(opts.target))
-    local resolver = opts.link_resolver or wikilinks.resolver(root)
+    link_resolver = link_resolver or wikilinks.resolver(root)
+    local resolver = link_resolver
     local tid, terr = wikilinks.typed_id(raw, "target", resolver)
     if not tid then
       return nil, terr
@@ -512,7 +515,7 @@ function M.new(area, opts)
       if ok then
         local id = area .. "/" .. slug
         -- The link index holds the plan files too: a slug another area has makes its `[[slug]]` links ambiguous.
-        local resolver = opts.link_resolver or wikilinks.resolver(root)
+        local resolver = link_resolver or wikilinks.resolver(root)
         return {
           id = id,
           path = path,

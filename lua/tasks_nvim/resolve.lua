@@ -36,6 +36,7 @@ local M = {}
 ---@field line integer        # 1-based line to land on (the first line of the file)
 ---@field title string        # the frontmatter title, or the slug
 ---@field root string         # the vault the target is in
+---@field date? string        # `done`: the day it was finished (`YYYY-MM-DD`), when its name says so
 
 ---Options of `resolve` and `resolve_at`.
 ---@class Tasks.ResolveOpts
@@ -211,6 +212,7 @@ function M.resolve(token, opts)
           root = root,
         }
       end
+      local model = require("tasks_nvim.model")
       for _, done in ipairs(scan.find_done_all(id, scan_opts)) do
         out[#out + 1] = {
           kind = "done",
@@ -219,6 +221,7 @@ function M.resolve(token, opts)
           line = 1,
           title = done.title,
           root = root,
+          date = model.done_date(done.path) or model.done_date(vim.fs.dirname(done.path)),
         }
       end
     end

@@ -220,6 +220,26 @@ return function(H)
   )
   eq(redo[1].path, newest, "a finished folder task is its task file")
   eq(
+    vim.tbl_map(function(x)
+      return x.date
+    end, redo),
+    { "2026-10-10", "2026-10-05", "2026-09-01" },
+    "each says the day it was finished"
+  )
+  -- one made by hand without a date, and a folder task whose file was not renamed: undated last, the folder's day counts
+  H.write(root .. "/lib.nvim/Backlog/TASKS/redo.md", F.text(F.meta("Redo undated", "done")))
+  H.write(
+    root .. "/lib.nvim/Backlog/TASKS/2026-10-07_redo/redo.md",
+    F.text(F.meta("Redo by folder", "done"))
+  )
+  eq(
+    vim.tbl_map(function(x)
+      return x.title
+    end, resolve.resolve("lib.nvim/redo", { roots = { root } })),
+    { "Redo third", "Redo by folder", "Redo second", "Redo first", "Redo undated" },
+    "by the day, an undated one last"
+  )
+  eq(
     #require("tasks_nvim.scan").find_done_all("lib.nvim/nothing-here", { root = root }),
     0,
     "find_done_all of a slug never finished is empty"
