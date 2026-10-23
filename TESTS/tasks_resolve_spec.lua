@@ -197,4 +197,44 @@ return function(H)
   )
   eq(token(("a"):rep(300) .. "/x", 5), {}, "a run longer than any id is no id")
   eq(token("see lib.nvim/alpha", 6)[1], "lib.nvim/alpha", "an ordinary id still is one")
+
+  -- ── every finished file, and both of a duplicate ───────────────────────
+  -- finished three times (twice as a task, once as a feature, the newest a folder task): every file, the newest first
+  H.write(
+    root .. "/lib.nvim/Backlog/TASKS/2026-09-01_redo.md",
+    F.text(F.meta("Redo first", "done"))
+  )
+  H.write(
+    root .. "/lib.nvim/Backlog/FEATURES/2026-10-05_redo.md",
+    F.text(F.meta("Redo second", "done"))
+  )
+  local newest = root .. "/lib.nvim/Backlog/TASKS/2026-10-10_redo/2026-10-10_redo.md"
+  H.write(newest, F.text(F.meta("Redo third", "done")))
+  local redo = resolve.resolve("lib.nvim/redo", { roots = { root } })
+  eq(
+    vim.tbl_map(function(x)
+      return x.kind .. " " .. x.title
+    end, redo),
+    { "done Redo third", "done Redo second", "done Redo first" },
+    "every finished file of a slug, the newest first"
+  )
+  eq(redo[1].path, newest, "a finished folder task is its task file")
+  eq(
+    #require("tasks_nvim.scan").find_done_all("lib.nvim/nothing-here", { root = root }),
+    0,
+    "find_done_all of a slug never finished is empty"
+  )
+
+  -- an open task as a file and as a folder: both are targets, the file first (it was no target at all before)
+  local dupe_file = F.task(H, root, "lib.nvim", "dupe", F.meta("Dupe as file", "open"))
+  local dupe_folder = root .. "/lib.nvim/ROADMAP/tasks/dupe/dupe.md"
+  H.write(dupe_folder, F.text(F.meta("Dupe as folder", "open")))
+  local dupe = resolve.resolve("lib.nvim/dupe", { roots = { root } })
+  eq(
+    vim.tbl_map(function(x)
+      return { x.kind, x.path, x.title }
+    end, dupe),
+    { { "task", dupe_file, "Dupe as file" }, { "task", dupe_folder, "Dupe as folder" } },
+    "a duplicate gives both of its files"
+  )
 end

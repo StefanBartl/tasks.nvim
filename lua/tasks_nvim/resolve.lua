@@ -23,6 +23,7 @@
 ---
 --- Not its job: opening anything, prompts, pickers, notifications. UI-free like the rest of the engine.
 
+local fsio = require("tasks_nvim.fsio")
 local vault = require("tasks_nvim.vault")
 
 local M = {}
@@ -119,7 +120,6 @@ end
 ---@return string[]
 local function roots_of(opts)
   if type(opts) == "table" and type(opts.roots) == "table" and #opts.roots > 0 then
-    local fsio = require("tasks_nvim.fsio")
     local out = {}
     for _, r in ipairs(opts.roots) do
       if type(r) == "string" and r ~= "" then
@@ -145,10 +145,10 @@ end
 --- `token` is an id (`<area>/<slug>`), also as a wikilink (`[[<area>/<slug>]]`, an alias or heading after it is
 --- ignored). Anything else, and an id no vault knows, gives an empty list.
 ---
---- Two limits that come from `scan`, not from here: of a slug finished twice only the first finished file is a target
---- (`find_done` stops at its first hit), and a task that exists as a file and as a folder is no target at all (`check`
---- reports it). Each call lists the area's two Backlog folders, a few milliseconds on a vault of hundreds of tasks; a
---- caller asking on every cursor pause may wrap it in `fsio.read_scope`.
+--- A slug finished more than once (finished, reopened, finished again) gives every finished file, the newest first. A
+--- task that exists as a file and as a folder (a duplicate `check` reports) gives both, the file first: which one is
+--- meant is for the person to see. Each call lists the area's two Backlog folders, a few milliseconds on a vault of
+--- hundreds of tasks; a caller asking on every cursor pause may wrap it in `fsio.read_scope`.
 ---@param token string
 ---@param opts? Tasks.ResolveOpts
 ---@return Tasks.ResolveTarget[]
@@ -182,18 +182,36 @@ function M.resolve(token, opts)
     -- only that a folder of the name is listed, which a `_Archive/Backlog/` or a `TEMPLATES/Backlog/` would pass.
     if vault.has_area(root, area) then
       local open = scan.find(id, scan_opts)
-      if open then
+      local opened = { open }
+      if not open then
+        -- A file and a folder of the same slug: `find` refuses to choose (`vault.resolve_task`), both are targets.
+        local file, folder =
+          vault.task_path(root, area, slug), vault.folder_task_path(root, area, slug)
+        if fsio.is_file(file) and fsio.is_file(folder) then
+          local model = require("tasks_nvim.model")
+          opened = {
+            model.from_file(
+              file,
+              { area = area, location = "roadmap", slug = slug, folder = false }
+            ),
+            model.from_file(
+              folder,
+              { area = area, location = "roadmap", slug = slug, folder = true }
+            ),
+          }
+        end
+      end
+      for _, task in ipairs(opened) do
         out[#out + 1] = {
           kind = "task",
-          id = open.id,
-          path = open.path,
+          id = task.id,
+          path = task.path,
           line = 1,
-          title = open.title,
+          title = task.title,
           root = root,
         }
       end
-      local done = scan.find_done(id, scan_opts)
-      if done then
+      for _, done in ipairs(scan.find_done_all(id, scan_opts)) do
         out[#out + 1] = {
           kind = "done",
           id = done.id,

@@ -556,4 +556,46 @@ function M.find_done(id, opts)
   return nil
 end
 
+---Every finished file of `id` in its area's Backlog, newest first: a slug finished, reopened and finished again has a
+---file for each time. `find_done` is the first of them in the order of the folders (FEATURES, then TASKS, by date).
+---@param id string
+---@param opts? Tasks.ScanOpts
+---@return Tasks.Task[]
+function M.find_done_all(id, opts)
+  local root = resolve_root(opts)
+  if not root then
+    return {}
+  end
+  local area, slug = vault.parse_id(id)
+  if not area or not slug or not vault.dir_listed(root, area) then
+    return {}
+  end
+  local found = {}
+  for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
+    local dir = vault.backlog_dir(root, area, bucket)
+    for _, entry in ipairs(classify(dir, markdown_files(dir, opts or {}, root))) do
+      if model.slug_of(entry.path, "backlog") == slug then
+        found[#found + 1] = model.from_file(entry.path, {
+          area = area,
+          location = "backlog",
+          folder = entry.folder,
+        })
+      end
+    end
+  end
+  -- The name of a finished file (and of the folder of a folder task) starts with its date: the newest is the largest
+  -- name; the whole path breaks a tie (the same day in FEATURES and in TASKS).
+  local function name_of(t)
+    return fsio.norm(t.path):match("([^/]*)$") or t.path
+  end
+  table.sort(found, function(a, b)
+    local na, nb = name_of(a), name_of(b)
+    if na ~= nb then
+      return na > nb
+    end
+    return a.path > b.path
+  end)
+  return linked(found, root, opts)
+end
+
 return M
