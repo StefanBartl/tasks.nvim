@@ -364,7 +364,7 @@ M.MAX_SLUG = 200
 ---finished task of that id, so a slug held by a task (file or folder), a finished item or another plan is taken.
 ---@param area string
 ---@param opts Tasks.NewPlanOpts
----@return { id: string, path: string, slug: string, renamed: boolean }|nil result  # `renamed`: the slug asked for (or made of the title) was taken
+---@return { id: string, path: string, slug: string, renamed: boolean, ambiguous?: Tasks.NewAmbiguity }|nil result  # `renamed`: the slug asked for (or made of the title) was taken; `ambiguous`: the bare `[[slug]]` links the new plan made ambiguous (`wikilinks.new_ambiguity`)
 ---@return string|nil err
 function M.new(area, opts)
   local root, rerr = vault.root(opts)
@@ -510,7 +510,17 @@ function M.new(area, opts)
     if not held then
       local ok, err = fsio.create_exclusive(path, text)
       if ok then
-        return { id = area .. "/" .. slug, path = path, slug = slug, renamed = n > 1 }, nil
+        local id = area .. "/" .. slug
+        -- The link index holds the plan files too: a slug another area has makes its `[[slug]]` links ambiguous.
+        local resolver = opts.link_resolver or wikilinks.resolver(root)
+        return {
+          id = id,
+          path = path,
+          slug = slug,
+          renamed = n > 1,
+          ambiguous = wikilinks.new_ambiguity(root, resolver, id, slug),
+        },
+          nil
       end
       if not fsio.is_exists(err) then
         return nil, "cannot create " .. path .. ": " .. tostring(err)

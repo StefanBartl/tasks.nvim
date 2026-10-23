@@ -759,47 +759,6 @@ end
 
 -- ── new ──────────────────────────────────────────────────────────────────────
 
----The bare `[[slug]]` links the new task `id` made ambiguous: when its slug named exactly one other id before, every
----task that names that slug as `[[slug]]` pointed there and is `wikilink-ambiguous` now (the new task itself
----included), and so is every plan file whose `target` is `[[slug]]`. Nil when there is none (the
----slug is new to the vault, or it was in several areas already and those links were ambiguous before).
----@param root string
----@param resolver Tasks.LinkResolver
----@param id string
----@param slug string
----@return Tasks.NewAmbiguity|nil
-local function new_ambiguity(root, resolver, id, slug)
-  -- the index may have been built before or after the file was created: leave the new id out either way
-  local others = {}
-  for _, other in ipairs(resolver.candidates(slug)) do
-    if other ~= id then
-      others[#others + 1] = other
-    end
-  end
-  if #others ~= 1 then
-    return nil
-  end
-  -- the new task counts too: a link it was given while the slug still named one id (`after = <the twin>` in
-  -- `wikilink` mode is written as `[[slug]]`) is ambiguous now like any other
-  local tasks = scan.all({ root = root, link_resolver = resolver })
-  local referrers = wikilinks.slug_referrers(tasks or {}, slug)
-  -- and the plan files whose `target` is that `[[slug]]`
-  local files = require("tasks_nvim.plans").all({ root = root, link_resolver = resolver })
-  for _, file in ipairs(files or {}) do
-    local kind, value = wikilinks.read(file.target_raw or "")
-    if kind == "slug" and value == slug then
-      referrers[#referrers + 1] = file.id
-    end
-  end
-  table.sort(referrers)
-  if #referrers == 0 then
-    return nil
-  end
-  local ids = { others[1], id }
-  table.sort(ids)
-  return { slug = slug, ids = ids, tasks = referrers }
-end
-
 ---Create a task file under `<area>/ROADMAP/tasks/`.
 ---
 ---The slug comes from the title (`opts.slug` overrides it); a taken slug gets
@@ -1028,7 +987,7 @@ function M.new(area, opts)
           path = path,
           folder = opts.folder == true,
         }
-        result.ambiguous = new_ambiguity(root, resolver, result.id, slug)
+        result.ambiguous = wikilinks.new_ambiguity(root, resolver, result.id, slug)
         if opts.index ~= false then
           result.index, result.index_err = index.write_area(area, { root = root })
         end

@@ -87,6 +87,10 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- `plan-new` (CLI, `plans.new`, `:Tasks planfile`) warns like `new` when the slug of the new plan is one a task of another
+  area has: every bare `[[slug]]` that named that task is `wikilink-ambiguous` now, and the result names them
+  (`ambiguous`, `Tasks.NewAmbiguity`; CLI `warn:`). The check is one function, `wikilinks.new_ambiguity`, for both.
+
 - `ops` dry run of `move_area`: two moves of one request that meet in one target (`x/foo` and `y/foo` to `z`) were both
   reported `would_move`, while the real run refuses the second as "an open task already". The dry run now claims the new
   id of every move it reports `ok` and names a second move to the same id as a `slug-taken` conflict (`blocked`).

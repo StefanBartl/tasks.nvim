@@ -744,4 +744,35 @@ return function(H)
       slug .. " names the moved task"
     )
   end
+
+  -- ── plan-new: a plan whose slug a task of another area has makes its [[slug]] links ambiguous, named at once ─
+  do
+    local pv = F.vault(H)
+    assert(mutate.new("lib.nvim", { root = pv, today = F.TODAY, title = "Goal", index = false }))
+    F.task(
+      H,
+      pv,
+      "cascade.nvim",
+      "user",
+      F.meta("User", "open", { { "blocked_by", '["[[goal]]"]' } })
+    )
+    local fresh =
+      assert(plans.new("cascade.nvim", { root = pv, today = F.TODAY, title = "Unique plan" }))
+    eq(fresh.ambiguous, nil, "a plan slug new to the vault makes nothing ambiguous")
+    local plan = assert(plans.new("cascade.nvim", { root = pv, today = F.TODAY, title = "Goal" }))
+    eq(plan.ambiguous, {
+      slug = "goal",
+      ids = { "cascade.nvim/goal", "lib.nvim/goal" },
+      tasks = { "cascade.nvim/user" },
+    }, "plans.new names the tasks whose [[goal]] is ambiguous now")
+    vim.fn.delete(plan.path)
+    local said = run(pv, { "plan-new", "cascade.nvim", "Goal" })
+    eq(said.code, 0, said.err)
+    has(
+      said.err,
+      "warn: [[goal]] now names cascade.nvim/goal and lib.nvim/goal",
+      "plan-new warns on the CLI"
+    )
+    has(said.err, "cascade.nvim/user", "and names the task")
+  end
 end

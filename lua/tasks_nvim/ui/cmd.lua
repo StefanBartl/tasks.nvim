@@ -626,6 +626,9 @@ function M.planfile(ctx)
     return
   end
   notify.info(("created plan %s"):format(res.id))
+  if res.ambiguous then
+    notify.warn(require("tasks_nvim.wikilinks").ambiguity_message(res.ambiguous))
+  end
   open_file(res.path)
 end
 

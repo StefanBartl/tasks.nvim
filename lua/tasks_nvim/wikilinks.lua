@@ -374,6 +374,48 @@ function M.ambiguity_message(amb)
   )
 end
 
+---The bare `[[slug]]` links a new task or plan `id` made ambiguous: when its slug named exactly one other id before, every
+---task that names that slug as `[[slug]]` pointed there and is `wikilink-ambiguous` now (the new task itself
+---included), and so is every plan file whose `target` is `[[slug]]`. Nil when there is none (the
+---slug is new to the vault, or it was in several areas already and those links were ambiguous before).
+---@param root string
+---@param resolver Tasks.LinkResolver
+---@param id string
+---@param slug string
+---@return Tasks.NewAmbiguity|nil
+function M.new_ambiguity(root, resolver, id, slug)
+  -- the index may have been built before or after the file was created: leave the new id out either way
+  local others = {}
+  for _, other in ipairs(resolver.candidates(slug)) do
+    if other ~= id then
+      others[#others + 1] = other
+    end
+  end
+  if #others ~= 1 then
+    return nil
+  end
+  -- the new one counts too: a link it was given while the slug still named one id (`after = <the twin>` in
+  -- `wikilink` mode is written as `[[slug]]`) is ambiguous now like any other
+  -- `scan` and `plans` read their links through this module: asked here, not at load.
+  local tasks = require("tasks_nvim.scan").all({ root = root, link_resolver = resolver })
+  local referrers = M.slug_referrers(tasks or {}, slug)
+  -- and the plan files whose `target` is that `[[slug]]`
+  local files = require("tasks_nvim.plans").all({ root = root, link_resolver = resolver })
+  for _, file in ipairs(files or {}) do
+    local kind, value = M.read(file.target_raw or "")
+    if kind == "slug" and value == slug then
+      referrers[#referrers + 1] = file.id
+    end
+  end
+  table.sort(referrers)
+  if #referrers == 0 then
+    return nil
+  end
+  local ids = { others[1], id }
+  table.sort(ids)
+  return { slug = slug, ids = ids, tasks = referrers }
+end
+
 ---The id one reference names, or nil (a malformed one, a slug that is not exactly one id).
 ---@param raw string
 ---@param resolver? Tasks.LinkResolver
