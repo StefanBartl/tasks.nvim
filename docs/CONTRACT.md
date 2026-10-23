@@ -146,6 +146,8 @@ characters of letters, digits and `. _ : -`) is echoed in the answer, for a clie
 paths) names the folders `attach` with `from: latest` takes the newest image from, instead of `attach.screenshot_dirs` and
 the folders of the system; given and empty, `latest` is refused (`invalid_argument`) and only the clipboard is read. It
 is the field of a caller that runs the engine for a page (the hub, from its own settings): a page never names a folder.
+`null` counts as not given. With `attach_dirs` a failed `latest` names no folder and no file (`no new image in the
+screenshot folders of the hub`).
 
 | `op` | Fields | |
 |---|---|---|

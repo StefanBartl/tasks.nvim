@@ -279,7 +279,7 @@ end
 ---@field dry boolean
 ---@field touched table<string, boolean>   # Areas whose index must be written.
 ---@field claimed table<string, string>   # A dry run: the new id an earlier `move_area` of the request takes -> its old id.
----@field attach? Tasks.AttachSourceOpts   # Specs: a fake clipboard, the folders to look into; never from a request.
+---@field attach? Tasks.AttachSourceOpts   # Specs: a fake clipboard; the folders of `attach_dirs` (`api`), never of an operation.
 
 ---A failure from `mutate` whose reason has no code: its validation messages are all about the request.
 ---@param ctx Tasks.OpsCtx
@@ -1085,7 +1085,8 @@ local function do_view_delete(op, ctx)
 end
 
 ---`attach` { id, from, name? }: the clipboard image or the newest screenshot becomes an asset of the task.
----The folders are the ones of the configuration (`attach.screenshot_dirs`): a request names no path of this machine.
+---The folders are those the caller named with `attach_dirs` (the hub, from its settings), else those of the
+---configuration (`attach.screenshot_dirs`); an operation names no path of this machine.
 ---A dry run checks the request and the task and reads neither the clipboard nor a folder.
 ---@param op table
 ---@param ctx Tasks.OpsCtx
@@ -1136,6 +1137,11 @@ local function do_attach(op, ctx)
     )
   )
   if not r then
+    -- For folders the caller named (a page's request through the hub) the answer names no folder and no file of this
+    -- machine: the page did not name them, and the person's user name is in their paths.
+    if op.from == "latest" and ctx.attach and ctx.attach.dirs_given then
+      return refuse("invalid_argument", "attach: no new image in the screenshot folders of the hub")
+    end
     return mutate_failure(ctx, err)
   end
   entry.etag_after = etag_of_file(r.path)

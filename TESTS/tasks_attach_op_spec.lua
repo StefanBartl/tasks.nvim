@@ -170,6 +170,16 @@ return function(H)
   eq(named.results and named.results[1].ok, true, vim.inspect(named))
   eq(named.results[1].asset, "assets/named.png", "the newest image of the folder that was named")
 
+  -- a named folder without a new image: refused, and the answer names no folder and no file of this machine
+  local empty = H.tmpdir() .. "/no-shots-here"
+  vim.fn.mkdir(empty, "p")
+  local k = new_task("Attach from an empty folder")
+  local quiet =
+    front({ attach_dirs = { empty }, ops = { { op = "attach", id = k.id, from = "latest" } } })
+  local qerr = quiet.results and quiet.results[1].error
+  eq(qerr and qerr.code, "invalid_argument", vim.inspect(quiet))
+  ok(not qerr.message:find("no-shots-here", 1, true), "the folder is not named: " .. qerr.message)
+
   -- named, and none: only the clipboard, never the folders of the system
   local h = new_task("Attach with no folder")
   local nofolder =
