@@ -153,4 +153,37 @@ return function(H)
     "not_found",
     "unknown task"
   )
+
+  -- ── the folders a caller names (`attach_dirs`, the hub from its settings) ─
+  ---@param request table
+  ---@return table doc
+  local function front(request)
+    local text = api.call("ops", vim.json.encode(request), { root = root, today = F.TODAY })
+    return vim.json.decode(text)
+  end
+  vim.fn.writefile({ PNG }, shots .. "/named.png", "b")
+  local g = new_task("Attach from a named folder")
+  local named = front({
+    attach_dirs = { shots },
+    ops = { { op = "attach", id = g.id, from = "latest", name = "named.png" } },
+  })
+  eq(named.results and named.results[1].ok, true, vim.inspect(named))
+  eq(named.results[1].asset, "assets/named.png", "the newest image of the folder that was named")
+
+  -- named, and none: only the clipboard, never the folders of the system
+  local h = new_task("Attach with no folder")
+  local nofolder =
+    front({ attach_dirs = {}, ops = { { op = "attach", id = h.id, from = "latest" } } })
+  local nerr = nofolder.results and nofolder.results[1].error
+  eq(nerr and nerr.code, "invalid_argument", vim.inspect(nofolder))
+  ok(nerr.message:find("no screenshot folders", 1, true), nerr.message)
+  eq(assert(scan.find(h.id, { root = root })).folder, false, "nothing was attached")
+
+  -- a folder that is not absolute, too many folders, not a list of words: the request is refused as a whole
+  for _, bad in ipairs({ { "shots" }, vim.fn["repeat"]({ shots }, 9), { 5 } }) do
+    local doc =
+      front({ attach_dirs = bad, ops = { { op = "attach", id = h.id, from = "latest" } } })
+    eq(doc.kind, "tasks.error", vim.inspect(doc))
+    eq(doc.code, "invalid_argument", vim.inspect(doc))
+  end
 end

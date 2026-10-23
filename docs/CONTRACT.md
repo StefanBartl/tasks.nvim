@@ -142,7 +142,10 @@ echo '{"client_op_id":"c-1","ops":[{"op":"set","id":"my-project/fix-the-thing","
 
 A request is `{ "schema": 1, "client_op_id": "c-81f2", "dry_run": false, "ops": [ ... ] }`. `client_op_id` (1 to 64
 characters of letters, digits and `. _ : -`) is echoed in the answer, for a client that must not repeat itself;
-`dry_run` checks everything and writes nothing. At most 100 operations.
+`dry_run` checks everything and writes nothing. At most 100 operations. `attach_dirs` (optional, at most 8 absolute
+paths) names the folders `attach` with `from: latest` takes the newest image from, instead of `attach.screenshot_dirs` and
+the folders of the system; given and empty, `latest` is refused (`invalid_argument`) and only the clipboard is read. It
+is the field of a caller that runs the engine for a page (the hub, from its own settings): a page never names a folder.
 
 | `op` | Fields | |
 |---|---|---|

@@ -17,6 +17,20 @@
 
 local contract = require("tasks_nvim.contract")
 local ops = require("tasks_nvim.ops")
+local errors = require("lib.nvim.contract.errors")
+
+---The most folders a caller names for `attach` (`attach_dirs`).
+local MAX_ATTACH_DIRS = 8
+
+---Is `path` absolute (`/x`, `C:/x`, `C:\x`, `\\server\x`)? A folder of the caller is never one relative to the engine.
+---@param path string
+---@return boolean
+local function absolute(path)
+  return path:match("^/") ~= nil
+    or path:match("^%a:[/\\]") ~= nil
+    or path:match("^[/\\][/\\]") ~= nil
+end
+
 local api_mod = require("lib.nvim.contract.api")
 
 local M = {}
@@ -143,8 +157,36 @@ local methods = {
   ops = {
     flat = true,
     keep_null = true,
-    params = { client_op_id = "string", dry_run = "boolean", ops = "object_list" },
+    params = {
+      client_op_id = "string",
+      dry_run = "boolean",
+      ops = "object_list",
+      attach_dirs = "string_list",
+    },
     run = function(params, opts)
+      -- The folders `attach` may take the newest image from, named by the caller that runs the engine for a page (the
+      -- hub, from its own settings; its door refuses the field from a page). Given, they are the only ones: an empty
+      -- list is no `latest` at all, never the folders of the system.
+      if params.attach_dirs ~= nil then
+        local dirs = params.attach_dirs
+        if #dirs > MAX_ATTACH_DIRS then
+          return nil,
+            errors.fail(
+              "invalid_argument",
+              ("attach_dirs: at most %d folders"):format(MAX_ATTACH_DIRS)
+            )
+        end
+        for _, dir in ipairs(dirs) do
+          if not absolute(dir) then
+            return nil,
+              errors.fail("invalid_argument", "attach_dirs: every folder must be an absolute path")
+          end
+        end
+        params = vim.tbl_extend("force", {}, params)
+        params.attach_dirs = nil
+        opts = vim.tbl_extend("force", {}, opts or {})
+        opts.attach = vim.tbl_extend("force", opts.attach or {}, { dirs = dirs, dirs_given = true })
+      end
       return ops.run(params, opts)
     end,
   },

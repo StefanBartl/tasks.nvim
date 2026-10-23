@@ -7,6 +7,10 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Contract `tasks-ops/1`: `attach_dirs` in a request, the folders `attach` with `from: latest` takes the newest image
+  from, given by the caller that runs the engine for a page (the hub, from its settings); given and empty, `latest` is
+  refused and only the clipboard is read, never the folders of the system (the hub runs the engine without the person's
+  configuration, so it had looked into `~/Pictures` and, on macOS, the Desktop). At most 8 absolute paths.
 - Editor: "attach a screenshot" in the new-task form (a third answer to "Attach assets?": the folder task is made, the
   clipboard image or else the newest screenshot is attached to it and its link lands in the opened task) and in the
   dashboard (`ga` / `<M-i>`, and an entry of the plain fallback's menu). Both end in `ui.cmd.attach_screenshot`, which uses

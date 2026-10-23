@@ -1097,6 +1097,18 @@ local function do_attach(op, ctx)
   if op.from ~= "clipboard" and op.from ~= "latest" then
     return refuse("invalid_argument", "attach needs from: 'clipboard' or 'latest'")
   end
+  -- The caller named the folders, and none: only the clipboard (the folders of the system are not looked into).
+  if
+    op.from == "latest"
+    and ctx.attach
+    and ctx.attach.dirs_given
+    and #(ctx.attach.dirs or {}) == 0
+  then
+    return refuse(
+      "invalid_argument",
+      "attach: no screenshot folders were given, only the clipboard is read"
+    )
+  end
   local task, ferr = scan.find(op.id, { root = ctx.root })
   if not task then
     return mutate_failure(ctx, ferr)
