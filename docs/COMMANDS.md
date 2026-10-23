@@ -96,13 +96,14 @@ opened with them) or "clear all", then a value (`(any)` clears one chip) |
 | `J` / `K` | stage view: move the task down / up among its stage's tasks: `order` becomes a fraction between the two neighbours, nothing is renumbered. `order` only breaks ties behind status and prio, so the move shows among tasks of equal status and prio |
 | `r` | rescan the vault now (the list also refreshes by itself, see "Live refresh"); keeps the cursor task and the marks |
 | `gp` | preview the task file under the cursor in the browser through mdview.nvim ([Browser preview](#browser-preview-mdview)); the single-task menu of the plain fallback has "preview the file (mdview)" |
+| `ga` | attach a screenshot to the task under the cursor: the clipboard image, else the newest screenshot (`attach.screenshot_dirs`, `attach.max_age_s`), the same as `:Tasks attach <id> from=clipboard\|latest`; the task becomes a folder task and the link is copied to the `+` register (nothing available: one message, nothing attached). The single-task menu of the plain fallback has "attach a screenshot" |
 | `gb` / `gr` | the Backlog picker (`:Tasks folder <area> backlog`) / `ROADMAP/ROADMAP.md` of the area under the cursor |
 | `g?` | key help float (any key closes it) |
 
 The letters work in the list window. In the input window they would shadow the editing
 commands (`s`, `p`, `D`, `e` in normal mode) and the typing in insert mode, so there the same
 actions are Alt chords (normal and insert mode): `<M-s>` `<M-p>` `<M-d>` `<M-f>` `<M-o>` `<M-e>`
-`<M-r>`, `<M-b>` (backlog), `<M-m>` (roadmap), `<M-v>` (preview), `<M-?>` (help). `s` and `p` are applied
+`<M-r>`, `<M-i>` (attach a screenshot), `<M-b>` (backlog), `<M-m>` (roadmap), `<M-v>` (preview), `<M-?>` (help). `s` and `p` are applied
 at once, as **one batch**: every task advances from its own value, one `tasks.mutate.set`
 per task without its own index write, then each touched area's `ROADMAP/TASKS.md` is
 regenerated **once**, and one notification reports `changed / unchanged / failed`. The
@@ -220,7 +221,10 @@ Submitting checks the form: the problems are written at the top of the buffer as
 (they vanish on the next submit), and nothing is lost -- the buffer stays as it is. A valid
 form asks **"Attach assets?"**: *Yes* creates a folder task (`<slug>/<slug>.md`, as
 `--folder` does), makes `assets/` and opens the file explorer on it (filetree.nvim's
-`:Filetree open` when installed, else Neovim's directory browser); *No* creates a plain task
+`:Filetree open` when installed, else Neovim's directory browser); *Yes, attach a screenshot* creates the
+folder task too and attaches the clipboard image to it, else the newest screenshot (as
+`:Tasks attach <id> from=clipboard|latest`; the link goes into the new task, which opens); without an image
+anywhere the task is still made and one message says that nothing was attached; *No* creates a plain task
 file; `<Esc>` / `q` creates nothing and leaves the form open with everything typed. The task is written by `tasks.mutate.new`, the one write path the CLI uses as well; an
 error of the engine (a tag with a forbidden character, say) is shown in the form, which stays
 open. Afterwards the form closes and the new file opens.

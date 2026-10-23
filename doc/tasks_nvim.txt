@@ -173,10 +173,11 @@ No global key is mapped. In the dashboard list (`g?` shows this):
 
   <CR> open   <Tab> mark   s status   p prio   D finish   f filter chip
   o sort      e export     gp preview  r rescan  gb backlog  gr roadmap
+  ga attach a screenshot (clipboard image, else the newest screenshot)
   gl lists (apply, save the current view as a list, rename or delete one)
 
 In the input window the same actions are on `<M-s> <M-p> <M-d> <M-f> <M-l> <M-o>
-<M-e> <M-r> <M-b> <M-m> <M-v> <M-?>` (they shadow some snacks defaults).
+<M-e> <M-r> <M-i> <M-b> <M-m> <M-v> <M-?>` (they shadow some snacks defaults).
 
 In the task form: `<Space>`/`<CR>` tick a line, `<C-s>` submit, `q`/`<C-q>`
 cancel (asks when text was typed), `g?` help.

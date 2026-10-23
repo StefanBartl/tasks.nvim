@@ -873,6 +873,11 @@ local ACTIONS = {
     text = "preview the task file in the browser (mdview.nvim)",
   },
   {
+    name = "attach",
+    action = "tasks_attach",
+    text = "attach a screenshot to the current task (the clipboard image, else the newest screenshot)",
+  },
+  {
     name = "rescan",
     action = "tasks_rescan",
     text = "rescan the vault now (the list also refreshes by itself when a task file changes)",
@@ -1251,6 +1256,20 @@ local function open_picker(engine, Snacks, state)
         end)
       end)
     end,
+    tasks_attach = function(picker)
+      local task = current_task(picker)
+      if not task then
+        return
+      end
+      -- The task becomes a folder task (its file moves): the watcher is held so that is not read as an outside
+      -- change, and the list is read again once.
+      local res = held(function()
+        return cmd().attach_screenshot(task.id)
+      end)
+      if res then
+        refresh_keep(picker, true)
+      end
+    end,
     tasks_backlog = function(picker)
       local task = current_task(picker)
       if not task then
@@ -1517,6 +1536,13 @@ local function open_select(state)
         label = "preview the file (mdview)",
         run = function()
           preview_task(task)
+        end,
+      },
+      {
+        label = "attach a screenshot (clipboard, else newest)",
+        run = function()
+          cmd().attach_screenshot(task.id)
+          again()
         end,
       },
       {

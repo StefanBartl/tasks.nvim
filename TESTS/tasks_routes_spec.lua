@@ -1477,7 +1477,7 @@ return function(H)
       has(buf_text(), "Title: Dismissed question", "the typed text survives")
       has(said(), "task not created")
       -- an answer the dialog does not offer is no "No" either: nothing is created
-      stray_index = 3
+      stray_index = 4
       fkeys("<C-s>")
       flush()
       ok(

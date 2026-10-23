@@ -149,6 +149,7 @@ return function(H)
         eq(labels, {
           "open the file",
           "preview the file (mdview)",
+          "attach a screenshot (clipboard, else newest)",
           "advance status",
           "advance prio",
           "finish",

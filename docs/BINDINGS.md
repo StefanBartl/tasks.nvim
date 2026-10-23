@@ -36,6 +36,7 @@ Details of every verb: [COMMANDS.md](COMMANDS.md).
 | `e` | export marked (else all shown) tasks |
 | `gp` | preview the task file in the browser |
 | `r` | rescan now |
+| `ga` | attach a screenshot to the task under the cursor (clipboard image, else the newest screenshot) |
 | `gb` / `gr` | Backlog picker / ROADMAP of the area under the cursor |
 | `v` | switch between the list and the stage view |
 | `P` | give the marked (else current) tasks a plan and a stage |
@@ -45,7 +46,7 @@ Details of every verb: [COMMANDS.md](COMMANDS.md).
 A count works on the cycling keys: `3p` advances the priority three steps, `2s` the status, `3o` the sort order. The other keys ignore a count (mark several tasks with `<Tab>` instead).
 
 In the input window the same actions are on Alt (these shadow snacks.nvim's own `<M-d>` inspect, `<M-f>` follow,
-`<M-r>` regex, `<M-m>` maximize and `<M-p>` preview toggles there; turn any of them off or move it with `keys`, below): `<M-s> <M-p> <M-d> <M-f> <M-l> <M-o> <M-e> <M-r> <M-b> <M-m> <M-v> <M-?>` (`<M-l>` is the lists menu).
+`<M-r>` regex, `<M-m>` maximize and `<M-p>` preview toggles there; turn any of them off or move it with `keys`, below): `<M-s> <M-p> <M-d> <M-f> <M-l> <M-o> <M-e> <M-r> <M-i> <M-b> <M-m> <M-v> <M-?>` (`<M-l>` is the lists menu, `<M-i>` attaches a screenshot).
 
 ## Changing or switching off keys
 

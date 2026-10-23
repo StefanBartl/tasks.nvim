@@ -7,6 +7,11 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Editor: "attach a screenshot" in the new-task form (a third answer to "Attach assets?": the folder task is made, the
+  clipboard image or else the newest screenshot is attached to it and its link lands in the opened task) and in the
+  dashboard (`ga` / `<M-i>`, and an entry of the plain fallback's menu). Both end in `ui.cmd.attach_screenshot`, which uses
+  `attach_source` like `:Tasks attach <id> from=...`; without an image anywhere one message names both sources and nothing
+  is attached. Seam for specs: `ui.cmd.attach_opts`.
 - Contract `tasks-export/1`: `views_rev` in `tasks.snapshot`, what the saved views looked like (the `rev` of `tasks.views`,
   from every file of a view): a view changed outside (a pull) changes it and the digest, not `rev`, so that a reader that
   shows the views learns of it and asks no other document again (the desktop hub's watcher reports the folder).

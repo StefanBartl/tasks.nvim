@@ -1180,16 +1180,17 @@ function M.task_new_form(given)
       -- `confirm.choose` itself, not `M.chooser`: that seam stands in for the dialog of `estimate --walk`, and a
       -- scripted walk must not answer this question with its own choices.
       confirm.choose(
-        "Attach assets (screenshots, logs) to the new task?\n\nYes makes a folder task with an assets/ folder and opens the file explorer on it.\nEsc goes back to the form: nothing is created.",
-        { "No", "Yes, attach assets" },
+        "Attach assets (screenshots, logs) to the new task?\n\nYes makes a folder task with an assets/ folder and opens the file explorer on it.\nA screenshot makes the folder task and attaches the clipboard image (else the newest screenshot) to it.\nEsc goes back to the form: nothing is created.",
+        { "No", "Yes, attach assets", "Yes, attach a screenshot" },
         function(picked)
-          -- Only the two answers create anything. Esc, `q`, a dialog that could not open: "not now" -- nothing is
+          -- Only the three answers create anything. Esc, `q`, a dialog that could not open: "not now" -- nothing is
           -- written and the form stays open with what was typed.
-          if picked ~= 1 and picked ~= 2 then
+          if picked ~= 1 and picked ~= 2 and picked ~= 3 then
             notify.info("task not created: the form is still open")
             return
           end
-          local with_assets = picked == 2
+          local with_screenshot = picked == 3
+          local with_assets = picked == 2 or with_screenshot
           -- after=/order=/plan=/phase= are no fields of the form: they go on as they were typed on the command line
           local carried =
             { after = given.after, order = given.order, plan = given.plan, phase = given.phase }
@@ -1222,7 +1223,11 @@ function M.task_new_form(given)
           end
           notify.info(("created %s"):format(res.id))
           open_file(res.path)
-          if with_assets then
+          if with_screenshot then
+            -- After the task is open: the link lands in it, at the cursor. A task without a screenshot stays
+            -- (it is made, only the attachment failed, and `M.attach_screenshot` says so).
+            M.attach_screenshot(res.id)
+          elseif with_assets then
             local assets = vim.fs.dirname(res.path) .. "/" .. mutate.ASSETS_DIR
             local made, merr = fsio.mkdirp(assets)
             if made then
@@ -1589,6 +1594,34 @@ local function insert_at_cursor(path, text)
   return false
 end
 
+---Say what an attach did, and put its link where it can be pasted: at the cursor of the task when it is open in a
+---window, else into the `+` register.
+---@param res table  # the result of `mutate.attach` / `attach_source.attach`
+---@param before? Tasks.Task  # the task as it was, to retarget buffers when it became a folder task
+local function report_attach(res, before)
+  if res.folderized and before then
+    M.retarget_buffers(before.path, res.path)
+  end
+  if res.index_err then
+    notify.warn("asset attached, but the index was not updated: " .. res.index_err)
+  end
+  if res.updated_err then
+    notify.warn("asset attached, but `updated` was not changed: " .. res.updated_err)
+  end
+  if insert_at_cursor(res.path, res.link) then
+    notify.info(("attached %s -> %s (link inserted at the cursor)"):format(res.id, res.rel))
+    return
+  end
+  local copied = pcall(vim.fn.setreg, "+", res.link)
+  notify.info(
+    ("attached %s -> %s%s"):format(
+      res.id,
+      res.rel,
+      copied and (" (link copied: " .. res.link .. ")") or (": " .. res.link)
+    )
+  )
+end
+
 ---`:Tasks attach <id> <file> [name=<file name>]`, or `:Tasks attach <id> from=clipboard|latest [dir=<folder>]`:
 ---copy the file (the clipboard image, the newest screenshot) into `assets/` and put the Markdown link at the
 ---cursor of the task when it is open in a window, else into the `+` register, and say so.
@@ -1632,27 +1665,33 @@ function M.task_attach(ctx)
     notify.error((tostring(err):gsub("pass %-%-name=", "pass name=<file name>")))
     return
   end
-  if res.folderized and before then
-    M.retarget_buffers(before.path, res.path)
+  report_attach(res, before)
+end
+
+---Attach "a screenshot" to a task: the clipboard image, else the newest screenshot of the screenshot folders. The
+---one entry the new-task form and the dashboard share with `:Tasks attach <id> from=...`: the same
+---`attach_source`, the same report, no second way. With neither source there is one message that names both
+---and nothing is attached (the task itself is not touched).
+---@param id string  # `<area>/<slug>`
+---@return table|nil res  # the result of `attach_source.attach`; nil: nothing attached
+function M.attach_screenshot(id)
+  local source = require("tasks_nvim.attach_source")
+  -- `M.attach_opts`: the seam of the specs (a fake clipboard, a folder, the clock).
+  local base = M.attach_opts or {}
+  local before = scan.find(id)
+  local res, clip_err = source.attach(id, "clipboard", base)
+  local latest_err
+  if not res then
+    res, latest_err = source.attach(id, "latest", base)
   end
-  if res.index_err then
-    notify.warn("asset attached, but the index was not updated: " .. res.index_err)
-  end
-  if res.updated_err then
-    notify.warn("asset attached, but `updated` was not changed: " .. res.updated_err)
-  end
-  if insert_at_cursor(res.path, res.link) then
-    notify.info(("attached %s -> %s (link inserted at the cursor)"):format(res.id, res.rel))
-    return
-  end
-  local copied = pcall(vim.fn.setreg, "+", res.link)
-  notify.info(
-    ("attached %s -> %s%s"):format(
-      res.id,
-      res.rel,
-      copied and (" (link copied: " .. res.link .. ")") or (": " .. res.link)
+  if not res then
+    notify.warn(
+      ("no screenshot attached to %s: %s; %s"):format(id, tostring(clip_err), tostring(latest_err))
     )
-  )
+    return nil
+  end
+  report_attach(res, before)
+  return res
 end
 
 ---`:Tasks done <id> [done_in=...] [commits=repo@sha,...] [date=YYYY-MM-DD] [--yes]`
