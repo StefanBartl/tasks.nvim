@@ -2,7 +2,7 @@
 ---@brief `--stale-refs`: which open tasks point at files that changed after the task was last updated.
 ---@description
 --- A task may carry `refs: [lua/ai/config/init.lua, docs/attachments.md, lib.nvim@803de65]`.
---- The idea (concept section 15, borrowed from documentation.nvim's
+--- The idea (concept section 15, borrowed from docmap.nvim's
 --- `@ref`/`@verified` checklists): when a referenced file changed after the
 --- task's `updated` date, the task needs a fresh read -- it is "stale by refs".
 ---
