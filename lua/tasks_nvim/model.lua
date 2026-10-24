@@ -19,6 +19,7 @@
 
 local fm = require("lib.nvim.markdown.frontmatter")
 local fsio = require("tasks_nvim.fsio")
+local questions = require("tasks_nvim.questions")
 local steps = require("tasks_nvim.steps")
 local vault = require("tasks_nvim.vault")
 local wikilinks = require("tasks_nvim.wikilinks")
@@ -809,6 +810,14 @@ function M.parse_text(text, ctx)
             table.concat(uncovered, ", ")
           ),
         }
+      end
+    end
+
+    -- The optional `## Offene Fragen` section: what a person still has to decide. Said once per problem, as a hint.
+    task.questions = questions.parse(parsed.body)
+    if task.questions then
+      for _, msg in ipairs(task.questions.problems) do
+        hints[#hints + 1] = { code = "question-problem", msg = msg }
       end
     end
   end

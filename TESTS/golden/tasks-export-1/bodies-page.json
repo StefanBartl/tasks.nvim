@@ -1,5 +1,5 @@
 {
-  "digest": "sha256:5eee1266a1629fce",
+  "digest": "sha256:dddea9800bf42649",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -9,9 +9,9 @@
   "incomplete": [],
   "items": [
     {
-      "body": "\nThe body of alpha.\n\n## Plan\n\n- [x] 1. first\n- [ ] 2. second\n- [ ] 3. third (dropped)\n",
+      "body": "\nThe body of alpha.\n\n## Plan\n\n- [x] 1. first\n- [ ] 2. second\n- [ ] 3. third (dropped)\n\n\n## Offene Fragen\n\n### Which format? [q1]\nA line of text.\n- [ ] Section (empfohlen)\n- [ ] Frontmatter\n\n### Settled already [q2]\n- [x] Yes\n- [ ] No\n",
       "body_truncated": false,
-      "etag": "sha256:e1e83d9a74e1f427",
+      "etag": "sha256:43e1231c7f816b39",
       "id": "lib.nvim/alpha"
     },
     {
@@ -32,7 +32,7 @@
   "next_offset": 4,
   "offset": 1,
   "plugin": "tasks.nvim",
-  "rev": "rev:a9077a",
+  "rev": "rev:080e29",
   "schema": 1,
   "total": 14,
   "vault": {

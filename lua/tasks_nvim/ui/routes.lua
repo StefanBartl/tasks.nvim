@@ -755,6 +755,33 @@ local function nested_routes()
     },
 
     {
+      path = { "task", "answer" },
+      args = {
+        {
+          name = "id",
+          type = "TASK_ID",
+          desc = "Id of the task whose question is answered, as area/slug",
+        },
+      },
+      kv = {
+        {
+          key = "question",
+          type = "STRING",
+          desc = "The question: its key (q1), or #n for the n-th",
+        },
+        {
+          key = "option",
+          type = "STRING",
+          desc = "The option to tick (1, 2 ...), or clear to take the answer back",
+        },
+      },
+      desc = "Answer a question of the ## Offene Fragen section of an open task: with question= and option= the answer is written, without them the open questions are asked one after the other (the recommended option is marked)",
+      run = function(ctx)
+        cmd().task_answer(ctx)
+      end,
+    },
+
+    {
       path = { "task", "done" },
       args = {
         {

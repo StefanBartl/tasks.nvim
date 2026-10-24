@@ -1,7 +1,7 @@
 {
-  "body": "\nThe body of alpha.\n\n## Plan\n\n- [x] 1. first\n- [ ] 2. second\n- [ ] 3. third (dropped)\n",
+  "body": "\nThe body of alpha.\n\n## Plan\n\n- [x] 1. first\n- [ ] 2. second\n- [ ] 3. third (dropped)\n\n\n## Offene Fragen\n\n### Which format? [q1]\nA line of text.\n- [ ] Section (empfohlen)\n- [ ] Frontmatter\n\n### Settled already [q2]\n- [x] Yes\n- [ ] No\n",
   "body_truncated": false,
-  "digest": "sha256:e99ce2a7e3af461c",
+  "digest": "sha256:4e7045935001b886",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -10,7 +10,51 @@
   "generated_at": "2026-01-01T00:00:00Z",
   "kind": "tasks.task",
   "plugin": "tasks.nvim",
-  "rev": "rev:9f2ae5",
+  "questions": [
+    {
+      "answered": false,
+      "key": "q1",
+      "n": 1,
+      "options": [
+        {
+          "chosen": false,
+          "n": 1,
+          "recommended": true,
+          "text": "Section"
+        },
+        {
+          "chosen": false,
+          "n": 2,
+          "recommended": false,
+          "text": "Frontmatter"
+        }
+      ],
+      "text": "A line of text.",
+      "title": "Which format?"
+    },
+    {
+      "answered": true,
+      "key": "q2",
+      "n": 2,
+      "options": [
+        {
+          "chosen": true,
+          "n": 1,
+          "recommended": false,
+          "text": "Yes"
+        },
+        {
+          "chosen": false,
+          "n": 2,
+          "recommended": false,
+          "text": "No"
+        }
+      ],
+      "text": "",
+      "title": "Settled already"
+    }
+  ],
+  "rev": "rev:fc8945",
   "schema": 1,
   "steps": [
     {
@@ -44,12 +88,13 @@
     "created": "2026-01-01",
     "effort": "S",
     "effort_days": 0.5,
-    "etag": "sha256:e1e83d9a74e1f427",
+    "etag": "sha256:43e1231c7f816b39",
     "file": "lib.nvim/ROADMAP/tasks/alpha.md",
     "folder": false,
     "group": "open|1",
     "id": "lib.nvim/alpha",
     "kind": "feature",
+    "open_questions": 1,
     "prio": 1,
     "problems": [],
     "readiness": {

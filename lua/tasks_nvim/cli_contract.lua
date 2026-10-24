@@ -211,6 +211,7 @@ local function run_show(ctx)
   field("after", t.after)
   field("refs", t.refs)
   field("commits", t.commits)
+  field("open_questions", t.open_questions)
   field("file", t.file)
   if t.readiness then
     field(

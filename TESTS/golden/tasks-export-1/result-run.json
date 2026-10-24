@@ -1,6 +1,6 @@
 {
   "client_op_id": "golden-run",
-  "digest": "sha256:5e6be593998a47cd",
+  "digest": "sha256:d1391568d71e1447",
   "dry_run": false,
   "engine": {
     "git": "0000000",
@@ -152,8 +152,8 @@
         "cascade.nvim/iota",
         "lib.nvim/beta"
       ],
-      "etag_after": "sha256:dc8bb091e59bb319",
-      "etag_before": "sha256:e1e83d9a74e1f427",
+      "etag_after": "sha256:41c70918120b8bde",
+      "etag_before": "sha256:43e1231c7f816b39",
       "file": "cascade.nvim/ROADMAP/tasks/alpha.md",
       "id": "lib.nvim/alpha",
       "index": {
@@ -161,7 +161,7 @@
       },
       "inverse": {
         "id": "cascade.nvim/alpha",
-        "if_match": "sha256:dc8bb091e59bb319",
+        "if_match": "sha256:41c70918120b8bde",
         "op": "move_area",
         "to_area": "lib.nvim"
       },

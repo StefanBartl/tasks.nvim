@@ -7,7 +7,7 @@ changes go through one door, `ops`, which asks the engine to write ([Writing](#w
 
 - [Asking](#asking) -- `tasks call`, the Lua door, the request
 - [The documents](#the-documents) -- `hello`, `snapshot`, `list`, `task`, `next`, `areas`, `finished`, `donepreview`, `result`, `error`
-- [Writing](#writing-tasks-ops1) -- `ops`: `set`, `new`, `reorder`, `done`, `move_area`, `plan_new`, `tick_step`, `append_note`, `reopen`, `set_body`, `view_save`, `view_delete`, `attach`; conflicts, `done_preview`, dry runs
+- [Writing](#writing-tasks-ops1) -- `ops`: `set`, `new`, `reorder`, `done`, `move_area`, `plan_new`, `tick_step`, `answer`, `append_note`, `reopen`, `set_body`, `view_save`, `view_delete`, `attach`; conflicts, `done_preview`, dry runs
 - [The rules every document keeps](#the-rules-every-document-keeps)
 - [`etag`, `rev`, `digest`](#etag-rev-digest) -- what changed
 - [Errors](#errors)
@@ -103,7 +103,8 @@ A **task entry** (`tasks[]`, `items[]`, `task`) has: `id`, `area`, `slug`, `titl
 `effort`, `effort_days`, `value`, `roi`, `actor`, `actor_written`, `severity`, `created`, `updated`, `plan`, `phase`,
 `done_in`, `commits` (every commit made for the task, `repo@sha` each; only when the task lists any), `remind` (a date: look at the task again then; whether it is due is for the reader to say, the entry does not change with the day), `tags`, `category`, `blocked_by`, `after`, `refs`, `summary`, `folder`, `file` (`<area>/ROADMAP/tasks/<slug>.md`,
 relative to the vault), `valid`, `problems` (`[{ code, msg }]`), `steps` (`total`, `ticked`, `dropped`, only when the
-task has a `## Plan` section), `etag` and, for an open task, `readiness`:
+task has a `## Plan` section), `open_questions` (how many questions of its `## Offene Fragen` section are not answered; only when
+there is one), `etag` and, for an open task, `readiness`:
 
 ```json
 "readiness": { "state": "ready", "stage": 0, "rank": 3, "eff_prio": 1, "leverage": 4, "open_blockers": [] }
@@ -119,7 +120,7 @@ is not read as "no priority".
 
 **`tasks.list`** -- `total` (all matches), `offset`, `limit`, `items` (task entries) and `next_offset` while there is
 more. Pages are 100 entries at most. **`tasks.task`** -- `task`, `body` (the Markdown after the frontmatter, cut at 256 KiB
-with `body_truncated`) and `steps` (`[{ n, text, ticked, dropped }]`). **`tasks.next`** -- `task` (`id`, `title`, `status`,
+with `body_truncated`) and `steps` (`[{ n, text, ticked, dropped }]`) and `questions` (`[{ n, key?, title, text, answered, options: [{ n, text, recommended, chosen }] }]`, empty without the section; see [the questions of a task](#the-questions-of-a-task)). **`tasks.next`** -- `task` (`id`, `title`, `status`,
 `prio`, `effort` and the `reason`), `alternatives`, `cdx` (the queue written for the AI), `freed`, `ready` and `open`
 (counts for the area and the vault) and, when there is no task, `empty` (`kind`: why). **`tasks.areas`** -- `areas`.
 
@@ -156,6 +157,7 @@ screenshot folders of the hub`).
 | `reorder` | `id`, `after`?, `before`?, `group`?, `if_match`? | move a task inside its group (same stage, same `status|eff_prio`, the `group` of the task entry): it gets an `order` between its neighbours'; tasks that have no `order` yet are numbered only where the spot needs it, and a crowd of halvings is renumbered. A move that would write more than 50 files is refused |
 | `done` | `id`, `confirm`, `done_in`?, `commits`?, `remind`? | finish a task (`commits`: `repo@sha` entries added to the task's own). `confirm` is the token of `done_preview` for the version of the file that was shown; `remind` (a date, `+<n>d` or `+<n>w`) sets a reminder on the finished task |
 | `tick_step` | `id`, `n`, `done`?, `if_match`? | tick (`done` true, the default) or untick step `n` of the `## Plan` section of an open task (the `steps` of the `task` document are numbered the same way). The step that is in the wanted state already is `unchanged`; a dropped step is `invalid_argument`. Sets `updated`. The entry has an `inverse` |
+| `answer` | `id`, `question`, `option` or `clear`, `if_match`? | answer a question of the `## Offene Fragen` section of an open task: tick option `option` (1-based) and untick the others, or take the answer back with `clear` (every option open). `question` is the key (`q1`), or `#n` for the n-th question; a question written without a key gets the next free one when it is answered. The answer that is in the wanted state already is `unchanged`; an unknown question or option, a question with more than one ticked option, and `option` together with `clear` are `invalid_argument`. Sets `updated`. The entry has an `inverse` (an `answer` that restores what was ticked before, or `clear`) |
 | `append_note` | `id`, `text`, `if_match`? | add one line `- YYYY-MM-DD: <text>` below the last line of the notes of an open task (`## Notizen`, or `## Notes` in a task written in English; the section is made at the end when it is missing). `text` is one line of at most 1000 characters, no control character (the 8-bit controls and the Unicode line separators are refused too). Sets `updated`. No `inverse` |
 | `reopen` | `id`, `status`?, `if_match`? | bring a finished task back: the file goes from `Backlog/<bucket>/` to `ROADMAP/tasks/`, `status` is `open` (or the one given), `done_in` and `remind` are dropped, its row leaves the Backlog README. `if_match` is the version of the finished file. An open task is `unchanged`; a task that is a folder, or an open task or plan of that name, is refused. The entry has `file`, and `notes` when the README row could not be taken out. No `inverse` (finishing again needs `done_preview`). What `done` set in motion beside the file (ticked steps, a closed plan, refreshed marker documents) stays as it is |
 | `set_body` | `id`, `body`, `if_match`? | replace the text below the frontmatter of an open task (what the `body` of the `task` document holds) by `body`: at most 100000 characters, no control character but the line break and the tab (a carriage return is refused: send line feeds, the file keeps its own line ending); the white space at both ends is trimmed, an empty `body` leaves one blank line. The frontmatter is untouched but for `updated`. The entry has an `inverse` (a `set_body` with the old text) unless the old text could not be sent again (longer than the limit, a control character); the old text comes back trimmed at the ends. A task whose body the `task` document cut (`body_truncated`) must not be edited with the text it was given: the client does not offer it |
@@ -193,6 +195,31 @@ relations (`blocked_by`, `after`, `plan`, `phase`) is judged first with the code
 neighbour of another group, neighbours that are no longer next to each other, another `group`) is a `conflict` too: the
 list moved on, ask again. A `reorder` is not all-or-nothing: what was written stays, and `details.written` says how far
 it got.
+
+### The questions of a task
+
+A task that waits for a decision may carry a section `## Offene Fragen` (`## Open questions` in a task written in English):
+the questions with the options a person can choose, so that a front end can offer them and write the answer.
+
+```
+## Offene Fragen
+
+### Which format? [q1]
+Optional text under the question.
+- [ ] Section in the body (empfohlen)
+- [ ] List in the frontmatter
+```
+
+- A question is a `###` heading, ending in its key `[qN]`; its options are the checkbox lines below it, up to the next question. Code fences and
+  other sections are not the questions.
+- The option that ends in `(empfohlen)` or `(recommended)` is the recommendation (the marker is not part of the option's `text`); at most one per question.
+- A question is answered when exactly one option is ticked. Two ticked options are no answer, and `check` says so (hint `question-problem`), as it does for a key used twice, a question
+  without options and a second recommendation.
+- The key is the engine's: the number is never reused, a question written without one gets the next free number when it is answered.
+- The section is prose, as `## Plan` is: a task without it is complete and valid. The engine reads, ticks and unticks; it never changes `status` or `actor` when
+  the last question is answered (that is for the person).
+- Write: the operation `answer` above, `answer <id> <q1|#n> <n|clear>` on the command line, `:Tasks task answer <id> [question= option=]` in the editor (without
+  `question=` it asks the open questions one after the other and marks the recommended option).
 
 **Finishing a task takes two steps** on purpose. `done_preview` (a read method, `{"id": ...}`) answers `tasks.donepreview`:
 the target, the README row, the steps it would tick, the plan it would close (`closes_plan`), the tasks it would free

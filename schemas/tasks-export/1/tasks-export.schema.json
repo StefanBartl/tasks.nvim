@@ -425,6 +425,11 @@
         "steps": {
           "$ref": "#/$defs/Steps"
         },
+        "open_questions": {
+          "description": "How many questions of the `## Offene Fragen` section of the task are not answered; absent when none is open.",
+          "type": "integer",
+          "minimum": 1
+        },
         "etag": {
           "$ref": "#/$defs/Etag"
         },
@@ -1638,6 +1643,58 @@
             },
             "additionalProperties": false
           }
+        },
+        "questions": {
+          "description": "The questions of the `## Offene Fragen` / `## Open questions` section, in the order written; empty without the section. A question is answered when exactly one option is ticked; `answer` writes it.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["n", "title", "text", "answered", "options"],
+            "properties": {
+              "n": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "key": {
+                "description": "`q1`; absent for a question written without one (the first `answer` gives it one). `answer` takes the key.",
+                "type": "string",
+                "pattern": "^q[0-9]+$"
+              },
+              "title": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "answered": {
+                "type": "boolean"
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["n", "text", "recommended", "chosen"],
+                  "properties": {
+                    "n": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "recommended": {
+                      "type": "boolean"
+                    },
+                    "chosen": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "unevaluatedProperties": false
@@ -2321,7 +2378,7 @@
       "required": ["op", "id"],
       "properties": {
         "op": {
-          "enum": ["set", "reorder", "tick_step", "set_body", "move_area", "view_save", "view_delete"]
+          "enum": ["set", "reorder", "tick_step", "answer", "set_body", "move_area", "view_save", "view_delete"]
         },
         "id": {
           "type": "string"
@@ -2333,6 +2390,19 @@
         },
         "done": {
           "description": "`tick_step`: whether the step is to be ticked (true) or open (false).",
+          "type": "boolean"
+        },
+        "question": {
+          "description": "`answer`: the key (`q1`) of the question.",
+          "type": "string"
+        },
+        "option": {
+          "description": "`answer`: the option that was ticked.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "clear": {
+          "description": "`answer`: true when no option was ticked, the question was open.",
           "type": "boolean"
         },
         "body": {
@@ -2459,7 +2529,7 @@
           "minimum": 1
         },
         "op": {
-          "enum": ["set", "new", "reorder", "done", "move_area", "plan_new", "tick_step", "append_note", "reopen", "set_body", "view_save", "view_delete", "attach"]
+          "enum": ["set", "new", "reorder", "done", "move_area", "plan_new", "tick_step", "answer", "append_note", "reopen", "set_body", "view_save", "view_delete", "attach"]
         },
         "id": {
           "type": "string"

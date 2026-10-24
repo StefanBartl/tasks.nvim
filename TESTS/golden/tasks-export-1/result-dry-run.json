@@ -1,6 +1,6 @@
 {
   "client_op_id": "golden-dry",
-  "digest": "sha256:685564e9438b7a35",
+  "digest": "sha256:0537f7612bfe91ec",
   "dry_run": true,
   "engine": {
     "git": "0000000",
@@ -54,6 +54,15 @@
     },
     {
       "changed_ids": [],
+      "etag_before": "sha256:43e1231c7f816b39",
+      "id": "lib.nvim/alpha",
+      "n": 5,
+      "ok": true,
+      "op": "answer",
+      "outcome": "would_change"
+    },
+    {
+      "changed_ids": [],
       "id": "lib.nvim/alpha",
       "move": {
         "conflicts": [],
@@ -74,7 +83,7 @@
         "to": "cascade.nvim/ROADMAP/tasks/alpha.md",
         "to_area": "cascade.nvim"
       },
-      "n": 5,
+      "n": 6,
       "ok": true,
       "op": "move_area",
       "outcome": "would_move"
@@ -83,7 +92,7 @@
       "changed_ids": [],
       "file": "lib.nvim/ROADMAP/plans/golden-plan.md",
       "id": "lib.nvim/golden-plan",
-      "n": 6,
+      "n": 7,
       "ok": true,
       "op": "plan_new",
       "outcome": "would_create",

@@ -79,6 +79,7 @@ G.cases = {
           { op = "new", area = "cascade.nvim", title = "Golden new task", fields = { prio = 2 } },
           { op = "reorder", id = "lib.nvim/alpha-twin", before = "lib.nvim/alpha" },
           { op = "done", id = "lib.nvim/delta" },
+          { op = "answer", id = "lib.nvim/alpha", question = "q1", option = 1 },
           { op = "move_area", id = "lib.nvim/alpha", to_area = "cascade.nvim" },
           {
             op = "plan_new",

@@ -73,6 +73,7 @@ local model = require("tasks_nvim.model")
 local moves = require("tasks_nvim.moves")
 local mutate = require("tasks_nvim.mutate")
 local scan = require("tasks_nvim.scan")
+local questions = require("tasks_nvim.questions")
 local steps = require("tasks_nvim.steps")
 local vault = require("tasks_nvim.vault")
 
@@ -110,6 +111,7 @@ M.OPS = {
   "move_area",
   "plan_new",
   "tick_step",
+  "answer",
   "append_note",
   "reopen",
   "set_body",
@@ -151,6 +153,13 @@ local FIELDS = {
   },
   move_area = { id = "string", to_area = "string", if_match = "string" },
   tick_step = { id = "string", n = "integer", done = "boolean", if_match = "string" },
+  answer = {
+    id = "string",
+    question = "string",
+    option = "integer",
+    clear = "boolean",
+    if_match = "string",
+  },
   append_note = { id = "string", text = "string", if_match = "string" },
   reopen = { id = "string", status = "string", if_match = "string" },
   set_body = { id = "string", body = "string", if_match = "string" },
@@ -476,6 +485,50 @@ local function do_tick_step(op, ctx)
       id = r.id,
       n = op.n,
       done = r.extra and r.extra.was or false,
+      if_match = r.etag_after,
+    })
+  end
+  return entry
+end
+
+---@param op table
+---@param ctx Tasks.OpsCtx
+---@return table entry
+local function do_answer(op, ctx)
+  local clear = op.clear == true
+  if op.id == nil or op.question == nil or (op.option == nil and not clear) then
+    return refuse("invalid_argument", "answer needs id, question and option (or clear)")
+  end
+  if clear and op.option ~= nil then
+    return refuse("invalid_argument", "answer takes an option or clear, not both")
+  end
+  local r, err, info = mutate.edit_text(op.id, function(text)
+    local new_text, was, qerr = questions.answer(text, op.question, clear and 0 or op.option)
+    if not new_text then
+      return nil, qerr
+    end
+    return new_text, nil, { was = was and was.was or 0, key = was and was.key or op.question }
+  end, {
+    root = ctx.root,
+    today = ctx.today,
+    index = false,
+    if_match = op.if_match,
+    dry_run = ctx.dry,
+  })
+  if not r then
+    return mutate_failure(ctx, err, info)
+  end
+  local entry = text_entry(ctx, r)
+  if r.changed and not ctx.dry then
+    -- Taking the answer back: the option that was ticked, or `clear` when none was; the key is the one the question
+    -- has now.
+    local was = r.extra and r.extra.was or 0
+    entry.inverse = json.object({
+      op = "answer",
+      id = r.id,
+      question = r.extra and r.extra.key or op.question,
+      option = was > 0 and was or nil,
+      clear = was == 0 or nil,
       if_match = r.etag_after,
     })
   end
@@ -1165,6 +1218,7 @@ local HANDLERS = {
   move_area = do_move_area,
   plan_new = do_plan_new,
   tick_step = do_tick_step,
+  answer = do_answer,
   append_note = do_append_note,
   reopen = do_reopen,
   set_body = do_set_body,

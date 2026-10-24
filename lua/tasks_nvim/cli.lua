@@ -31,6 +31,7 @@ local lists = require("tasks_nvim.lists")
 local quick_wins = require("tasks_nvim.quick_wins")
 local fsio = require("tasks_nvim.fsio")
 local mutate = require("tasks_nvim.mutate")
+local questions = require("tasks_nvim.questions")
 local next_pick = require("tasks_nvim.next_pick")
 local plan_scope = require("tasks_nvim.plan_scope")
 local plan_view = require("tasks_nvim.plan_view")
@@ -103,6 +104,8 @@ commands:
        [--lang=de|en] [--folder]             create a task file (--lang: body headings;
                                                --folder: a folder task that can hold assets)
   set <area>/<slug> key=value ...         change frontmatter (empty value removes the key)
+  answer <area>/<slug> <q1|#n> <n|clear>  answer a question of the `## Offene Fragen` section: tick option n (1-based),
+                                          or take the answer back (clear)
   done <area>/<slug> [--commits=repo@sha,repo@sha] [--done-in=text] [--date=YYYY-MM-DD] [--remind=7d|YYYY-MM-DD]
                                           [--no-next] [--unblock]  (--commits adds to the task's own `commits`)
                                           finish: move to Backlog/; prints the tasks it freed and what to start
@@ -276,6 +279,7 @@ local SPECS = {
     flag = { "no-index", "folder" },
   },
   set = { value = {}, flag = { "no-index" } },
+  answer = { value = {}, flag = { "no-index" } },
   ["migrate-actor"] = { value = {}, flag = { "write", "no-index" } },
   done = {
     value = { "done-in", "commits", "date", "remind" },
@@ -1207,6 +1211,41 @@ function commands.set(ctx)
     return 1
   end
   ctx.say(("set\t%s\t%s\t%s"):format(res.id, res.changed and "changed" or "unchanged", res.path))
+  report_index(ctx, res)
+  return 0
+end
+
+function commands.answer(ctx)
+  local args, eo = ctx.args, ctx.eo
+  local id, question, choice = args.pos[1], args.pos[2], args.pos[3]
+  if not id or not question or not choice or #args.pos > 3 then
+    ctx.warn("error: usage: answer <area>/<slug> <q1|#n> <n|clear>")
+    return 2
+  end
+  local option = choice == "clear" and 0 or tonumber(choice)
+  if option == nil or option % 1 ~= 0 or option < 0 then
+    ctx.warn("error: the option is a whole number from 1, or `clear`")
+    return 2
+  end
+  local res, err = mutate.edit_text(id, function(text)
+    local new_text, info, qerr = questions.answer(text, question, option)
+    if not new_text then
+      return nil, qerr
+    end
+    return new_text, nil, { key = info and info.key or question }
+  end, { root = eo.root, today = eo.today, index = not args.opt["no-index"] })
+  if not res then
+    ctx.warn("error: " .. tostring(err))
+    return 1
+  end
+  ctx.say(
+    ("answer\t%s\t%s\t%s\t%s"):format(
+      res.id,
+      res.extra and res.extra.key or question,
+      choice,
+      res.changed and "changed" or "unchanged"
+    )
+  )
   report_index(ctx, res)
   return 0
 end

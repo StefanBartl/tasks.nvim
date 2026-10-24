@@ -31,6 +31,7 @@ lua/tasks_nvim/
 ├── mutate.lua    template, new, set, done (plan / execute / rollback), folderize, attach
 ├── done_flow.lua the one entry for finishing a task (`mutate.done` + the follow-up chain, empty so far)
 ├── steps.lua     the optional `## Plan` section of a task: progress, tick_all, acceptance hint (pure)
+├── questions.lua the optional `## Offene Fragen` section: questions, options, the recommendation, `answer` (pure)
 ├── plans.lua     plan files under ROADMAP/plans (parse, scan, new, close)
 ├── plan.lua      readiness, scopes, stages, leverage, effective prio, critical path, cycles (pure)
 ├── plan_scope.lua  reads the vault for the plan (open tasks, finished ids, the scope asked for)

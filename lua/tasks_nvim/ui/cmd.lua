@@ -26,6 +26,7 @@ local fsio = require("tasks_nvim.fsio")
 local index = require("tasks_nvim.index")
 local model = require("tasks_nvim.model")
 local mutate = require("tasks_nvim.mutate")
+local questions = require("tasks_nvim.questions")
 local scan = require("tasks_nvim.scan")
 local staleness = require("tasks_nvim.staleness")
 local vault = require("tasks_nvim.vault")
@@ -1462,6 +1463,94 @@ function M.task_set(ctx)
     refresh_buffers(res.path)
   end
   notify.info(("set %s: %s"):format(res.id, res.changed and "changed" or "unchanged"))
+end
+
+-- ── task answer ──────────────────────────────────────────────────────────────
+
+---Write the answer into the file and say so.
+---@param id string
+---@param question string|integer
+---@param option integer  # 0 takes the answer back.
+local function write_answer(id, question, option)
+  local res, err = mutate.edit_text(id, function(text)
+    local new_text, info, qerr = questions.answer(text, question, option)
+    if not new_text then
+      return nil, qerr
+    end
+    return new_text, nil, { key = info and info.key or tostring(question) }
+  end, {})
+  if not res then
+    notify.error(tostring(err))
+    return
+  end
+  if res.changed then
+    refresh_buffers(res.path)
+  end
+  notify.info(
+    ("answer %s %s: %s"):format(
+      res.id,
+      res.extra and res.extra.key or tostring(question),
+      res.changed and "changed" or "unchanged"
+    )
+  )
+end
+
+---`:Tasks task answer <id> [question=q1 option=2|clear]`: with both, the answer is written; without, the open questions
+---are asked one after the other (the recommended option is marked), so a decision can be made from the editor.
+---@param ctx table
+function M.task_answer(ctx)
+  if #ctx.rest > 0 then
+    notify.error("unexpected argument: " .. table.concat(ctx.rest, " "))
+    return
+  end
+  local id = ctx.args.id
+  local task = scan.find(id)
+  local summary = task and task.questions
+  if not summary then
+    notify.error(id .. " has no questions (no `## Offene Fragen` section)")
+    return
+  end
+  local question, choice = ctx.kv.question, ctx.kv.option
+  if question ~= nil or choice ~= nil then
+    local n = choice == "clear" and 0 or tonumber(choice)
+    if question == nil or n == nil then
+      notify.error("answer needs question=<q1|#n> and option=<n|clear>")
+      return
+    end
+    write_answer(id, question, n)
+    return
+  end
+  local open = {}
+  for _, q in ipairs(summary.items) do
+    if not q.answered then
+      open[#open + 1] = q
+    end
+  end
+  if #open == 0 then
+    notify.info(id .. ": every question is answered")
+    return
+  end
+  local function ask(i)
+    local q = open[i]
+    if not q then
+      return
+    end
+    local labels = {}
+    for _, o in ipairs(q.options) do
+      labels[#labels + 1] = o.text .. (o.recommended and "  (recommended)" or "")
+    end
+    vim.ui.select(
+      labels,
+      { prompt = q.title .. (q.text ~= "" and (": " .. q.text) or "") },
+      function(_, at)
+        if at then
+          write_answer(id, q.key or q.n, at)
+        end
+        ask(i + 1)
+      end
+    )
+  end
+  ask(1)
 end
 
 -- ── task done ────────────────────────────────────────────────────────────────

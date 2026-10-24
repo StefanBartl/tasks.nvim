@@ -393,6 +393,25 @@ export type TaskDocument = Head & {
     ticked: boolean;
     dropped: boolean;
   }[];
+  /**
+   * The questions of the `## Offene Fragen` / `## Open questions` section, in the order written; empty without the section. A question is answered when exactly one option is ticked; `answer` writes it.
+   */
+  questions?: {
+    n: number;
+    /**
+     * `q1`; absent for a question written without one (the first `answer` gives it one). `answer` takes the key.
+     */
+    key?: string;
+    title: string;
+    text: string;
+    answered: boolean;
+    options: {
+      n: number;
+      text: string;
+      recommended: boolean;
+      chosen: boolean;
+    }[];
+  }[];
 };
 /**
  * tasks.next: what to start, with the reason; or why there is nothing.
@@ -683,6 +702,10 @@ export interface TaskEntry {
   valid: boolean;
   problems: Problem[];
   steps?: Steps;
+  /**
+   * How many questions of the `## Offene Fragen` section of the task are not answered; absent when none is open.
+   */
+  open_questions?: number;
   etag?: Etag;
   readiness?: Readiness;
   /**
@@ -889,6 +912,7 @@ export interface ResultEntry {
     | "move_area"
     | "plan_new"
     | "tick_step"
+    | "answer"
     | "append_note"
     | "reopen"
     | "set_body"
@@ -974,7 +998,7 @@ export interface ResultEntry {
  * The operation that undoes a change: send it as a new operation (its `if_match` is the version the change left). A key the change added is `null` in the patch of a `set`.
  */
 export interface Inverse {
-  op: "set" | "reorder" | "tick_step" | "set_body" | "move_area" | "view_save" | "view_delete";
+  op: "set" | "reorder" | "tick_step" | "answer" | "set_body" | "move_area" | "view_save" | "view_delete";
   id: string;
   /**
    * `tick_step`: the number of the step.
@@ -984,6 +1008,18 @@ export interface Inverse {
    * `tick_step`: whether the step is to be ticked (true) or open (false).
    */
   done?: boolean;
+  /**
+   * `answer`: the key (`q1`) of the question.
+   */
+  question?: string;
+  /**
+   * `answer`: the option that was ticked.
+   */
+  option?: number;
+  /**
+   * `answer`: true when no option was ticked, the question was open.
+   */
+  clear?: boolean;
   /**
    * `set_body`: the text below the frontmatter that the task had.
    */

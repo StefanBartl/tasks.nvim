@@ -1,5 +1,5 @@
 {
-  "digest": "sha256:1d8ea3acd3006039",
+  "digest": "sha256:c3d4f835510a297f",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -52,12 +52,13 @@
       "created": "2026-01-01",
       "effort": "S",
       "effort_days": 0.5,
-      "etag": "sha256:e1e83d9a74e1f427",
+      "etag": "sha256:43e1231c7f816b39",
       "file": "lib.nvim/ROADMAP/tasks/alpha.md",
       "folder": false,
       "group": "open|1",
       "id": "lib.nvim/alpha",
       "kind": "feature",
+      "open_questions": 1,
       "prio": 1,
       "problems": [],
       "readiness": {
@@ -209,7 +210,7 @@
   "next_offset": 5,
   "offset": 0,
   "plugin": "tasks.nvim",
-  "rev": "rev:e06b36",
+  "rev": "rev:c5d42f",
   "schema": 1,
   "total": 14,
   "vault": {

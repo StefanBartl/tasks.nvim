@@ -59,7 +59,7 @@ function M.build(H)
     },
     "open",
     'Alpha <script>alert(1)</script> & "quotes" \\ slash',
-    "\nThe body of alpha.\n\n## Plan\n\n- [x] 1. first\n- [ ] 2. second\n- [ ] 3. third (dropped)\n"
+    "\nThe body of alpha.\n\n## Plan\n\n- [x] 1. first\n- [ ] 2. second\n- [ ] 3. third (dropped)\n\n\n## Offene Fragen\n\n### Which format? [q1]\nA line of text.\n- [ ] Section (empfohlen)\n- [ ] Frontmatter\n\n### Settled already [q2]\n- [x] Yes\n- [ ] No\n"
   )
   task(H, root, "lib.nvim", "alpha-twin", {
     { "prio", "1" },

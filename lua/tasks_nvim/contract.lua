@@ -49,11 +49,12 @@ M.PLUGIN = "tasks.nvim"
 M.ENGINE_VERSION = "0.1.0-dev"
 
 ---What this engine can answer; an app shows only what is listed here. Sorted.
----`ops` is the write door (`set`, `new`, `reorder`, `done`, `move_area`, `plan_new`, `tick_step`, `append_note`, `reopen`, `set_body`, `view_save`, `view_delete`, `attach`), `if_match` the compare-and-set on a task's
+---`ops` is the write door (`set`, `new`, `reorder`, `done`, `move_area`, `plan_new`, `tick_step`, `answer`, `append_note`, `reopen`, `set_body`, `view_save`, `view_delete`, `attach`), `if_match` the compare-and-set on a task's
 ---`etag`, `done_preview` what `done` needs first, `reorder` a move inside a group, `move_area_preview` the report of a
 ---move to another area (the move itself is not there yet).
 ---@type string[]
 M.CAPABILITIES = {
+  "answer",
   "append_note",
   "areas",
   "attach",
@@ -268,6 +269,10 @@ local function task_entry(root, task, node, rank)
       ticked = task.plan_steps.ticked,
       dropped = task.plan_steps.dropped,
     })
+  end
+  -- Only a task that waits for an answer says so: a document without open questions reads as before.
+  if task.questions and task.questions.open > 0 then
+    entry.open_questions = task.questions.open
   end
   for i, msg in ipairs(task.errors or {}) do
     entry.problems[#entry.problems + 1] =
@@ -840,6 +845,23 @@ function M.task(id, opts)
   doc.steps = vim.tbl_map(function(s)
     return { n = s.n, text = s.text, ticked = s.done == true, dropped = s.dropped == true }
   end, found.plan_steps and found.plan_steps.items or {})
+  doc.questions = vim.tbl_map(function(q)
+    return json.object({
+      n = q.n,
+      key = q.key,
+      title = q.title,
+      text = clip(q.text, M.LIMITS.summary),
+      answered = q.answered,
+      options = vim.tbl_map(function(o)
+        return json.object({
+          n = o.n,
+          text = o.text,
+          recommended = o.recommended,
+          chosen = o.chosen,
+        })
+      end, q.options),
+    })
+  end, found.questions and found.questions.items or {})
   return seal(doc, rev_of(view, { doc.task })), nil
 end
 

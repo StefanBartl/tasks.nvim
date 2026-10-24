@@ -292,6 +292,12 @@ A new task whose slug another area already has turns every bare `[[slug]]` that 
 `warn: [[dep-a]] now names cascade.nvim/dep-a and lib.nvim/dep-a: wikilink-ambiguous in lib.nvim/linked (write the id
 there)`. The task is created all the same.
 
+### `:Tasks task answer <id> [question=<q1|#n> option=<n|clear>]`
+
+Answers a question of the `## Offene Fragen` section of an open task ([the format](CONTRACT.md#the-questions-of-a-task)). With `question=` and `option=` the answer is written
+(`option=clear` takes it back). Without them the open questions are asked one after the other, with the options as a choice list; the recommended option is
+marked `(recommended)`. The status and the actor of the task stay as they are. Command line: `answer <id> <q1|#n> <n|clear>`.
+
 ### `:Tasks attach <id> <file> [name=<file name>]` / `attach <id> from=clipboard|latest [dir=<folder>]` / `task folderize <id>`
 
 A task may be a folder `tasks/<slug>/<slug>.md` that holds assets (concept section 12.2).

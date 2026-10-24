@@ -7,6 +7,12 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Questions with options in a task: the optional section `## Offene Fragen` / `## Open questions` (a `###` heading with a key `[qN]`,
+  checkbox options below it, one of them marked `(empfohlen)` / `(recommended)`), so that a front end can offer the options and write the answer.
+  `tasks_nvim.questions` reads and writes it byte-exactly; `check` reports a key used twice, two ticked options, a second recommendation and a question
+  without options (hint `question-problem`). Contract `tasks-ops/1`: the operation `answer` (`id`, `question`, `option` or `clear`, `if_match`), capability of the same name, with an inverse. Contract
+  `tasks-export/1`: `open_questions` in the task entry (only when a question is open) and `questions` in `tasks.task`. Command line `answer <id> <q1|#n> <n|clear>`, editor
+  `:Tasks task answer <id> [question= option=]` (asks the open questions, marks the recommendation). Schema, goldens, types and spec.
 - Contract `tasks-ops/1`: `attach_dirs` in a request, the folders `attach` with `from: latest` takes the newest image
   from, given by the caller that runs the engine for a page (the hub, from its settings); given and empty, `latest` is
   refused and only the clipboard is read, never the folders of the system (the hub runs the engine without the person's
