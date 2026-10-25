@@ -60,10 +60,13 @@ local RECOMMENDED = { "empfohlen", "recommended" }
 ---@return string stripped
 ---@return boolean recommended
 local function split_recommended(text)
+  -- `text` is trimmed (see `checkbox`). The marker is compared at the end by length: a pattern with a leading `%s*`
+  -- would go quadratic on a line that holds a long run of blanks (SEC-32).
+  local lower = text:lower()
   for _, word in ipairs(RECOMMENDED) do
-    local at = text:lower():find("%s*%(" .. word .. "%)%s*$")
-    if at then
-      return fsio.trim(text:sub(1, at - 1)), true
+    local marker = "(" .. word .. ")"
+    if #lower >= #marker and lower:sub(-#marker) == marker then
+      return fsio.trim(text:sub(1, #text - #marker)), true
     end
   end
   return text, false
@@ -82,13 +85,15 @@ end
 ---@return string|nil title
 ---@return string|nil key
 local function heading(bare)
-  local rest = bare:match("^###%s+(.-)%s*$")
-  if not rest or rest == "" then
+  -- Linear: a lazy `(.-)%s*$` backtracks over a long run of blanks (SEC-32), so the line is cut and trimmed instead.
+  local raw = bare:match("^###%s+(.*)$")
+  local rest = raw and fsio.trim(raw) or ""
+  if rest == "" then
     return nil, nil
   end
-  local title, key = rest:match("^(.-)%s*%[(q%d+)%]$")
-  if title then
-    return title, key
+  local at, _, key = rest:find("%[(q%d+)%]$")
+  if at then
+    return fsio.trim(rest:sub(1, at - 1)), key
   end
   return rest, nil
 end
@@ -348,7 +353,7 @@ function M.answer(text, question, option)
   if needs_key then
     local head = lines[q.line]
     local cr = head:match("\r$") or ""
-    lines[q.line] = bare_of(head):gsub("%s+$", "") .. " [" .. key .. "]" .. cr
+    lines[q.line] = fsio.trim(bare_of(head)) .. " [" .. key .. "]" .. cr
   end
   local new_text = table.concat(lines, "\n")
   if new_text == text then

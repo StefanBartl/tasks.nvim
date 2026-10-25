@@ -397,4 +397,83 @@ return function(H)
   has(refused.err, "there is no question q9")
   local shown = run_plain({ "show", "lib.nvim/cliask" })
   has(shown.out, "open_questions: 2")
+
+  -- ── a line of blanks is no way to stall the engine (SEC-32) ────────────────
+  local blanks = string.rep(" ", 200000)
+  local hostile = table.concat({
+    "## Offene Fragen",
+    "### " .. blanks .. "x",
+    "- [ ] " .. blanks .. "x",
+    "### " .. blanks .. "y [q2]" .. blanks,
+    "- [ ] " .. blanks .. "(empfohlen)" .. blanks,
+    "- [ ] option",
+  }, "\n")
+  local started = os.clock()
+  local slow = questions.parse(hostile)
+  local slow_answer = questions.answer(hostile, 1, 1)
+  ok(os.clock() - started < 2, "parsing and answering a line of 200000 blanks stays linear")
+  ok(slow ~= nil and slow.total == 2 and slow_answer ~= nil)
+  eq(slow.items[2].key, "q2")
+  eq(slow.items[2].options[1].recommended, true, "the marker counts at the end of the trimmed text")
+
+  -- ── :Tasks task answer ─────────────────────────────────────────────────────
+  local cmd = require("tasks_nvim.ui.cmd")
+  local vault = require("tasks_nvim.vault")
+  vault.set_root(root)
+  local told = {}
+  local orig = { notify = vim.notify, select = vim.ui.select }
+  vim.notify = function(msg)
+    told[#told + 1] = tostring(msg)
+  end
+  F.task(H, root, "lib.nvim", "ed", F.meta("Ed", "decision", {}), BODY)
+  local ed = root .. "/lib.nvim/ROADMAP/tasks/ed.md"
+  -- with question= and option= the answer is written
+  cmd.task_answer({
+    rest = {},
+    args = { id = "lib.nvim/ed" },
+    kv = { question = "q1", option = "2" },
+  })
+  has(H.read(ed), "- [x] List in the frontmatter")
+  has(table.concat(told, "\n"), "answer lib.nvim/ed q1: changed")
+  cmd.task_answer({
+    rest = {},
+    args = { id = "lib.nvim/ed" },
+    kv = { question = "q1", option = "clear" },
+  })
+  has(H.read(ed), "- [ ] List in the frontmatter")
+  -- half of the pair, a word that is no option, an unknown question: nothing is written, each is said
+  local bytes = H.read(ed)
+  told = {}
+  cmd.task_answer({ rest = {}, args = { id = "lib.nvim/ed" }, kv = { question = "q1" } })
+  cmd.task_answer({
+    rest = {},
+    args = { id = "lib.nvim/ed" },
+    kv = { question = "q1", option = "x" },
+  })
+  cmd.task_answer({
+    rest = {},
+    args = { id = "lib.nvim/ed" },
+    kv = { question = "q9", option = "1" },
+  })
+  eq(H.read(ed), bytes)
+  eq(#told, 3, table.concat(told, "|"))
+  -- without them every open question is asked, the recommended option marked, and the choice written
+  local asked = {}
+  vim.ui.select = function(items, opts, on_choice)
+    asked[#asked + 1] = { items = items, prompt = opts.prompt }
+    on_choice(items[1], 1)
+  end
+  cmd.task_answer({ rest = {}, args = { id = "lib.nvim/ed" }, kv = {} })
+  eq(#asked, 2, "q1 and the keyless question are open, q2 is answered")
+  eq(asked[1].items[1], "Section in the body  (recommended)")
+  has(asked[1].prompt, "Which format?")
+  local after_ask = H.read(ed)
+  has(after_ask, "- [x] Section in the body (empfohlen)")
+  has(after_ask, "### Written without a key [q3]")
+  -- a task without questions is told so
+  F.task(H, root, "lib.nvim", "edplain", F.meta("Ed plain", "open", {}), "\nNothing.\n")
+  told = {}
+  cmd.task_answer({ rest = {}, args = { id = "lib.nvim/edplain" }, kv = {} })
+  has(table.concat(told, "\n"), "has no questions")
+  vim.notify, vim.ui.select = orig.notify, orig.select
 end
