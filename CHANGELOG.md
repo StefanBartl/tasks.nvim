@@ -7,6 +7,8 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- `new <a>,<b> "title"` on the command line (and `mutate.new_many`): one task with the same text in each area; every area is
+  tried as a dry run first, so an unknown one makes none.
 - `:Tasks new`: a `Links:` line in the form and `links=` on the command line (web addresses, `http://` or `https://`; a
   bad entry is reported in the form). The form is `Area`, `Title`, `Summary`, choices, `Tags`, `Refs`, `Links`, sections.
 - Task field `links`: web addresses (`http://` or `https://`, nothing else) apart from `refs`, which stays for paths, commits and ids.

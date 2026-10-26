@@ -278,6 +278,45 @@ return function(H)
   eq(hp.sections.context, "## Notes about the thing\nkept")
   eq(hp.sections.notes, "")
 
+  -- ── the headings and hints of the body sections: the same text as the capture dialog of tasks-desktop ──
+  -- `ui/src/lib/fields.test.ts` there pins the same two strings; change one side and the other names it.
+  local sample = { context = "Why", acceptance = "works\n- [x] kept", notes = "" }
+  eq(
+    require("tasks_nvim.mutate").body_sections(sample, "en"),
+    table.concat({
+      "## Context",
+      "",
+      "Why",
+      "",
+      "## Acceptance",
+      "",
+      "- [ ] works",
+      "- [x] kept",
+      "",
+      "## Notes",
+      "",
+      "<!-- Decisions, dead ends, references. -->",
+      "",
+    }, "\n")
+  )
+  eq(
+    require("tasks_nvim.mutate").body_sections({ context = "", acceptance = "", notes = "n" }, "de"),
+    table.concat({
+      "## Kontext",
+      "",
+      "<!-- Warum, woher kam das. -->",
+      "",
+      "## Akzeptanz",
+      "",
+      "<!-- was am Ende wahr sein muss, als Checkliste -->",
+      "",
+      "## Notizen",
+      "",
+      "n",
+      "",
+    }, "\n")
+  )
+
   -- ── a `!` line of a text is text; only the report at the top is stripped ────
   local img = form.template({ area = "ALL", title = "T" })
   table.insert(img, find(img, "## Kontext") + 1, "![shot](assets/a.png)")

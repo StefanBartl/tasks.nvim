@@ -1126,6 +1126,48 @@ function M.new(area, opts)
   end
 end
 
+---Create the same task in several areas: `areas` is one name or a comma list (blanks around a name dropped, a name
+---once). Every area is tried as a dry run first; one that fails stops everything with nothing written. A failure
+---after the first write (a race, a full disk) names the tasks that exist already.
+---@param areas string
+---@param opts Tasks.NewOpts
+---@return table[]|nil results  # One `new` result per area, in the order named.
+---@return string|nil err
+function M.new_many(areas, opts)
+  local names = {}
+  for part in vim.gsplit(tostring(areas), ",", { plain = true }) do
+    local name = trim(part)
+    if name ~= "" and not vim.tbl_contains(names, name) then
+      names[#names + 1] = name
+    end
+  end
+  if #names <= 1 then
+    -- one area (or none: `new` says what is wrong with the name)
+    local res, err = M.new(names[1] or areas, opts)
+    return res and { res } or nil, err
+  end
+  for _, name in ipairs(names) do
+    local _, err = M.new(name, vim.tbl_extend("force", opts, { dry_run = true }))
+    if err then
+      return nil, ("%s: %s"):format(name, err)
+    end
+  end
+  local out = {}
+  for _, name in ipairs(names) do
+    local res, err = M.new(name, opts)
+    if not res then
+      local ids = {}
+      for _, made in ipairs(out) do
+        ids[#ids + 1] = made.id
+      end
+      return nil,
+        ("%s: %s (created before: %s)"):format(name, tostring(err), table.concat(ids, ", "))
+    end
+    out[#out + 1] = res
+  end
+  return out, nil
+end
+
 -- ── set ──────────────────────────────────────────────────────────────────────
 
 ---The frontmatter values of `keys` as the file carries them, in the shape `set` takes them back: the inverse of a

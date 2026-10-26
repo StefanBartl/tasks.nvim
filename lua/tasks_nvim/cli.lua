@@ -99,7 +99,7 @@ commands:
   index [<area>] [--check]                (re)write ROADMAP/TASKS.md; --check only reports
   migrate-actor [<area>] [--write]        propose actor=me for tasks that wait for you (status decision, tag
                                           needs-user) and leave every other task EMPTY; dry run unless --write
-  new <area> <title> [--kind=k] [--prio=1..3] [--effort=XS..XL|0.5d] [--value=1..5] [--actor=cdx|me|pair] [--after=id,id] [--order=2.5] [--plan=id] [--phase=word] [--tags=a,b]
+  new <area>[,<area>...] <title> [--kind=k] [--prio=1..3] [--effort=XS..XL|0.5d] [--value=1..5] [--actor=cdx|me|pair] [--after=id,id] [--order=2.5] [--plan=id] [--phase=word] [--tags=a,b]
        [--category=c,d] [--severity=low|medium|high|critical] [--refs=path,repo@sha] [--links=https://...,...]
        [--summary=text] [--slug=slug] [--status=s]
        [--lang=de|en] [--folder]             create a task file (--lang: body headings;
@@ -1150,7 +1150,7 @@ function commands.new(ctx)
     ctx.warn('error: usage: new <area> "<title>" [options]')
     return 2
   end
-  local res, err = mutate.new(area, {
+  local new_opts = {
     root = eo.root,
     today = eo.today,
     title = title,
@@ -1174,16 +1174,21 @@ function commands.new(ctx)
     status = opt.status --[[@as string|nil]],
     folder = opt.folder == true,
     index = not opt["no-index"],
-  })
-  if not res then
-    ctx.warn("error: " .. tostring(err))
+  }
+  -- `a,b`: one task in each area, the same text in all; every area is tried as a dry run first, so a bad one
+  -- stops the whole thing before anything is written
+  local made, merr = mutate.new_many(area, new_opts)
+  if not made then
+    ctx.warn("error: " .. tostring(merr))
     return 1
   end
-  ctx.say(("created\t%s\t%s"):format(res.id, res.path))
-  if res.ambiguous then
-    ctx.warn("warn: " .. require("tasks_nvim.wikilinks").ambiguity_message(res.ambiguous))
+  for _, res in ipairs(made) do
+    ctx.say(("created\t%s\t%s"):format(res.id, res.path))
+    if res.ambiguous then
+      ctx.warn("warn: " .. require("tasks_nvim.wikilinks").ambiguity_message(res.ambiguous))
+    end
+    report_index(ctx, res)
   end
-  report_index(ctx, res)
   return 0
 end
 

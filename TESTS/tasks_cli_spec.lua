@@ -433,4 +433,31 @@ return function(H)
   has(refs_text, "refs: [lua/a.lua, lib.nvim@abc1234]")
   has(refs_text, "## Context")
   eq(run({ "new", "lib.nvim", "Bad lang", "--lang=fr" }).code, 1)
+
+  -- ── new in several areas: a,b makes one task in each, a bad name makes none ─
+  r = run({ "new", "lib.nvim, cascade.nvim,lib.nvim", "Both areas", "--links=https://x.org/both" })
+  eq(r.code, 0, r.err)
+  local made_lines = lines(r.out)
+  local created = {}
+  for _, l in ipairs(made_lines) do
+    local id = l:match("^created\t([^\t]+)\t")
+    if id then
+      created[#created + 1] = id
+    end
+  end
+  eq(created, { "lib.nvim/both-areas", "cascade.nvim/both-areas" }, "once each, in the order named")
+  for _, id in ipairs(created) do
+    local path = vim.fs.joinpath(root, (id:gsub("/", "/ROADMAP/tasks/")) .. ".md")
+    has(assert(H.read(path)), "links: [https://x.org/both]")
+  end
+  r = run({ "new", "lib.nvim,nowhere", "Never made" })
+  eq(r.code, 1)
+  has(r.err, "nowhere: unknown area")
+  ok(
+    not H.exists(root .. "/lib.nvim/ROADMAP/tasks/never-made.md"),
+    "nothing is written for the good area either"
+  )
+  r = run({ "new", "nowhere", "Single bad" })
+  eq(r.code, 1)
+  has(r.err, "unknown area: nowhere")
 end
