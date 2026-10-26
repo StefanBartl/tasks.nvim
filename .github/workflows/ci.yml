@@ -1,47 +1,54 @@
+# CI of tasks.nvim.
+#
+# Runs on a self-hosted runner (the author's Windows machine): the repository is private and has no paid plan, so
+# hosted runners do not start (billing/spending-limit errors, not a code problem). Runner: $REPOS_DIR/tasks-vault/
+# TOOLS/self-hosted-runner.md; start it with `scripts/runners.ps1 ensure tasks.nvim` of the nvim config (or
+# `:MyPlugins ci runners`). Without a running runner a push stays "Queued" (no red mark, discarded after 24 h).
+# Only for PRIVATE repos with trusted authors; no `pull_request` trigger on purpose (a PR would run its own workflow
+# with the author's rights on this machine). Windows only: the Linux and macOS legs of the former matrix are gone.
+#
+# The tools (nvim, stylua, luacheck, node) are expected on the runner's PATH and are not pinned here (the hosted jobs
+# pinned stylua 2.5.2 and luacheck 1.2.0); every job prints the versions it used.
+
 name: CI
 
 on:
   push:
     branches: [main]
-  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# `shell: bash` resolves to the WSL launcher on this machine; Git Bash is named explicitly, in 8.3 form because the
+# shell string is split at spaces.
+defaults:
+  run:
+    shell: C:\PROGRA~1\Git\bin\bash.exe --noprofile --norc -e -o pipefail {0}
 
 jobs:
   stylua:
     name: stylua (format check)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, windows]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
-      - uses: JohnnyMorganz/stylua-action@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          # Pinned, not "latest", like every repo of the fleet.
-          version: v2.5.2
-          args: --check .
+      - run: stylua --version && stylua --check .
 
   luacheck:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, windows]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
-      - uses: leafo/gh-actions-lua@v13
-        with:
-          luaVersion: "5.4"
-      - uses: leafo/gh-actions-luarocks@v6
-      - run: luarocks install luacheck 1.2.0
-      - run: luacheck lua TESTS scripts
+      - run: luacheck --version | head -n1 && luacheck lua TESTS scripts
 
   tests:
-    name: specs (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: specs (windows)
+    runs-on: [self-hosted, windows]
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    defaults:
-      run:
-        shell: bash
     steps:
       - uses: actions/checkout@v5
       # lib.nvim is a hard runtime dependency; TESTS/run.lua finds it in .deps/lib.nvim.
@@ -55,16 +62,13 @@ jobs:
         with:
           repository: folke/snacks.nvim
           path: .deps/snacks.nvim
-      - uses: rhysd/action-setup-vim@v1
-        with:
-          neovim: true
-          version: stable
       # Checked out from the branch that only moves once the dependency's own CI is green.
       - uses: actions/checkout@v5
         with:
-          repository: "WKDSteve/testing.nvim"
+          repository: WKDSteve/testing.nvim
           path: .deps/testing.nvim
           ref: ci-verified
+      - run: nvim --version | head -n1
       - run: bash scripts/test.sh --json "$RUNNER_TEMP/testing-ir.json"
         env:
           TASKS_REQUIRE_SNACKS: "1"
@@ -72,11 +76,11 @@ jobs:
         env:
           TASKS_REQUIRE_SNACKS: "1"
         run: bash scripts/test.sh conformance
-      # The IR is what a reporter or a person reads to find out WHICH case failed on WHICH platform.
+      # The IR is what a reporter or a person reads to find out WHICH case failed.
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: testing-ir-${{ matrix.os }}
+          name: testing-ir-windows
           path: ${{ runner.temp }}/testing-ir.json
           if-no-files-found: ignore
           retention-days: 14
@@ -85,14 +89,11 @@ jobs:
   # documents that must be refused, the rules for a reader, and the generated TypeScript types.
   contract:
     name: contract (schema, golden files, types)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, windows]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-      - run: npm ci
+      - run: node --version && npm ci
         working-directory: contract
       - run: node check.mjs
         working-directory: contract
