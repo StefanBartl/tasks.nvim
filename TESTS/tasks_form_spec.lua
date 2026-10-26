@@ -216,6 +216,43 @@ return function(H)
   has(ev.opts.body, "## Context\n\nctx")
   has(ev.opts.body, "## Acceptance")
 
+  -- ── the fields of the form are the fields `new` takes (the write door), minus the slug ──
+  -- The capture dialog of tasks-desktop is held to the same list (`ui/src/lib/captureFields.test.ts` there): a field
+  -- added to the engine's `new` has to be in both forms, or in the list of what a form leaves out on purpose.
+  local FORM_FIELDS = {
+    "actor",
+    "category",
+    "effort",
+    "kind",
+    "links",
+    "prio",
+    "refs",
+    "severity",
+    "status",
+    "summary",
+    "tags",
+    "value",
+  }
+  local in_form = {}
+  for _, f in ipairs(form.fields()) do
+    in_form[#in_form + 1] = f.name
+  end
+  vim.list_extend(in_form, { "tags", "refs", "links", "summary" })
+  table.sort(in_form)
+  eq(in_form, FORM_FIELDS, "the fields of the :Tasks new form")
+  local engine_new = {}
+  for name in pairs(require("tasks_nvim.ops").NEW_FIELDS) do
+    if name ~= "slug" then
+      engine_new[#engine_new + 1] = name
+    end
+  end
+  table.sort(engine_new)
+  eq(
+    engine_new,
+    FORM_FIELDS,
+    "a field of `new` that no form offers (add it to both forms, or leave it out here)"
+  )
+
   -- ── Links: web addresses only, apart from Refs ─────────────────────────────
   local lk = form.template({ area = "ALL", title = "T", links = "https://a.org/x#y, http://b.io" })
   ok(find(lk, "Links: https://a.org/x#y, http://b.io"), "prefilled")

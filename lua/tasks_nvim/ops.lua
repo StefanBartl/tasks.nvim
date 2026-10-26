@@ -210,6 +210,7 @@ local NEW_FIELDS = {
   status = true,
   slug = true,
 }
+M.NEW_FIELDS = NEW_FIELDS
 
 -- ── what a front end may write ───────────────────────────────────────────────
 
