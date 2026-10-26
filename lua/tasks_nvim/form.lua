@@ -207,13 +207,18 @@ function M.parse(lines)
     unknown = {},
   }
   local current ---@type Tasks.FormField|nil
+  local in_report = true -- the leading lines that start with `!` are the report of an earlier submit
   local section ---@type string|nil  -- body section being read: its lines are text, never fields
   local texts = {} ---@type table<string, string[]>
   for _, raw in ipairs(lines) do
     local line = rtrim(raw)
-    if line:sub(1, 1) == "!" or line:sub(1, 4) == "<!--" then
-    -- report or hint: not form content
+    if in_report and line:sub(1, 1) == "!" then
+    -- the error report at the top: not form content
+    elseif line:sub(1, 4) == "<!--" then
+      in_report = false
+    -- a hint: not form content
     else
+      in_report = false
       local name = line:match("^##%s+([%w_]+)")
       -- a section heading is the whole line (`## Notizen`): `## Notes about x` inside a text is text
       local skey = name and line:match("^##%s+[%w_]+%s*$") and section_key(name)
@@ -469,9 +474,15 @@ end
 ---@param lines string[]
 ---@return string[]
 function M.strip_errors(lines)
+  -- Only the report at the top (`error_lines` puts it there): a `![shot](x.png)` or `!important` line of a text
+  -- further down is the person's, not ours.
   local out = {}
+  local in_report = true
   for _, l in ipairs(lines) do
-    if l:sub(1, 1) ~= "!" then
+    if in_report and l:sub(1, 1) == "!" then
+      -- part of the report
+    else
+      in_report = false
       out[#out + 1] = l
     end
   end

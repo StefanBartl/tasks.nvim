@@ -278,6 +278,15 @@ return function(H)
   eq(hp.sections.context, "## Notes about the thing\nkept")
   eq(hp.sections.notes, "")
 
+  -- ── a `!` line of a text is text; only the report at the top is stripped ────
+  local img = form.template({ area = "ALL", title = "T" })
+  table.insert(img, find(img, "## Kontext") + 1, "![shot](assets/a.png)")
+  table.insert(img, find(img, "## Kontext") + 2, "!important: keep")
+  local with_report = vim.list_extend(form.error_lines({ "boom" }), img)
+  eq(form.strip_errors(with_report), img, "the report goes, the text stays")
+  eq(form.parse(with_report).sections.context, "![shot](assets/a.png)\n!important: keep")
+  eq(form.parse(form.strip_errors(img)).title, "T")
+
   -- ── several areas: one task each ───────────────────────────────────────────
   eq(form.split_areas(" a , b,,a "), { "a", "b" }, "trimmed, once each, in the order typed")
   local ma = form.template({ area = "ALL, lib.nvim", title = "T" })
