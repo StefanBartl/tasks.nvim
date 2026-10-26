@@ -263,6 +263,9 @@ local function meta_pairs(meta)
   if meta.refs then
     pairs_[#pairs_ + 1] = { "refs", meta.refs }
   end
+  if meta.rules then
+    pairs_[#pairs_ + 1] = { "rules", meta.rules }
+  end
   return pairs_
 end
 
@@ -886,6 +889,15 @@ function M.new(area, opts)
     end
     refs = #list > 0 and list or nil
   end
+  local rules
+  if opts.rules ~= nil then
+    -- rule ids are single tokens, as tags are
+    local list, rerr3 = string_list(opts.rules, "rules", true)
+    if not list then
+      return nil, rerr3
+    end
+    rules = #list > 0 and list or nil
+  end
   local lang, langerr = check_lang(opts.lang)
   if not lang then
     return nil, langerr
@@ -940,6 +952,7 @@ function M.new(area, opts)
       category = category,
       severity = opts.severity,
       refs = refs,
+      rules = rules,
       created = today,
       updated = today,
     }),

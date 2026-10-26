@@ -19,7 +19,8 @@
 ![Status](https://img.shields.io/badge/status-alpha-red)
 
 > Part of the [wkd](https://stefanbartl.github.io/wkd/) family of plugins. It pairs with
-> [rules.nvim](https://github.com/StefanBartl/rules.nvim) (findings of a rule check become tasks; planned) and
+> [rules.nvim](https://github.com/StefanBartl/rules.nvim) (the work list of a rule check becomes tasks: `import --from-rules`, see
+> [COMMANDS.md](docs/COMMANDS.md#headless-import---from-rules-and-bootstrap-rulesnvim)) and
 > builds on [lib.nvim](https://github.com/StefanBartl/lib.nvim).
 
 Open work as **one Markdown file per task**, with a few lines of flat YAML frontmatter, and a generated overview

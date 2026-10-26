@@ -7,6 +7,12 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Command line `import <area> --from-rules=<file|->` and `bootstrap <area> [--from-rules=...]`: a work list of
+  rules.nvim (`rules-work-list/1`) becomes one task per rule that fails or nobody judged (`rules:`, `category: [ruleset]`,
+  prio from the severity, the findings in `refs`), a dry run unless `--apply`; a second run adds nothing (key: the rule id
+  plus `rules-target:<project>` in `refs`), a finished task is not opened again, a waived rule gets none. `bootstrap`
+  makes the area's folders, READMEs and index first, never overwriting. Module `tasks_nvim.rules_import`; `new` takes
+  `rules` (`mutate.new`). rules.nvim is never required.
 - Questions with options in a task: the optional section `## Offene Fragen` / `## Open questions` (a `###` heading with a key `[qN]`,
   checkbox options below it, one of them marked `(empfohlen)` / `(recommended)`), so that a front end can offer the options and write the answer.
   `tasks_nvim.questions` reads and writes it byte-exactly; `check` reports a key used twice, two ticked options, a second recommendation and a question

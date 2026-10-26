@@ -576,6 +576,42 @@ use one. Without pickers.nvim it falls back to a plain `vim.ui.select` over the 
 `*.md` files: no content search, and `--action=grep|smart` is answered with that hint.
 Full-text search over the whole vault is a job for your picker's own grep on the vault folder.
 
+### Headless: `import --from-rules` and `bootstrap` (rules.nvim)
+
+A run of [rules.nvim](https://github.com/StefanBartl/rules.nvim) written as a work list (`rules-work-list/1`, see
+`docs/WORK-LIST.md` there) becomes tasks of an area. The work list is the only coupling: tasks.nvim never loads
+rules.nvim and works the same without it.
+
+```sh
+# in the project, with rules.nvim installed: the work list of the review gate
+nvim --headless -c 'lua io.stdout:write((require("rules").run_gate_work_list("review", vim.fn.getcwd())))' -c q > review.json
+nvim --headless -u NONE -l scripts/tasks.lua import my.nvim --from-rules=review.json          # what it would do
+nvim --headless -u NONE -l scripts/tasks.lua import my.nvim --from-rules=review.json --apply  # do it
+nvim --headless -u NONE -l scripts/tasks.lua bootstrap new.nvim --from-rules=- --apply < review.json
+```
+
+- **A dry run is the default.** Every rule gets a line: `would-create <id> <rule> <title>`, `exists <id> <rule>`,
+  `done <id> <rule>` (a finished task, not opened again), `waived - <rule> <reason>`, `passes <id> <rule>` (the rule
+  passes now and the task may be finished), `invalid - <rule> <why>`; the last line counts them. `--apply` writes,
+  `--dry-run` says the default out loud. The area is always named on the command line, never taken from the list
+  (a note says so when the checked project and the area have different names).
+- **One task per rule that fails or nobody judged** (`fail`, `unchecked`: a manual rule, or a check that could not run):
+  title `<rule id>: <the rule's heading>`, `rules: [<id>]`, `category: [ruleset]`, prio from the severity
+  (`critical` 1, `recommended` 2, `nice-to-have` 3), effort `S` for an automated rule and `M` for a manual one, `refs`
+  with the anchor `rules-target:<project folder>` and the findings (`file:line`, at most 20). The body holds the rule's
+  text, where it is (its file relative to the ruleset), the run, the findings, and the acceptance as a checklist.
+  `--lang=en` writes English headings.
+- **Idempotent:** a task of the area (open or finished) that names the rule in `rules:` and the same project in `refs`
+  (or no project at all: a task written by hand) means no new one. A waived rule gets no task; an expired waiver no
+  longer waives, so its rule fails and gets one, with a line about the waiver.
+- **What comes from the document is checked first:** another schema, another version, broken JSON, more than 4 MiB or
+  2000 entries refuse the whole list; a rule id or project name that is not a plain word is refused (its entry is
+  `invalid`); control and ANSI sequences are taken out, a heading in the rule's text is escaped, and no absolute path
+  reaches a task (a finding outside the project is counted, not named; a rule's file is named relative to its ruleset).
+- **`bootstrap <area>`** makes the area first: `ROADMAP/tasks/`, `Backlog/FEATURES/`, `Backlog/TASKS/`, `README.md`,
+  `Backlog/README.md` and the index `ROADMAP/TASKS.md`, whatever is missing (nothing existing is overwritten), then
+  imports `--from-rules` if given. Its dry run lists `would-make <path>` and the tasks.
+
 ## `:TasksVault`: the vault itself
 
 `:Tasks` works on tasks; `:TasksVault` works on **where they live**: open, copy, paste and search the Backlog (or

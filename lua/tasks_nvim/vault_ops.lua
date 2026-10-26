@@ -343,16 +343,29 @@ function M.check_vault_target(dir, areas)
     return nil, root .. " is a file"
   end
   for _, area in ipairs(areas or {}) do
-    if
-      not vault.valid_area(area)
-      or vault.SKIP[area]
-      or area:match("^[._]")
-      or vault.is_reserved_name(area)
-    then
-      return nil, "invalid area name: " .. tostring(area)
+    local err = M.area_name_error(area)
+    if err then
+      return nil, err
     end
   end
   return root, nil
+end
+
+---Why `area` cannot be the name of a new area, or nil when it can: an invalid folder name, a reserved one, a hidden
+---or `_` folder (never an area), a skipped one (`TEMPLATES`, `TOOLS`).
+---@param area any
+---@return string|nil err
+function M.area_name_error(area)
+  if
+    type(area) ~= "string"
+    or not vault.valid_area(area)
+    or vault.SKIP[area]
+    or area:match("^[._]")
+    or vault.is_reserved_name(area)
+  then
+    return "invalid area name: " .. tostring(area)
+  end
+  return nil
 end
 
 ---Create a vault folder (and its parents) with the given areas. An existing folder is fine, an existing area

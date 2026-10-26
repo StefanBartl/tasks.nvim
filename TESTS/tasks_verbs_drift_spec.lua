@@ -13,8 +13,19 @@ return function(H)
   routes.register_types()
   local specs = require("tasks_nvim.cli").specs()
 
-  local ONLY_CLI =
-    { "areas", "call", "check", "ci", "export", "migrate-actor", "plan-new", "plans", "show" }
+  local ONLY_CLI = {
+    "areas",
+    "bootstrap",
+    "call",
+    "check",
+    "ci",
+    "export",
+    "import",
+    "migrate-actor",
+    "plan-new",
+    "plans",
+    "show",
+  }
   local ONLY_COMPOSER = { "folder", "open", "planfile", "preview" }
   local OPTIONS = {
     ["answer"] = { composer = {}, cli = { "no-index" } },

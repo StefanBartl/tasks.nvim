@@ -44,6 +44,7 @@ local M = {}
 ---@class Tasks.CliIO
 ---@field out fun(text: string)   # Written verbatim (callers add the newline).
 ---@field err fun(text: string)
+---@field stdin? file*   # Where `-` reads from (default `io.stdin`).
 
 ---@type Tasks.CliIO
 M.stdio = {
@@ -126,6 +127,13 @@ commands:
                                           --trust-vault-lint (or TASKS_TRUST_VAULT_LINT=1); else --md-lint=<own copy> or --no-lint
   areas [--format=names|tsv|json]        list the vault's areas (tsv: with the open counts; json: the tasks.areas document)
   export [--top=N] [--no-links]           all-areas overview as Markdown on stdout (never written)
+  import <area> --from-rules=<file|-> [--apply] [--lang=de|en]
+                                          a work list of rules.nvim (rules-work-list/1) becomes tasks of the area: one
+                                          per rule that fails or nobody judged; a rule with a task (open or finished),
+                                          a waived and a passing one get none. A dry run unless --apply
+  bootstrap <area> [--from-rules=<file|->] [--apply] [--lang=de|en]
+                                          make the area (folders, READMEs, index; nothing overwritten), then import;
+                                          a dry run unless --apply
 
 global options: --vault=<dir> (default: $TASKS_VAULT; no built-in default path)
                 --today=YYYY-MM-DD (for reproducible runs); --no-index on new/set/done
@@ -296,6 +304,8 @@ local SPECS = {
   },
   areas = { value = { "format" }, flag = {} },
   export = { value = { "top", "link-prefix" }, flag = { "no-links" } },
+  import = { value = { "from-rules", "lang" }, flag = { "apply", "dry-run" } },
+  bootstrap = { value = { "from-rules", "lang" }, flag = { "apply", "dry-run" } },
 }
 
 local GLOBAL_VALUE = { "vault", "today" }
@@ -1586,6 +1596,187 @@ function commands.export(ctx)
   })
   ctx.out(text)
   return 0
+end
+
+---The work list of `--from-rules`: a file, or stdin for `-` (one byte over the limit is read, so a larger one is
+---refused, not cut).
+---@param ctx Tasks.CliCtx
+---@param source string
+---@return string|nil text
+---@return string|nil err
+local function read_work_list(ctx, source)
+  local rules_import = require("tasks_nvim.rules_import")
+  if source == "-" then
+    local stdin = ctx.io.stdin or io.stdin
+    return stdin:read(rules_import.MAX_BYTES + 1) or "", nil
+  end
+  local text, err = fsio.read(source)
+  if not text then
+    return nil, "cannot read the work list: " .. tostring(err)
+  end
+  return text, nil
+end
+
+---`import` and `bootstrap`: the plan of a work list, printed one line per rule; written only with `--apply`.
+---@param ctx Tasks.CliCtx
+---@param make_area boolean  `bootstrap`: the area is made first
+---@return integer
+local function import_command(ctx, make_area)
+  local rules_import = require("tasks_nvim.rules_import")
+  local args, eo = ctx.args, ctx.eo
+  local opt = args.opt
+  local verb = make_area and "bootstrap" or "import"
+  local area = args.pos[1]
+  local source = opt["from-rules"]
+  if not area or #args.pos > 1 or (not make_area and not source) then
+    ctx.warn(
+      make_area and "error: usage: bootstrap <area> [--from-rules=<file|->] [--apply]"
+        or "error: usage: import <area> --from-rules=<file|-> [--apply]"
+    )
+    return 2
+  end
+  if opt.apply and opt["dry-run"] then
+    ctx.warn("error: --apply and --dry-run exclude each other")
+    return 2
+  end
+  local lang = opt.lang or "de"
+  if lang ~= "de" and lang ~= "en" then
+    ctx.warn("error: --lang must be de or en")
+    return 2
+  end
+  local apply = opt.apply == true
+  local root, rerr = vault.root(eo)
+  if not root then
+    ctx.warn("error: " .. tostring(rerr))
+    return 1
+  end
+  -- the work list is read and checked before anything is made
+  local doc
+  if source then
+    local text, terr = read_work_list(ctx, source --[[@as string]])
+    if not text then
+      ctx.warn("error: " .. terr)
+      return 1
+    end
+    local perr
+    doc, perr = rules_import.parse(text)
+    if not doc then
+      ctx.warn("error: " .. tostring(perr))
+      return 1
+    end
+  end
+
+  if make_area then
+    local missing, berr = rules_import.bootstrap_plan(root, area)
+    if not missing then
+      ctx.warn("error: " .. tostring(berr))
+      return 1
+    end
+    if apply then
+      local made, merr = rules_import.bootstrap(root, area)
+      if not made then
+        ctx.warn("error: " .. tostring(merr))
+        return 1
+      end
+      for _, p in ipairs(made) do
+        ctx.say("made\t" .. p)
+      end
+    else
+      for _, p in ipairs(missing) do
+        ctx.say("would-make\t" .. p)
+      end
+    end
+  elseif not vault.has_area(root, area) then
+    ctx.warn("error: " .. vault.not_an_area_message(area, vault.area_names(root)))
+    return 1
+  end
+  if not doc then
+    if not apply then
+      ctx.say(("%s\tdry-run\tnothing written; --apply makes it"):format(verb))
+    end
+    return 0
+  end
+  local plan, plerr =
+    rules_import.plan(doc, area, { root = root, today = eo.today or model.today(), lang = lang })
+  if not plan then
+    ctx.warn("error: " .. tostring(plerr))
+    return 1
+  end
+  if plan.target ~= area then
+    ctx.warn(
+      ("note: the work list checked %s, its tasks go to the area %s"):format(plan.target, area)
+    )
+  end
+  local failed = {}
+  if apply then
+    local res = rules_import.apply(plan, { root = root })
+    for _, f in ipairs(res.failed) do
+      failed[f.rule_id] = f.err
+    end
+    if res.index_err then
+      ctx.warn("warn: index not updated: " .. res.index_err)
+    end
+  end
+  for _, item in ipairs(plan.items) do
+    local a = item.action
+    if a == "create" then
+      if failed[item.rule_id] then
+        ctx.say(("failed\t-\t%s\t%s"):format(item.rule_id, failed[item.rule_id]))
+      else
+        ctx.say(
+          ("%s\t%s\t%s\t%s"):format(
+            apply and "created" or "would-create",
+            item.id,
+            item.rule_id,
+            item.title
+          )
+        )
+      end
+    elseif a == "exists" then
+      ctx.say(("exists\t%s\t%s"):format(item.id, item.rule_id))
+    elseif a == "done" then
+      ctx.say(("done\t%s\t%s\tfinished, not opened again"):format(item.id, item.rule_id))
+    elseif a == "waived" then
+      ctx.say(("waived\t-\t%s\t%s"):format(item.rule_id, item.note or ""))
+    elseif a == "pass" and item.id then
+      ctx.say(
+        ("passes\t%s\t%s\tthe rule passes now: the task may be finished"):format(
+          item.id,
+          item.rule_id
+        )
+      )
+    elseif a == "invalid" then
+      ctx.say(("invalid\t-\t%s\t%s"):format(item.rule_id or "-", item.note or ""))
+    end
+  end
+  local c = plan.counts
+  local nfailed = vim.tbl_count(failed)
+  ctx.say(
+    ("%s\t%s\t%d %s, %d exist, %d finished, %d waived, %d pass, %d invalid%s"):format(
+      verb,
+      apply and "applied" or "dry-run",
+      c.create - nfailed,
+      apply and "created" or "to create",
+      c.exists,
+      c.done,
+      c.waived,
+      c.pass,
+      c.invalid,
+      nfailed > 0 and (", " .. nfailed .. " failed") or ""
+    )
+  )
+  if not apply and c.create > 0 then
+    ctx.say(("%s\tdry-run\tnothing written; --apply creates the tasks"):format(verb))
+  end
+  return nfailed > 0 and 1 or 0
+end
+
+function commands.import(ctx)
+  return import_command(ctx, false)
+end
+
+function commands.bootstrap(ctx)
+  return import_command(ctx, true)
 end
 
 ---The options of every CLI verb (`value`: needs `=value`; `flag`: none), a copy of the table the parser reads. The

@@ -116,6 +116,9 @@
 ---@field actor? string               # `cdx`, `me` or `pair`.
 ---@field folder? boolean             # Create a folder task (`<slug>/<slug>.md`) so assets can be attached.
 ---@field refs? string[]|string       # Paths or `repo@commit`; a string is split at commas.
+---@field rules? string[]|string      # Rule ids the task fulfils (`ERR-03`); a string is split at commas.
+---@field body? string                # The body in place of the template's sections.
+---@field dry_run? boolean            # Only the id it would get; nothing is created.
 ---@field lang? "de"|"en"             # Language of the body headings (default "de").
 ---@field status? string
 ---@field summary? string
