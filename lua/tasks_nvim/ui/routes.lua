@@ -564,6 +564,7 @@ local FIELD_DESC = {
   prio = "Urgency from 1 (most urgent) to 3",
   effort = "Size: XS to XL, or days such as 0.5d",
   tags = "Free labels, comma-separated; filter with --tag",
+  links = "Web addresses (http or https), comma-separated; paths go in refs",
   category = "Concerns the task serves; several allowed, comma list",
   severity = "How serious a bug or security task is",
   value = "Expected benefit from 1 (little) to 5 (a lot)",
@@ -597,7 +598,6 @@ local function set_kv()
     summary = "One-line summary shown in the index",
     blocked_by = "Tasks that must finish first (ids, comma-separated)",
     refs = "Files the task is about; --stale=refs watches them",
-    links = "Web addresses (http or https), comma-separated; paths go in refs",
     rules = "Rule ids a ruleset task brings code in line with",
     done_in = "Commit(s) that delivered the task",
     commits = "Every commit made for the task, repo@sha each (replaces the list)",
@@ -686,6 +686,7 @@ local function nested_routes()
         { key = "prio", type = "STRING", values = { "1", "2", "3" }, desc = FIELD_DESC.prio },
         { key = "effort", type = "STRING", values = model.EFFORTS, desc = FIELD_DESC.effort },
         { key = "tags", type = "TASK_TAGS", desc = FIELD_DESC.tags },
+        { key = "links", type = "STRING", desc = FIELD_DESC.links },
         {
           key = "category",
           type = "STRING",

@@ -1177,6 +1177,7 @@ function M.task_new_form(given)
     mode = given.mode,
     tags = given.tags,
     refs = given.refs,
+    links = given.links,
     ticks = ticks,
     on_cancel = function()
       notify.info("task new cancelled")
@@ -1343,6 +1344,7 @@ function M.task_new(ctx)
       "value",
       "actor",
       "tags",
+      "links",
       "category",
       "severity",
       "status",
@@ -1380,6 +1382,7 @@ function M.task_new(ctx)
     "plan",
     "phase",
     "tags",
+    "links",
     "category",
     "severity",
     "status",
@@ -1406,6 +1409,7 @@ function M.task_new(ctx)
       plan = values.plan,
       phase = values.phase,
       status = values.status,
+      web_links = values.links,
       -- a list: a string would be split at the commas of a file name (`a,b.lua`)
       refs = source and source.ref and { source.ref } or nil,
       folder = ctx.flags.folder == true,

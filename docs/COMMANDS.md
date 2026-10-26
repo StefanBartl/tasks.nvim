@@ -201,7 +201,8 @@ The choice fields `kind`, `prio`, `effort`, `value`, `actor`, `category`, `sever
 lists whose values come from the engine (`tasks.model`); `category` takes several ticks, the
 others one (ticking a bullet clears its siblings; leaving a list empty means "not set", and
 `kind` / `status` then get the engine defaults `task` / `open`). `Area:` and `Title:` are
-required; `Tags:` and `Refs:` are comma separated. `Area:` may name several areas (`lib.nvim, cascade.nvim`): one
+required; `Tags:`, `Refs:` and `Links:` are comma separated (`Links:` takes web addresses, `http://` or `https://`;
+anything else is reported; `Refs:` takes paths and commits; `:Tasks new links=https://...` pre-fills it). `Area:` may name several areas (`lib.nvim, cascade.nvim`): one
 task with the same text is created in each (every area is checked first; a bad one creates nothing). `Summary:` is the
 one line that ends up in the index. The sections `## Kontext`, `## Akzeptanz` and `## Notizen` at the end are free
 text and become the body of the task (an `Akzeptanz` line without a checkbox becomes `- [ ] line`; a section left

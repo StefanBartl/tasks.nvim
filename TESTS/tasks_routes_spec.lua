@@ -1466,6 +1466,7 @@ return function(H)
       set_line("Area: ", "lib.nvim, cascade.nvim")
       set_line("Title: ", "Twin task")
       set_line("Summary: ", "Both plugins need it")
+      set_line("Links: ", "https://example.org/twin")
       do
         local ls = vim.api.nvim_buf_get_lines(0, 0, -1, false)
         for i, l in ipairs(ls) do
@@ -1486,6 +1487,7 @@ return function(H)
       for _, a in ipairs({ "lib.nvim", "cascade.nvim" }) do
         local twin = assert(H.read(task_path(a, "twin-task")), a .. ": the task exists")
         has(twin, "Both plugins need it")
+        has(twin, "links: [https://example.org/twin]")
         has(twin, "## Kontext\n\nBecause of the form")
         has(twin, "- [ ] it works in both")
         has(twin, "## Notizen\n\n<!--")

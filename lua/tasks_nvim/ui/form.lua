@@ -66,7 +66,8 @@ function M.help_lines(keys)
     ),
     ("%s               this help"):format(key("help")),
     "",
-    "Area and Title are required. Tags and Refs are comma separated.",
+    "Area and Title are required. Tags, Refs and Links are comma separated;",
+    "Links takes web addresses (http:// or https://), Refs paths and commits.",
     "Area may name several areas (a, b): one task is created in each.",
     "Summary is the one line that ends up in the index.",
     "Kontext / Akzeptanz / Notizen at the end are free text (an Akzeptanz line without",
@@ -265,6 +266,7 @@ end
 ---@field summary? string
 ---@field tags? string
 ---@field refs? string
+---@field links? string  # Web addresses, comma separated.
 ---@field lang? "de"|"en"  # Headings of the body sections (default `de`).
 ---@field mode? Tasks.FormMode  # Default: `setup({ form = { mode } })`, `float`.
 ---@field ticks? table<string, string|string[]>
@@ -298,6 +300,7 @@ function M.open(opts)
       areas = opts.areas,
       tags = opts.tags,
       refs = opts.refs,
+      links = opts.links,
       ticks = opts.ticks,
       hint = M.key_hint(form_keys),
     })

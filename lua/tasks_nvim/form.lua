@@ -130,7 +130,7 @@ local function heading(f)
 end
 
 ---Fresh form text.
----@param opts? { area?: string, title?: string, summary?: string, areas?: string[], tags?: string, refs?: string, ticks?: table<string, string|string[]>, hint?: string, lang?: "de"|"en" }
+---@param opts? { area?: string, title?: string, summary?: string, areas?: string[], tags?: string, refs?: string, links?: string, ticks?: table<string, string|string[]>, hint?: string, lang?: "de"|"en" }
 ---  `ticks` overrides the ticked values per field name; `hint` is the second line (the keys of the user's setup);
 ---  `lang` picks the headings of the body sections (default `de`).
 ---@return string[] lines
@@ -169,6 +169,7 @@ function M.template(opts)
   lines[#lines + 1] = ""
   lines[#lines + 1] = "Tags: " .. (opts.tags or "")
   lines[#lines + 1] = "Refs: " .. (opts.refs or "")
+  lines[#lines + 1] = "Links: " .. (opts.links or "")
   local headings = SECTION_HEADINGS[opts.lang or "de"] or SECTION_HEADINGS.de
   for _, h in ipairs(headings) do
     lines[#lines + 1] = ""
@@ -184,6 +185,7 @@ end
 ---@field summary string
 ---@field tags string
 ---@field refs string
+---@field links string
 ---@field sections table<string, string>  # Free text per body section (`context`, `acceptance`, `notes`).
 ---@field ticks table<string, string[]>  # Ticked values per choice field, in form order.
 ---@field unknown string[]               # Ticked choices that are not in the value set.
@@ -199,6 +201,7 @@ function M.parse(lines)
     summary = "",
     tags = "",
     refs = "",
+    links = "",
     sections = {},
     ticks = {},
     unknown = {},
@@ -234,6 +237,7 @@ function M.parse(lines)
           or key == "summary"
           or key == "tags"
           or key == "refs"
+          or key == "links"
         then
           out[key] = value
           current = nil
@@ -341,6 +345,17 @@ function M.validate(parsed, areas, root, lang)
   end
   if refs ~= "" then
     opts.refs = refs
+  end
+  local links = trim(parsed.links)
+  if links ~= "" then
+    for _, link in ipairs(vim.split(links, ",", { plain = true, trimempty = true })) do
+      if not model.is_web_link(trim(link)) then
+        errors[#errors + 1] = ("Links: '%s' is not an http:// or https:// address"):format(
+          trim(link)
+        )
+      end
+    end
+    opts.web_links = links
   end
   local summary = trim(parsed.summary)
   if summary ~= "" then

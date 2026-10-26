@@ -216,6 +216,23 @@ return function(H)
   has(ev.opts.body, "## Context\n\nctx")
   has(ev.opts.body, "## Acceptance")
 
+  -- ── Links: web addresses only, apart from Refs ─────────────────────────────
+  local lk = form.template({ area = "ALL", title = "T", links = "https://a.org/x#y, http://b.io" })
+  ok(find(lk, "Links: https://a.org/x#y, http://b.io"), "prefilled")
+  local lv = assert(form.validate(form.parse(lk), { "ALL" }))
+  eq(lv.opts.web_links, "https://a.org/x#y, http://b.io")
+  eq(lv.opts.refs, nil, "links are not refs")
+  local lbad =
+    form.template({ area = "ALL", title = "T", links = "https://ok.org, ftp://no, lua/x.lua" })
+  local _, le = form.validate(form.parse(lbad), { "ALL" })
+  eq(#le, 2)
+  has(le[1], "ftp://no")
+  has(le[2], "lua/x.lua")
+  eq(
+    assert(form.validate(form.parse(form.template({ area = "ALL", title = "T" })), { "ALL" })).opts.web_links,
+    nil
+  )
+
   -- ── several areas: one task each ───────────────────────────────────────────
   eq(form.split_areas(" a , b,,a "), { "a", "b" }, "trimmed, once each, in the order typed")
   local ma = form.template({ area = "ALL, lib.nvim", title = "T" })

@@ -7,6 +7,8 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- `:Tasks new`: a `Links:` line in the form and `links=` on the command line (web addresses, `http://` or `https://`; a
+  bad entry is reported in the form). The form is `Area`, `Title`, `Summary`, choices, `Tags`, `Refs`, `Links`, sections.
 - Task field `links`: web addresses (`http://` or `https://`, nothing else) apart from `refs`, which stays for paths, commits and ids.
   `new --links=` / `opts.links` / `fields.links`, `set links=[...]` (an empty value removes it), `check` finding `bad-link`, `show`;
   contract `tasks-export/1`: `links` in the task entry (only when the task lists any), contract `tasks-ops/1`: `new` takes
