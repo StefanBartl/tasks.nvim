@@ -201,6 +201,71 @@ local NEW_BODY_SECTIONS = {
   }, "\n"),
 }
 
+---Headings and the invisible placeholder of an empty section, per language, in body order.
+---@type table<Tasks.Lang, { key: string, heading: string, placeholder: string }[]>
+local SECTION_DEFS = {
+  de = {
+    { key = "context", heading = "## Kontext", placeholder = "<!-- Warum, woher kam das. -->" },
+    {
+      key = "acceptance",
+      heading = "## Akzeptanz",
+      placeholder = "<!-- was am Ende wahr sein muss, als Checkliste -->",
+    },
+    {
+      key = "notes",
+      heading = "## Notizen",
+      placeholder = "<!-- Entscheidungen, Sackgassen, Verweise. -->",
+    },
+  },
+  en = {
+    {
+      key = "context",
+      heading = "## Context",
+      placeholder = "<!-- Why, where this came from. -->",
+    },
+    {
+      key = "acceptance",
+      heading = "## Acceptance",
+      placeholder = "<!-- what must be true at the end, as a checklist -->",
+    },
+    {
+      key = "notes",
+      heading = "## Notes",
+      placeholder = "<!-- Decisions, dead ends, references. -->",
+    },
+  },
+}
+
+---The body sections of a new task from the text the caller wrote per section (`context`, `acceptance`,
+---`notes`; missing or blank = the invisible placeholder of the template). Every non-blank acceptance line
+---becomes a checkbox (`- [ ] text`) unless it is one already (`- [ ]`, `- [x]`, `- `, `* `).
+---@param texts { context?: string, acceptance?: string, notes?: string }
+---@param lang? Tasks.Lang  default `de`
+---@return string body  # Sections only, no summary line; `nil`-free
+function M.body_sections(texts, lang)
+  local defs = SECTION_DEFS[lang or "de"] or SECTION_DEFS.de
+  local out = {}
+  for _, def in ipairs(defs) do
+    local text = vim.trim(fsio.lf(tostring(texts[def.key] or "")))
+    if text ~= "" and def.key == "acceptance" then
+      local lines = {}
+      for _, line in ipairs(vim.split(text, "\n", { plain = true })) do
+        if vim.trim(line) == "" or line:match("^%s*[-*]%s") then
+          lines[#lines + 1] = line
+        else
+          lines[#lines + 1] = "- [ ] " .. vim.trim(line)
+        end
+      end
+      text = table.concat(lines, "\n")
+    end
+    out[#out + 1] = def.heading
+    out[#out + 1] = ""
+    out[#out + 1] = text ~= "" and text or def.placeholder
+    out[#out + 1] = ""
+  end
+  return table.concat(out, "\n")
+end
+
 ---@param lang any
 ---@return Tasks.Lang|nil lang
 ---@return string|nil err

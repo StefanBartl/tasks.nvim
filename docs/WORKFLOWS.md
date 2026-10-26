@@ -55,7 +55,7 @@ nvim --headless -u NONE -l scripts/tasks.lua new my-area "Reply check reports a 
 ```
 
 `:Tasks new` without arguments opens a small Markdown form instead: tick the kind, prio, effort, categories and
-status, type area and title, `<C-s>` submits and asks whether the task should get an `assets/` folder. The new file
+status, type area (several: one task each) and title, optionally a summary and the sections context, acceptance and notes, `<C-s>` submits and asks whether the task should get an `assets/` folder. The new file
 opens; the area index is regenerated. Nothing else is asked, now or later.
 
 ### 2. Capture ten things after a meeting, sort later — works today

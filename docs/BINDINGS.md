@@ -41,7 +41,7 @@ Details of every verb: [COMMANDS.md](COMMANDS.md).
 | `v` | switch between the list and the stage view |
 | `P` | give the marked (else current) tasks a plan and a stage |
 | `J` / `K` | stage view: move the task down / up among its stage's tasks (sets `order`) |
-| `g?` | help |
+| `g?` | help in a float; stays until `q` / `<Esc>` or leaving the window |
 
 A count works on the cycling keys: `3p` advances the priority three steps, `2s` the status, `3o` the sort order. The other keys ignore a count (mark several tasks with `<Tab>` instead).
 

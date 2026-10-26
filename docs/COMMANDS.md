@@ -201,15 +201,24 @@ The choice fields `kind`, `prio`, `effort`, `value`, `actor`, `category`, `sever
 lists whose values come from the engine (`tasks.model`); `category` takes several ticks, the
 others one (ticking a bullet clears its siblings; leaving a list empty means "not set", and
 `kind` / `status` then get the engine defaults `task` / `open`). `Area:` and `Title:` are
-required; `Tags:` and `Refs:` are comma separated. `key=value` words on the command line
+required; `Tags:` and `Refs:` are comma separated. `Area:` may name several areas (`lib.nvim, cascade.nvim`): one
+task with the same text is created in each (every area is checked first; a bad one creates nothing). `Summary:` is the
+one line that ends up in the index. The sections `## Kontext`, `## Akzeptanz` and `## Notizen` at the end are free
+text and become the body of the task (an `Akzeptanz` line without a checkbox becomes `- [ ] line`; a section left
+empty keeps the template's hint comment). `key=value` words on the command line
 (`:Tasks new kind=bug category=docs,ruleset tags=a`) pre-tick the form. A hint line
 lists the areas of the vault.
+
+The form opens as a centered float. `:Tasks new mode=float|split|vsplit|current` (or
+`setup({ form = { mode = "split" } })`) picks the window: a float, a split below, a vertical split or the current
+window.
 
 | Key (form buffer) | Does |
 |---|---|
 | `<Space>` / `<CR>` on a bullet | tick / untick it (`<CR>` on other lines is a plain `<CR>`) |
 | `<C-s>` (normal and insert) | submit |
 | `q` (normal) / `<C-q>` | cancel -- nothing is created |
+| `g?` | help in a float that stays until `q` / `<Esc>` or until you leave it |
 | `g?` | help |
 
 The tick is cascade.nvim's checkbox toggle (`require("cascade").toggle_checkbox`) when that

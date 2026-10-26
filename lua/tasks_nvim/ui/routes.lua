@@ -721,6 +721,12 @@ local function nested_routes()
           desc = "Status to start in (default: open)",
           enum_desc = STATUS_VALUES,
         },
+        {
+          key = "mode",
+          type = "STRING",
+          values = { "float", "split", "vsplit", "current" },
+          desc = "Form window: float (default), split, vsplit or current",
+        },
       },
       flags = {
         {
@@ -730,7 +736,7 @@ local function nested_routes()
         },
       },
       range = true,
-      desc = "Without arguments: a Markdown form (tick kind, prio, effort, category, severity, status; <C-s> submits) and the question whether to attach assets. With an area: create ROADMAP/tasks/<slug>.md in it and open it; the words after the area are the title (asked for when missing); --folder makes a folder task that can hold assets",
+      desc = "Without arguments: a Markdown form (summary, tick kind, prio, effort, category, severity, status; context, acceptance and notes as text; several areas a,b create one task each; <C-s> submits; mode= picks float, split, vsplit or current) and the question whether to attach assets. With an area: create ROADMAP/tasks/<slug>.md in it and open it; the words after the area are the title (asked for when missing); --folder makes a folder task that can hold assets",
       run = function(ctx)
         cmd().task_new(ctx)
       end,

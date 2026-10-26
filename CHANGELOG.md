@@ -7,6 +7,10 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- `:Tasks new` form: a `Summary:` line and the free-text sections Kontext / Akzeptanz / Notizen (the body of the new
+  task), several areas in `Area:` (`a, b`: one task each, all areas checked first), the window as a float by default
+  (`mode=float|split|vsplit|current`, `setup({ form = { mode } })`), and a help (`g?`) that stays until `q` / `<Esc>` or
+  until you leave it instead of a notification that timed out. `mutate.body_sections` builds the sections.
 - Command line `import <area> --from-rules=<file|->` and `bootstrap <area> [--from-rules=...]`: a work list of
   rules.nvim (`rules-work-list/1`) becomes one task per rule that fails or nobody judged (`rules:`, `category: [ruleset]`,
   prio from the severity, the findings in `refs`), a dry run unless `--apply`; a second run adds nothing (key: the rule id

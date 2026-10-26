@@ -1173,6 +1173,8 @@ function M.task_new_form(given)
     areas = areas,
     root = root,
     title = given.title,
+    summary = given.summary,
+    mode = given.mode,
     tags = given.tags,
     refs = given.refs,
     ticks = ticks,
@@ -1207,25 +1209,69 @@ function M.task_new_form(given)
           then
             opts.refs = given.ref_list
           end
-          local res, err = mutate.new(values.area, opts)
-          if not res then
+          local function show_problems(msgs)
             if buf and vim.api.nvim_buf_is_valid(buf) then
-              ui.show_errors(buf, { tostring(err) })
+              ui.show_errors(buf, msgs)
             else
-              notify.error(tostring(err))
+              notify.error(table.concat(msgs, "\n"))
             end
-            return
           end
+          -- Several areas (`a, b`): one task in each. Every area is tried as a dry run first, so a bad one stops
+          -- the whole thing and the form stays open with nothing written (a retry would double the others).
+          local names = values.areas or { values.area }
+          if #names > 1 then
+            local problems = {}
+            for _, name in ipairs(names) do
+              local _, perr = mutate.new(name, vim.tbl_extend("force", opts, { dry_run = true }))
+              if perr then
+                problems[#problems + 1] = name .. ": " .. tostring(perr)
+              end
+            end
+            if #problems > 0 then
+              show_problems(problems)
+              return
+            end
+          end
+          ---@type table[]
+          local created = {}
+          for _, name in ipairs(names) do
+            local r, err = mutate.new(name, opts)
+            if not r then
+              if #created == 0 then
+                show_problems({ tostring(err) })
+                return
+              end
+              -- Some tasks exist already: closing the form is the honest thing, a resubmit would double them.
+              local ids = {}
+              for _, m in ipairs(created) do
+                ids[#ids + 1] = m.id
+              end
+              notify.error(
+                ("%s: %s -- created before: %s"):format(
+                  name,
+                  tostring(err),
+                  table.concat(ids, ", ")
+                )
+              )
+              break
+            end
+            created[#created + 1] = r
+          end
+          local res = created[1]
           if buf then
             ui.close(buf)
           end
-          if res.index_err then
-            notify.warn("task created, but the index was not updated: " .. res.index_err)
+          local ids = {}
+          for _, m in ipairs(created) do
+            ids[#ids + 1] = m.id
+            if m.index_err then
+              notify.warn("task created, but the index was not updated: " .. m.index_err)
+            end
+            if m.ambiguous then
+              notify.warn(require("tasks_nvim.wikilinks").ambiguity_message(m.ambiguous))
+            end
           end
-          if res.ambiguous then
-            notify.warn(require("tasks_nvim.wikilinks").ambiguity_message(res.ambiguous))
-          end
-          notify.info(("created %s"):format(res.id))
+          notify.info(("created %s"):format(table.concat(ids, ", ")))
           open_file(res.path)
           if with_screenshot then
             -- After the task is open: the link lands in it, at the cursor. A task without a screenshot stays
@@ -1300,6 +1346,7 @@ function M.task_new(ctx)
       "category",
       "severity",
       "status",
+      "mode",
       -- not fields of the form: carried through to `mutate.new` as they were typed
       "after",
       "order",

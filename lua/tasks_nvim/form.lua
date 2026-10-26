@@ -94,6 +94,34 @@ local function rtrim(s)
   return s:match("^(.*%S)") or ""
 end
 
+---The free-text sections at the end of the form (the body of the task), in form order. `names` are the headings
+---the parser takes for the section (German and English); the template writes the first one.
+---@type { key: "context"|"acceptance"|"notes", names: string[] }[]
+M.SECTIONS = {
+  { key = "context", names = { "kontext", "context" } },
+  { key = "acceptance", names = { "akzeptanz", "acceptance" } },
+  { key = "notes", names = { "notizen", "notes" } },
+}
+
+---Heading words of the sections per language, for the template.
+---@type table<string, string[]>
+local SECTION_HEADINGS = {
+  de = { "Kontext", "Akzeptanz", "Notizen" },
+  en = { "Context", "Acceptance", "Notes" },
+}
+
+---@param name string  heading word, any case
+---@return string|nil key
+local function section_key(name)
+  name = name:lower()
+  for _, s in ipairs(M.SECTIONS) do
+    if vim.tbl_contains(s.names, name) then
+      return s.key
+    end
+  end
+  return nil
+end
+
 ---Heading line of a choice field, e.g. `## kind (one)`.
 ---@param f Tasks.FormField
 ---@return string
@@ -102,8 +130,9 @@ local function heading(f)
 end
 
 ---Fresh form text.
----@param opts? { area?: string, title?: string, areas?: string[], tags?: string, refs?: string, ticks?: table<string, string|string[]>, hint?: string }
----  `ticks` overrides the ticked values per field name; `hint` is the second line (the keys of the user's setup).
+---@param opts? { area?: string, title?: string, summary?: string, areas?: string[], tags?: string, refs?: string, ticks?: table<string, string|string[]>, hint?: string, lang?: "de"|"en" }
+---  `ticks` overrides the ticked values per field name; `hint` is the second line (the keys of the user's setup);
+---  `lang` picks the headings of the body sections (default `de`).
 ---@return string[] lines
 function M.template(opts)
   opts = opts or {}
@@ -114,8 +143,10 @@ function M.template(opts)
   if opts.areas and #opts.areas > 0 then
     lines[#lines + 1] = "<!-- areas: " .. table.concat(opts.areas, ", ") .. " -->"
   end
+  lines[#lines + 1] = "<!-- several areas (a, b): one task is created in each -->"
   lines[#lines + 1] = "Area: " .. (opts.area or "")
   lines[#lines + 1] = "Title: " .. (opts.title or "")
+  lines[#lines + 1] = "Summary: " .. (opts.summary or "")
   for _, f in ipairs(M.fields()) do
     lines[#lines + 1] = ""
     lines[#lines + 1] = heading(f)
@@ -138,14 +169,22 @@ function M.template(opts)
   lines[#lines + 1] = ""
   lines[#lines + 1] = "Tags: " .. (opts.tags or "")
   lines[#lines + 1] = "Refs: " .. (opts.refs or "")
+  local headings = SECTION_HEADINGS[opts.lang or "de"] or SECTION_HEADINGS.de
+  for _, h in ipairs(headings) do
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "## " .. h
+    lines[#lines + 1] = ""
+  end
   return lines
 end
 
 ---@class Tasks.FormParsed
 ---@field area string
 ---@field title string
+---@field summary string
 ---@field tags string
 ---@field refs string
+---@field sections table<string, string>  # Free text per body section (`context`, `acceptance`, `notes`).
 ---@field ticks table<string, string[]>  # Ticked values per choice field, in form order.
 ---@field unknown string[]               # Ticked choices that are not in the value set.
 
@@ -154,23 +193,48 @@ end
 ---@return Tasks.FormParsed
 function M.parse(lines)
   ---@type Tasks.FormParsed
-  local out = { area = "", title = "", tags = "", refs = "", ticks = {}, unknown = {} }
+  local out = {
+    area = "",
+    title = "",
+    summary = "",
+    tags = "",
+    refs = "",
+    sections = {},
+    ticks = {},
+    unknown = {},
+  }
   local current ---@type Tasks.FormField|nil
+  local section ---@type string|nil  -- body section being read: its lines are text, never fields
+  local texts = {} ---@type table<string, string[]>
   for _, raw in ipairs(lines) do
     local line = rtrim(raw)
     if line:sub(1, 1) == "!" or line:sub(1, 4) == "<!--" then
     -- report or hint: not form content
     else
       local name = line:match("^##%s+([%w_]+)")
-      if name then
+      local skey = name and section_key(name)
+      if skey then
+        section, current = skey, nil
+        texts[skey] = texts[skey] or {}
+      elseif name then
+        section = nil
         current = field_by_name(name)
         if current then
           out.ticks[current.name] = out.ticks[current.name] or {}
         end
+      elseif section then
+        -- raw, not trimmed: indentation inside a text is the user's (a code block, a nested list)
+        table.insert(texts[section], (raw:gsub("%s+$", "")))
       else
         local key, value = line:match("^(%a+):%s*(.*)$")
         key = key and key:lower()
-        if key == "area" or key == "title" or key == "tags" or key == "refs" then
+        if
+          key == "area"
+          or key == "title"
+          or key == "summary"
+          or key == "tags"
+          or key == "refs"
+        then
           out[key] = value
           current = nil
         else
@@ -186,13 +250,31 @@ function M.parse(lines)
       end
     end
   end
+  for key, list in pairs(texts) do
+    out.sections[key] = vim.trim(table.concat(list, "\n"))
+  end
   return out
 end
 
 ---The values a valid form stands for, as `tasks.mutate.new` options.
 ---@class Tasks.FormValues
----@field area string
+---@field area string        # The first area named.
+---@field areas string[]     # Every area named, once each, in the order typed: one task is created in each.
 ---@field opts Tasks.NewOpts
+
+---The area names of the `Area:` line: a comma list, blanks around a name dropped, a name once.
+---@param text string
+---@return string[]
+function M.split_areas(text)
+  local names = {}
+  for part in vim.gsplit(text, ",", { plain = true }) do
+    local name = trim(part)
+    if name ~= "" and not vim.tbl_contains(names, name) then
+      names[#names + 1] = name
+    end
+  end
+  return names
+end
 
 ---The message for a vault that has no areas: the cause is the vault (a wrong folder, or one that moved while
 ---Neovim still holds the old path), not the name typed. One text for the report in the form and the warning on open.
@@ -211,19 +293,25 @@ end
 ---@param parsed Tasks.FormParsed
 ---@param areas? string[]
 ---@param root? string
+---@param lang? "de"|"en"  # Headings of the body sections written into the task (default `de`).
 ---@return Tasks.FormValues|nil values
 ---@return string[] errors
-function M.validate(parsed, areas, root)
+function M.validate(parsed, areas, root, lang)
   local errors = {}
-  local area = trim(parsed.area)
+  local names = M.split_areas(parsed.area)
   if areas and #areas == 0 then
     -- No name can pass an empty list, so the name typed is not the problem: the vault is. Say that, and where it
     -- looked.
     errors[#errors + 1] = M.no_areas_message(root)
-  elseif area == "" then
+  elseif #names == 0 then
     errors[#errors + 1] = "Area is required"
-  elseif areas and not vim.tbl_contains(areas, area) then
-    errors[#errors + 1] = "Area " .. require("tasks_nvim.vault").not_an_area_message(area, areas)
+  elseif areas then
+    for _, name in ipairs(names) do
+      if not vim.tbl_contains(areas, name) then
+        errors[#errors + 1] = "Area "
+          .. require("tasks_nvim.vault").not_an_area_message(name, areas)
+      end
+    end
   end
   local title = trim(parsed.title)
   if title == "" then
@@ -254,10 +342,25 @@ function M.validate(parsed, areas, root)
   if refs ~= "" then
     opts.refs = refs
   end
+  local summary = trim(parsed.summary)
+  if summary ~= "" then
+    opts.summary = summary
+  end
+  local texts, any = {}, false
+  for _, s in ipairs(M.SECTIONS) do
+    texts[s.key] = parsed.sections[s.key] or ""
+    any = any or texts[s.key] ~= ""
+  end
+  if any then
+    -- All three sections are written (an empty one keeps the template's placeholder); with nothing typed the
+    -- engine writes the same sections itself.
+    opts.body = require("tasks_nvim.mutate").body_sections(texts, lang)
+    opts.lang = lang
+  end
   if #errors > 0 then
     return nil, errors
   end
-  return { area = area, opts = opts }, errors
+  return { area = names[1], areas = names, opts = opts }, errors
 end
 
 ---Flip the choice bullet on line `lnum`. A single-choice field ends with at

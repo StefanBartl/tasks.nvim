@@ -67,6 +67,10 @@
 ---@field attach Tasks.AttachConfig
 ---@field completion Tasks.CompletionConfig
 ---@field keys Tasks.KeysConfig
+---@field form Tasks.FormConfig
+
+---@class Tasks.FormConfig
+---@field mode "float"|"split"|"vsplit"|"current"  Window of the `:Tasks new` form: a centered float, a split below, a vertical split or the current window. `:Tasks new mode=...` overrides it for one call.
 
 ---@type Tasks.Opts
 return {
@@ -84,6 +88,7 @@ return {
   reminders = { on_start = true },
   attach = { screenshot_dirs = {}, max_age_s = 300 },
   completion = { finished = true },
+  form = { mode = "float" },
   keys = {
     dashboard = {
       status = "s",

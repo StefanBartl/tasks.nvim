@@ -95,6 +95,8 @@ blockers, plan or estimate is valid and stays visible everywhere.
                            (once per session, only with a UI; `false` turns it off).
   keys.dashboard           Dashboard list keys: action = key, or false.
   keys.dashboard_input     Dashboard input-window keys (normal and insert).
+  form.mode                Window of the `:Tasks new` form: "float" (default), "split",
+                           "vsplit" or "current"; `:Tasks new mode=...` for one call.
   keys.form                Keys of the `:Tasks new` form.
                            Actions: see |tasks_nvim-keys|.
 

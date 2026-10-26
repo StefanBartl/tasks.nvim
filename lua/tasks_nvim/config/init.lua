@@ -18,7 +18,7 @@ local state = vim.deepcopy(DEFAULTS)
 ---@type table<string, boolean>
 local given = {}
 
----@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"|"value"|"effort"|"lists"|"finished_window"|"links"
+---@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"|"value"|"effort"|"lists"|"finished_window"|"links"|"form_mode"
 
 ---@type table<string, Tasks.ConfigType|table<string, Tasks.ConfigType>>
 local SCHEMA = {
@@ -36,6 +36,7 @@ local SCHEMA = {
   reminders = { on_start = "boolean" },
   attach = { screenshot_dirs = "string_list", max_age_s = "posint" },
   completion = { finished = "finished_window" },
+  form = { mode = "form_mode" },
   keys = { dashboard = "keymap", dashboard_input = "keymap", form = "keymap" },
 }
 
@@ -107,6 +108,11 @@ local function check(kind, value)
       return true, value, nil
     end
     return false, nil, 'one of "auto", "snacks", "kit", "select"'
+  elseif kind == "form_mode" then
+    if value == "float" or value == "split" or value == "vsplit" or value == "current" then
+      return true, value, nil
+    end
+    return false, nil, 'one of "float", "split", "vsplit", "current"'
   elseif kind == "links" then
     if value == "plain" or value == "wikilink" then
       return true, value, nil

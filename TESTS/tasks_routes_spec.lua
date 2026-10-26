@@ -1460,6 +1460,52 @@ return function(H)
       has(said(), "created lib.nvim/form-made-task")
       has(assert(H.read(lib_index)), "Form made task", "the index is regenerated")
 
+      -- several areas, a summary and body sections: one task in each area, with the same text
+      run("task new")
+      form_buf = vim.api.nvim_get_current_buf()
+      set_line("Area: ", "lib.nvim, cascade.nvim")
+      set_line("Title: ", "Twin task")
+      set_line("Summary: ", "Both plugins need it")
+      do
+        local ls = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+        for i, l in ipairs(ls) do
+          if l == "## Kontext" then
+            vim.api.nvim_buf_set_lines(0, i, i, false, { "Because of the form" })
+          end
+        end
+        ls = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+        for i, l in ipairs(ls) do
+          if l == "## Akzeptanz" then
+            vim.api.nvim_buf_set_lines(0, i, i, false, { "it works in both" })
+          end
+        end
+      end
+      answer = false
+      fkeys("<C-s>")
+      flush()
+      for _, a in ipairs({ "lib.nvim", "cascade.nvim" }) do
+        local twin = assert(H.read(task_path(a, "twin-task")), a .. ": the task exists")
+        has(twin, "Both plugins need it")
+        has(twin, "## Kontext\n\nBecause of the form")
+        has(twin, "- [ ] it works in both")
+        has(twin, "## Notizen\n\n<!--")
+      end
+      has(said(), "created lib.nvim/twin-task, cascade.nvim/twin-task")
+      ok(not vim.api.nvim_buf_is_valid(form_buf), "the form is closed")
+      -- one bad area: nothing is written anywhere and the form stays open
+      run("task new")
+      form_buf = vim.api.nvim_get_current_buf()
+      set_line("Area: ", "lib.nvim, nowhere")
+      set_line("Title: ", "Half task")
+      fkeys("<C-s>")
+      has(buf_text(), "nowhere")
+      ok(not H.exists(task_path("lib.nvim", "half-task")), "no task in the good area either")
+      eq(vim.api.nvim_get_current_buf(), form_buf, "the form stays open")
+      fkeys("q")
+      answer = true
+      fkeys("q")
+      answer = false
+
       -- Esc on the question is not "no assets": nothing is created and the form stays open with what was typed
       run("task new")
       form_buf = vim.api.nvim_get_current_buf()
@@ -1596,8 +1642,17 @@ return function(H)
       run("task new")
       fkeys("g?")
       flush()
-      has(said(), "Task form")
-      has(said(), "<C-s>")
+      -- the help is a float that has the focus and stays until `q`; it is no notification any more
+      local help_win = vim.api.nvim_get_current_win()
+      eq(vim.api.nvim_win_get_config(help_win).relative, "editor", "the help is a float")
+      local help_text = table.concat(
+        vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(help_win), 0, -1, false),
+        "\n"
+      )
+      has(help_text, "Task form")
+      has(help_text, "<C-s>")
+      fkeys("q")
+      ok(not vim.api.nvim_win_is_valid(help_win), "q closes the help")
       fkeys("q")
 
       -- kv given on the command line are pre-ticked, areas stay free

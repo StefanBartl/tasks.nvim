@@ -67,8 +67,62 @@ function M.help_lines(keys)
     ("%s               this help"):format(key("help")),
     "",
     "Area and Title are required. Tags and Refs are comma separated.",
+    "Area may name several areas (a, b): one task is created in each.",
+    "Summary is the one line that ends up in the index.",
+    "Kontext / Akzeptanz / Notizen at the end are free text (an Akzeptanz line without",
+    "a checkbox becomes `- [ ] line`); a section left empty keeps the template's hint.",
     "Lines starting with ! are error reports; they vanish on the next submit.",
+    "",
+    "q / <Esc> closes this help; so does leaving its window.",
   }
+end
+
+---The help of the form as a float that takes the focus and stays until it is closed (`q`, `<Esc>`) or left
+---(`WinLeave`): there is no timeout, the text is read at the reader's pace.
+---@param lines? string[]  # Default: `M.help_lines()`.
+---@return integer win
+---@return integer buf
+function M.show_help(lines)
+  lines = lines or M.help_lines()
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+  vim.bo[buf].bufhidden = "wipe"
+  local width = 0
+  for _, l in ipairs(lines) do
+    width = math.max(width, vim.fn.strdisplaywidth(l))
+  end
+  width = math.min(width, math.max(10, vim.o.columns - 6))
+  local height = math.min(#lines, math.max(3, vim.o.lines - 6))
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    row = math.max(0, math.floor((vim.o.lines - height) / 2) - 1),
+    col = math.max(0, math.floor((vim.o.columns - width - 2) / 2)),
+    width = width + 2,
+    height = height,
+    style = "minimal",
+    border = "rounded",
+    title = " Task form help ",
+    title_pos = "center",
+    zindex = 250,
+  })
+  local function close()
+    if vim.api.nvim_win_is_valid(win) then
+      pcall(vim.api.nvim_win_close, win, true)
+    end
+  end
+  for _, lhs in ipairs({ "q", "<Esc>" }) do
+    vim.keymap.set("n", lhs, close, { buffer = buf, nowait = true, silent = true })
+  end
+  vim.api.nvim_create_autocmd({ "WinLeave", "BufLeave" }, {
+    buffer = buf,
+    once = true,
+    callback = function()
+      -- scheduled: a window cannot be closed from inside the event that is leaving it
+      vim.schedule(close)
+    end,
+  })
+  return win, buf
 end
 
 ---Form text of a buffer.
@@ -146,11 +200,12 @@ end
 ---@param buf integer
 ---@param areas string[]|nil
 ---@param root? string  the vault folder, named when the vault has no areas
+---@param lang? "de"|"en"  headings of the body sections
 ---@return Tasks.FormValues|nil
-function M.read(buf, areas, root)
+function M.read(buf, areas, root, lang)
   local lines = form.strip_errors(buf_lines(buf))
   set_lines(buf, lines)
-  local values, errors = form.validate(form.parse(lines), areas, root)
+  local values, errors = form.validate(form.parse(lines), areas, root, lang)
   if not values then
     M.show_errors(buf, errors)
     return nil
@@ -164,12 +219,42 @@ function M.close(buf)
   if not vim.api.nvim_buf_is_valid(buf) then
     return
   end
+  -- `current`: the form took over a window that was there before; the buffer goes, the window stays.
+  local keep_window = vim.b[buf].tasks_form_mode == "current"
   for _, win in ipairs(vim.fn.win_findbuf(buf)) do
-    if #vim.api.nvim_list_wins() > 1 then
+    if not keep_window and #vim.api.nvim_list_wins() > 1 then
       pcall(vim.api.nvim_win_close, win, true)
     end
   end
   pcall(vim.api.nvim_buf_delete, buf, { force = true })
+end
+
+---Window modes of the form: a centered float (default), a split below, a vertical split, or the current window.
+---@alias Tasks.FormMode "float"|"split"|"vsplit"|"current"
+M.MODES = { "float", "split", "vsplit", "current" }
+
+---Make the window for the form and leave the new, empty buffer in it.
+---@param mode Tasks.FormMode
+---@return integer buf
+local function open_window(mode)
+  if mode == "float" then
+    local buf = vim.api.nvim_create_buf(false, true)
+    local width = math.min(100, math.max(30, vim.o.columns - 8))
+    local height = math.min(48, math.max(10, vim.o.lines - 6))
+    vim.api.nvim_open_win(buf, true, {
+      relative = "editor",
+      row = math.max(0, math.floor((vim.o.lines - height) / 2) - 1),
+      col = math.max(0, math.floor((vim.o.columns - width) / 2)),
+      width = width,
+      height = height,
+      border = "rounded",
+      title = " New task ",
+      title_pos = "center",
+    })
+    return buf
+  end
+  vim.cmd(({ split = "botright new", vsplit = "botright vnew", current = "enew" })[mode])
+  return vim.api.nvim_get_current_buf()
 end
 
 ---@class Tasks.FormOpenOpts
@@ -177,8 +262,11 @@ end
 ---@field root? string  # The vault folder: named in the message that says the vault has no areas.
 ---@field area? string
 ---@field title? string
+---@field summary? string
 ---@field tags? string
 ---@field refs? string
+---@field lang? "de"|"en"  # Headings of the body sections (default `de`).
+---@field mode? Tasks.FormMode  # Default: `setup({ form = { mode } })`, `float`.
 ---@field ticks? table<string, string|string[]>
 ---@field on_submit fun(values: Tasks.FormValues, buf: integer)
 ---@field on_cancel? fun()
@@ -188,8 +276,9 @@ end
 ---@return integer buf
 function M.open(opts)
   local form_keys = require("tasks_nvim.config").get().keys.form
-  vim.cmd("botright new")
-  local buf = vim.api.nvim_get_current_buf()
+  local mode = opts.mode or require("tasks_nvim.config").get().form.mode
+  local buf = open_window(mode)
+  vim.b[buf].tasks_form_mode = mode
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].swapfile = false
@@ -204,6 +293,8 @@ function M.open(opts)
     form.template({
       area = opts.area,
       title = opts.title,
+      summary = opts.summary,
+      lang = opts.lang,
       areas = opts.areas,
       tags = opts.tags,
       refs = opts.refs,
@@ -243,7 +334,7 @@ function M.open(opts)
   end
   local function submit()
     vim.cmd("stopinsert")
-    local values = M.read(buf, opts.areas, opts.root)
+    local values = M.read(buf, opts.areas, opts.root, opts.lang)
     if values then
       opts.on_submit(values, buf)
     end
@@ -275,7 +366,7 @@ function M.open(opts)
   bind("n", "cancel", cancel, "Task form: cancel")
   bind({ "n", "i" }, "cancel_ctrl", cancel, "Task form: cancel")
   bind("n", "help", function()
-    require("lib.nvim.notify").create("[tasks]").info(table.concat(M.help_lines(), "\n"))
+    M.show_help()
   end, "Task form: help")
 
   -- Start on the first free text line.
