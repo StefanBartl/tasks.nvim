@@ -215,19 +215,21 @@ function M.parse(lines)
     -- report or hint: not form content
     else
       local name = line:match("^##%s+([%w_]+)")
-      local skey = name and section_key(name)
+      -- a section heading is the whole line (`## Notizen`): `## Notes about x` inside a text is text
+      local skey = name and line:match("^##%s+[%w_]+%s*$") and section_key(name)
       if skey then
         section, current = skey, nil
         texts[skey] = texts[skey] or {}
+      elseif section then
+        -- raw, not trimmed: indentation inside a text is the user's (a code block, a nested list); the choice
+        -- lists come before the sections, a heading inside a text is part of it
+        table.insert(texts[section], (raw:gsub("%s+$", "")))
       elseif name then
         section = nil
         current = field_by_name(name)
         if current then
           out.ticks[current.name] = out.ticks[current.name] or {}
         end
-      elseif section then
-        -- raw, not trimmed: indentation inside a text is the user's (a code block, a nested list)
-        table.insert(texts[section], (raw:gsub("%s+$", "")))
       else
         local key, value = line:match("^(%a+):%s*(.*)$")
         key = key and key:lower()

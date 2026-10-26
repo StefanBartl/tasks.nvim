@@ -233,6 +233,14 @@ return function(H)
     nil
   )
 
+  -- ── a heading inside a text is text, not the start of a section ────────────
+  local hd = form.template({ area = "ALL", title = "T" })
+  table.insert(hd, find(hd, "## Kontext") + 1, "## Notes about the thing")
+  table.insert(hd, find(hd, "## Kontext") + 2, "kept")
+  local hp = form.parse(hd)
+  eq(hp.sections.context, "## Notes about the thing\nkept")
+  eq(hp.sections.notes, "")
+
   -- ── several areas: one task each ───────────────────────────────────────────
   eq(form.split_areas(" a , b,,a "), { "a", "b" }, "trimmed, once each, in the order typed")
   local ma = form.template({ area = "ALL, lib.nvim", title = "T" })

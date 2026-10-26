@@ -48,6 +48,25 @@ return function(H)
   ok(vim.api.nvim_win_is_valid(origin), "current: the window stays when the form closes")
   eq(#vim.api.nvim_list_wins(), before)
 
+  -- an unknown mode is said and replaced by the configured one, no error from the window code
+  local ub = ui.open({ areas = { "a" }, mode = "floot", on_submit = function() end })
+  eq(vim.b[ub].tasks_form_mode, "float")
+  ui.close(ub)
+
+  -- `current` with a modified buffer that may not be hidden: a split, the text is not touched, and the mode says so
+  local keep_hidden = vim.o.hidden
+  vim.o.hidden = false
+  vim.cmd("enew")
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { "unsaved" })
+  local dirty = vim.api.nvim_get_current_buf()
+  local mb = open("current")
+  eq(vim.b[mb].tasks_form_mode, "split", "fell back to a split")
+  ok(vim.api.nvim_buf_is_valid(dirty), "the modified buffer is still there")
+  ui.close(mb)
+  eq(vim.api.nvim_buf_get_lines(dirty, 0, -1, false), { "unsaved" })
+  vim.cmd("bwipeout! " .. dirty)
+  vim.o.hidden = keep_hidden
+
   -- the configured mode is the default
   config.merge({ form = { mode = "split" } })
   local cfgb = ui.open({ areas = { "a" }, on_submit = function() end })

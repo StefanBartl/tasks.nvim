@@ -100,4 +100,15 @@ return function(H)
   end
   eq(entry_of(doc.results[1].id).links, { "https://d.org" })
   eq(entry_of(plain.id).links, nil)
+  -- a hand-written `javascript:` entry is a problem of the task and never reaches a client as a link
+  F.task(
+    H,
+    root,
+    "lib.nvim",
+    "js-link",
+    F.meta("Js", "open", { { "links", "[javascript:alert(1), https://ok.org]" } })
+  )
+  local js = entry_of("lib.nvim/js-link")
+  eq(js.links, { "https://ok.org" })
+  eq(js.valid, false, "the task is marked as having a problem")
 end

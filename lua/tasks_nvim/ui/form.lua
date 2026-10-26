@@ -237,6 +237,7 @@ M.MODES = { "float", "split", "vsplit", "current" }
 ---Make the window for the form and leave the new, empty buffer in it.
 ---@param mode Tasks.FormMode
 ---@return integer buf
+---@return Tasks.FormMode mode  # The mode that was used (`current` becomes `split` when the window cannot be taken).
 local function open_window(mode)
   if mode == "float" then
     local buf = vim.api.nvim_create_buf(false, true)
@@ -252,10 +253,19 @@ local function open_window(mode)
       title = " New task ",
       title_pos = "center",
     })
-    return buf
+    return buf, mode
   end
-  vim.cmd(({ split = "botright new", vsplit = "botright vnew", current = "enew" })[mode])
-  return vim.api.nvim_get_current_buf()
+  if mode == "current" then
+    -- `enew` fails (E37) when the window holds a modified buffer that may not be hidden: take a split then, the
+    -- person's text is not touched
+    local ok = pcall(vim.cmd, "enew")
+    if ok then
+      return vim.api.nvim_get_current_buf(), mode
+    end
+    mode = "split"
+  end
+  vim.cmd(({ split = "botright new", vsplit = "botright vnew" })[mode])
+  return vim.api.nvim_get_current_buf(), mode
 end
 
 ---@class Tasks.FormOpenOpts
@@ -279,7 +289,15 @@ end
 function M.open(opts)
   local form_keys = require("tasks_nvim.config").get().keys.form
   local mode = opts.mode or require("tasks_nvim.config").get().form.mode
-  local buf = open_window(mode)
+  if not vim.tbl_contains(M.MODES, mode) then
+    -- `:Tasks new mode=floot` must not end in an error from the window code: say so and use the configured one
+    require("lib.nvim.notify")
+      .create("[tasks]")
+      .warn(("unknown form mode '%s' (expected %s)"):format(tostring(mode), table.concat(M.MODES, ", ")))
+    mode = require("tasks_nvim.config").get().form.mode
+  end
+  local buf
+  buf, mode = open_window(mode)
   vim.b[buf].tasks_form_mode = mode
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].bufhidden = "wipe"
