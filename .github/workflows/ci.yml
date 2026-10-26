@@ -47,7 +47,7 @@ jobs:
       # lib.nvim is a hard runtime dependency; TESTS/run.lua finds it in .deps/lib.nvim.
       - uses: actions/checkout@v5
         with:
-          repository: StefanBartl/lib.nvim
+          repository: WKDSteve/lib.nvim
           path: .deps/lib.nvim
           ref: ci-verified
       # The dashboard specs drive the real Snacks picker; without it they would pass with no assertion.
@@ -62,7 +62,7 @@ jobs:
       # Checked out from the branch that only moves once the dependency's own CI is green.
       - uses: actions/checkout@v5
         with:
-          repository: "StefanBartl/testing.nvim"
+          repository: "WKDSteve/testing.nvim"
           path: .deps/testing.nvim
           ref: ci-verified
       - run: bash scripts/test.sh --json "$RUNNER_TEMP/testing-ir.json"

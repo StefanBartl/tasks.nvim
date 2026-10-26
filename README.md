@@ -18,10 +18,10 @@
 [![Lua](https://img.shields.io/badge/Lua-5.1%2FLuaJIT-2C2D72?logo=lua&logoColor=white)](https://www.lua.org)
 ![Status](https://img.shields.io/badge/status-alpha-red)
 
-> Part of the [wkd](https://stefanbartl.github.io/wkd/) family of plugins. It pairs with
-> [rules.nvim](https://github.com/StefanBartl/rules.nvim) (the work list of a rule check becomes tasks: `import --from-rules`, see
+> Part of the [wkd](https://wkdsteve.github.io/wkd/) family of plugins. It pairs with
+> [rules.nvim](https://github.com/WKDSteve/rules.nvim) (the work list of a rule check becomes tasks: `import --from-rules`, see
 > [COMMANDS.md](docs/COMMANDS.md#headless-import---from-rules-and-bootstrap-rulesnvim)) and
-> builds on [lib.nvim](https://github.com/StefanBartl/lib.nvim).
+> builds on [lib.nvim](https://github.com/WKDSteve/lib.nvim).
 
 Open work as **one Markdown file per task**, with a few lines of flat YAML frontmatter, and a generated overview
 per project. The engine reads, ranks, indexes, creates, changes, finishes and checks those files; on top sit the
@@ -76,12 +76,12 @@ How it is meant to be used, scenario by scenario: [docs/WORKFLOWS.md](docs/WORKF
 | | |
 | --- | --- |
 | Neovim | 0.10+ |
-| [lib.nvim](https://github.com/StefanBartl/lib.nvim) | required (files, frontmatter, checkpoints, the command composer, the shared contract modules `lib.nvim.contract.*`); commit `6f30218` or newer |
+| [lib.nvim](https://github.com/WKDSteve/lib.nvim) | required (files, frontmatter, checkpoints, the command composer, the shared contract modules `lib.nvim.contract.*`); commit `6f30218` or newer |
 | [snacks.nvim](https://github.com/folke/snacks.nvim) | optional: the interactive dashboard |
-| [mdview.nvim](https://github.com/StefanBartl/mdview.nvim) | optional: browser preview |
-| [ui.nvim](https://github.com/StefanBartl/ui.nvim) | optional: themed confirmation dialogs |
-| [pickers.nvim](https://github.com/StefanBartl/pickers.nvim) | optional: `:Tasks folder` |
-| [cascade.nvim](https://github.com/StefanBartl/cascade.nvim) | optional: cycle values in the form |
+| [mdview.nvim](https://github.com/WKDSteve/mdview.nvim) | optional: browser preview |
+| [ui.nvim](https://github.com/WKDSteve/ui.nvim) | optional: themed confirmation dialogs |
+| [pickers.nvim](https://github.com/WKDSteve/pickers.nvim) | optional: `:Tasks folder` |
+| [cascade.nvim](https://github.com/WKDSteve/cascade.nvim) | optional: cycle values in the form |
 | `git` | optional: dates for `--stale=refs` (file times otherwise) |
 
 `:checkhealth tasks_nvim` shows what is present.
@@ -92,8 +92,8 @@ lazy.nvim:
 
 ```lua
 {
-  "StefanBartl/tasks.nvim",
-  dependencies = { "StefanBartl/lib.nvim" },
+  "WKDSteve/tasks.nvim",
+  dependencies = { "WKDSteve/lib.nvim" },
   cmd = { "Tasks", "TasksVault" },
   opts = {
     vault = "~/vault", -- one folder per area; or set $TASKS_VAULT
@@ -220,7 +220,7 @@ scripts/test.sh --file tasks_mutate # spec files whose name contains the argumen
 scripts/test.sh --json ir.json      # also write the machine-readable result
 ```
 
-The specs run on [testing.nvim](https://github.com/StefanBartl/testing.nvim) (configured in `.testing.lua`) against a
+The specs run on [testing.nvim](https://github.com/WKDSteve/testing.nvim) (configured in `.testing.lua`) against a
 temporary fixture vault, never a real one. testing.nvim and lib.nvim are looked up in `$TESTING_NVIM_DIR` / `$LIB_NVIM_DIR`,
 `.deps/<name>`, next to this repository and in lazy.nvim's data folder. The dashboard specs also drive snacks.nvim's
 picker: `scripts/test.sh` looks for it in the same places (override `$SNACKS_DIR`) and passes the folder on, because the

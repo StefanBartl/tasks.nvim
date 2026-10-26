@@ -43,7 +43,7 @@ lowercase word `all` is the keyword; `ALL` with capitals is the area of that nam
 | `--unestimated` | missing the effort or the value |
 | `--quick-win` | a quick win: value and effort at the thresholds of `setup({ quick_wins })` (default value 4+, effort S-). Shorthand for `--value=>=N --effort=<=X`, so it cannot be combined with `--value` or `--effort` (an error, never a silent pick) |
 | `--sort=default` / `prio-effort` / `severity` / `frecency` / `roi` | the order (`roi`: highest `value / effort` first, tasks without both numbers after the ones with a figure, each group in the default order): `default` is status, prio, area, slug; `prio-effort` is status, prio, then effort ascending (important and small first, no effort last of its prio); `severity` is `critical` first, then `high`, `medium`, `low`, no severity last, each group in the default order; `frecency` is what the dashboard opened or changed most first (see below), the rest in the default order |
-| `--to=` | where the list goes: `buffer` (default), `clipboard`, `qf`, `file:<path>`, `echo`, `mdview` (Markdown written to a temp file and shown in the browser by [mdview.nvim](https://github.com/StefanBartl/mdview.nvim); see [Browser preview](#browser-preview-mdview)) |
+| `--to=` | where the list goes: `buffer` (default), `clipboard`, `qf`, `file:<path>`, `echo`, `mdview` (Markdown written to a temp file and shown in the browser by [mdview.nvim](https://github.com/WKDSteve/mdview.nvim); see [Browser preview](#browser-preview-mdview)) |
 | `--format=md` / `--format=csv` | table (default) or CSV with the extra columns tags, blocked by, summary, path, severity, value, roi, actor; a `file:` target ending in `.csv` implies `csv`. A CSV cell that starts with `=`, `+`, `-`, `@` or a tab gets a leading `'`, so a title like `=HYPERLINK(...)` is text, not a formula, when the file is opened in a spreadsheet |
 
 ```vim
@@ -534,7 +534,7 @@ see [Browser preview](#browser-preview-mdview).
 
 `task preview <id>`, `tasks ... --to=mdview` and the dashboard keys (`gp`, and "Preview in
 browser" in the `e` menu) put the rendered Markdown in the browser through
-[mdview.nvim](https://github.com/StefanBartl/mdview.nvim). The wire is `ui/preview.lua`:
+[mdview.nvim](https://github.com/WKDSteve/mdview.nvim). The wire is `ui/preview.lua`:
 
 - **A task file** is opened as it is (`:edit`, then `:MDView start <file>`, the path handed over as
   one argument, so a space, `#`, `%` or `'` in it survives), so edits show up in the preview live.
@@ -566,7 +566,7 @@ A picker over the files of **one folder of one area**. `folder` is `tasks`
 reported and no picker opens.
 
 It calls `pickers.command.dispatch(action, { roots = { <folder> }, prompt = ... }, engine)` of
-[pickers.nvim](https://github.com/StefanBartl/pickers.nvim) when that plugin is installed, so the configured
+[pickers.nvim](https://github.com/WKDSteve/pickers.nvim) when that plugin is installed, so the configured
 picker engine is used; `--action=grep|smart` searches file contents. `--list` (or `--to=`) delivers the list of
 files, relative to the folder, instead of opening a picker.
 
@@ -578,7 +578,7 @@ Full-text search over the whole vault is a job for your picker's own grep on the
 
 ### Headless: `import --from-rules` and `bootstrap` (rules.nvim)
 
-A run of [rules.nvim](https://github.com/StefanBartl/rules.nvim) written as a work list (`rules-work-list/1`, see
+A run of [rules.nvim](https://github.com/WKDSteve/rules.nvim) written as a work list (`rules-work-list/1`, see
 `docs/WORK-LIST.md` there) becomes tasks of an area. The work list is the only coupling: tasks.nvim never loads
 rules.nvim and works the same without it.
 

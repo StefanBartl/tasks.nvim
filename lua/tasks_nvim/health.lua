@@ -51,7 +51,7 @@ function M.check()
       lib_ok = false
       error_(
         ("%s missing -- %s"):format(req[1], req[2]),
-        { 'Install or update "StefanBartl/lib.nvim"' }
+        { 'Install or update "WKDSteve/lib.nvim"' }
       )
     end
   end

@@ -69,7 +69,7 @@ local opts = require("docmap.config").build(root, {
   source = "lua/tasks_nvim",
   title = "tasks.nvim",
   out_dir = "docs/map",
-  repo_url = "https://github.com/StefanBartl/tasks.nvim",
+  repo_url = "https://github.com/WKDSteve/tasks.nvim",
   branch = "main",
 
   -- The engine has no UI (see docs/ENGINE.md); a rule in prose is only intent until a check states it. The editor
