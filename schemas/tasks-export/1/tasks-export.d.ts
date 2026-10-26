@@ -693,6 +693,10 @@ export interface TaskEntry {
    * As written, but a path of the machine shows as `<external>/<name>`.
    */
   refs: string[];
+  /**
+   * Web addresses of the task (`http://` or `https://`), apart from `refs`. Only when the task lists any.
+   */
+  links?: string[];
   summary: string;
   folder: boolean;
   /**

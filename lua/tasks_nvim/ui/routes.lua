@@ -597,6 +597,7 @@ local function set_kv()
     summary = "One-line summary shown in the index",
     blocked_by = "Tasks that must finish first (ids, comma-separated)",
     refs = "Files the task is about; --stale=refs watches them",
+    links = "Web addresses (http or https), comma-separated; paths go in refs",
     rules = "Rule ids a ruleset task brings code in line with",
     done_in = "Commit(s) that delivered the task",
     commits = "Every commit made for the task, repo@sha each (replaces the list)",

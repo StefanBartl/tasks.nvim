@@ -152,15 +152,11 @@ function M.build(H)
     "open",
     "Eta tests"
   )
-  task(
-    H,
-    root,
-    "cascade.nvim",
-    "theta",
-    { { "blocked_by", "[lib.nvim/old-done]" }, { "refs", "[lib.nvim@abc1234, lua/x.lua]" } },
-    "blocked",
-    "Theta was blocked by a finished task"
-  )
+  task(H, root, "cascade.nvim", "theta", {
+    { "blocked_by", "[lib.nvim/old-done]" },
+    { "refs", "[lib.nvim@abc1234, lua/x.lua]" },
+    { "links", "[https://example.org/docs#intro, http://example.com]" },
+  }, "blocked", "Theta was blocked by a finished task")
   task(
     H,
     root,

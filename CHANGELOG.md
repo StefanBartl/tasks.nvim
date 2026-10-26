@@ -7,6 +7,10 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- Task field `links`: web addresses (`http://` or `https://`, nothing else) apart from `refs`, which stays for paths, commits and ids.
+  `new --links=` / `opts.links` / `fields.links`, `set links=[...]` (an empty value removes it), `check` finding `bad-link`, `show`;
+  contract `tasks-export/1`: `links` in the task entry (only when the task lists any), contract `tasks-ops/1`: `new` takes
+  `fields.links`. `model.is_web_link` is the one test.
 - `:Tasks new` form: a `Summary:` line and the free-text sections Kontext / Akzeptanz / Notizen (the body of the new
   task), several areas in `Area:` (`a, b`: one task each, all areas checked first), the window as a float by default
   (`mode=float|split|vsplit|current`, `setup({ form = { mode } })`), and a help (`g?`) that stays until `q` / `<Esc>` or

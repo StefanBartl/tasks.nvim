@@ -206,6 +206,7 @@ local NEW_FIELDS = {
   actor = true,
   summary = true,
   refs = true,
+  links = true,
   status = true,
   slug = true,
 }
@@ -708,17 +709,17 @@ local function do_new(op, ctx)
       end
     end
   end
-  local r, err, info = mutate.new(
-    op.area,
-    vim.tbl_extend("force", fields, {
-      root = ctx.root,
-      today = ctx.today,
-      index = false,
-      title = op.title,
-      body = op.body,
-      dry_run = ctx.dry,
-    })
-  )
+  -- `links` of the request is the frontmatter field; in `mutate.new` that name is the wikilink mode
+  local new_opts = vim.tbl_extend("force", fields, {
+    root = ctx.root,
+    today = ctx.today,
+    index = false,
+    title = op.title,
+    body = op.body,
+    dry_run = ctx.dry,
+  })
+  new_opts.web_links, new_opts.links = fields.links, nil
+  local r, err, info = mutate.new(op.area, new_opts)
   if not r then
     return mutate_failure(ctx, err, info)
   end

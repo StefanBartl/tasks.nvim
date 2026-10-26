@@ -1,7 +1,7 @@
 {
   "assumed": 1,
   "days": 3,
-  "digest": "sha256:50f5f7e642d91907",
+  "digest": "sha256:373f6f89945b3c68",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -20,7 +20,7 @@
     "high": 3.5,
     "low": 2.7
   },
-  "rev": "rev:080e29",
+  "rev": "rev:8d1bfb",
   "roi": 4,
   "schema": 1,
   "tasks": 3,

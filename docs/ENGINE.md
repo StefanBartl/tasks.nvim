@@ -263,7 +263,7 @@ finished task with the same id under another date, is refused.
 |---|---|
 | `frontmatter-missing`, `frontmatter-invalid`, `title-missing`, `status-missing`, `field-type`, `unreadable` | the file cannot be read as a task |
 | `symlink-task` (error) | the task file is a symbolic link or a junction: it is not read (the vault must not point outside itself); the task is invalid and has no `etag` |
-| `unknown-status`, `unknown-kind`, `unknown-category`, `unknown-severity`, `bad-prio`, `bad-effort`, `bad-value`, `bad-actor`, `bad-date` | a field has a value outside its enum / format |
+| `unknown-status`, `unknown-kind`, `unknown-category`, `unknown-severity`, `bad-prio`, `bad-effort`, `bad-value`, `bad-actor`, `bad-date`, `bad-link` | a field has a value outside its enum / format (`bad-link`: a `links` entry that is no `http://` / `https://` address) |
 | `blocked-by-cycle` (error) | the hard edges form a circle; one finding per cycle, the members named (a task that blocks only itself is `blocked-by-self`) |
 | `doing-while-blocked`, `blocked-without-blocker`, `blocker-freed`, `blocked-by-parked` (warnings) | the status runs behind what the blockers say; each is a warning because a status may trail the facts for a moment, a cycle may not |
 | `actor-cdx-waits-on-me` (warning) | a task written `actor: cdx` waits on an open task that only you can do (`model.actor` = `me`) |
@@ -371,7 +371,7 @@ nvim --headless -u NONE -l scripts/tasks.lua check
 | `lists [save <name>\|delete <name>\|rename <old> <new>\|show <name>] [filters] [--sort --area --desc]` | the named lists (name, source, summary); `list`, `plan` and `estimate` take `@<name>` as their first word and run the list, options typed on top win |
 | `quickwins [area] [filters] [--min-value --max-effort] [--format=tsv\|md\|ids] [--by-actor] [--paths] [--report=<file>]` | the quick wins, best roi first, plus the small tasks that miss a value; default status `open,doing,decision` |
 | `index [area] [--check]` | write / verify `ROADMAP/TASKS.md` (all areas without argument) |
-| `new <area> <title> [--kind --prio --effort --tags=a,b --category=c,d --severity=s --value=1..5 --actor=cdx\|me\|pair --refs=a,b --lang=de\|en --summary --slug --status] [--folder] [--no-index]` | create a task file (`--lang` picks the language of the body headings, default `de`; `--folder` a folder task) |
+| `new <area> <title> [--kind --prio --effort --tags=a,b --category=c,d --severity=s --value=1..5 --actor=cdx\|me\|pair --refs=a,b --links=https://...,... --lang=de\|en --summary --slug --status] [--folder] [--no-index]` | create a task file (`--lang` picks the language of the body headings, default `de`; `--folder` a folder task) |
 | `plan [area] [--for=id] [filters] [--ready] [--format=md\|tsv\|ids]` | the plan: ready now, decisions by leverage, stages, critical path |
 | `next [area] [--n=3] [--actor=cdx\|me\|pair\|none] [--format=json]` | `next: <id> <title> <reason>`, `then: ...`, `freed:`, `cdx:`, `empty:` and `remind:` lines; `remind: <id>\t<title>\t<date>` lists the open tasks whose reminder is due (oldest first, judged by `--today`, which must be a date), a last `remind: N finished task(s) with a reminder due (`list --done --reminders`)` counts the finished ones; `--format=json` is the `tasks.next` document (no `remind:` there) |
 | `estimate [area] [--for=id] [filters]` | the estimate line, `quick wins:`, `unestimated:` |

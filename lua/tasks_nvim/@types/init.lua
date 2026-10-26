@@ -38,6 +38,7 @@
 ---@field wikilinks? { field: string, index?: integer, slug: string, raw: string }[]  # Bare `[[slug]]` references `parse_text` could not settle without the vault; `scan` resolves them (`tasks_nvim.wikilinks.resolve`) and clears the field.
 ---@field link_problems? Tasks.LinkProblem[]  # The bare `[[slug]]` references that name no id or several (`check`: `wikilink-dangling`, `wikilink-ambiguous`).
 ---@field refs string[]
+---@field links string[]               # Web addresses (`http://` or `https://`), apart from `refs`.
 ---@field plan_steps? Tasks.StepsSummary  # The optional `## Plan` section: steps, how many are ticked (nil without the section).
 ---@field done_in? string
 ---@field commits string[]            # Every commit made for the task, `repo@sha` each (empty without the key).
@@ -116,6 +117,7 @@
 ---@field actor? string               # `cdx`, `me` or `pair`.
 ---@field folder? boolean             # Create a folder task (`<slug>/<slug>.md`) so assets can be attached.
 ---@field refs? string[]|string       # Paths or `repo@commit`; a string is split at commas.
+---@field web_links? string[]|string  # The `links` frontmatter: web addresses (`http://`, `https://`); a string is split at commas.
 ---@field rules? string[]|string      # Rule ids the task fulfils (`ERR-03`); a string is split at commas.
 ---@field body? string                # The body in place of the template's sections.
 ---@field dry_run? boolean            # Only the id it would get; nothing is created.

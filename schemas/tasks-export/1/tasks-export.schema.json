@@ -403,6 +403,14 @@
             "type": "string"
           }
         },
+        "links": {
+          "description": "Web addresses of the task (`http://` or `https://`), apart from `refs`. Only when the task lists any.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://"
+          }
+        },
         "summary": {
           "type": "string"
         },

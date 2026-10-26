@@ -478,6 +478,18 @@ local function as_list(value, field, bad)
   return {}
 end
 
+---Whether `s` is a web address a `links` entry may hold: `http://` or `https://`, a host, no blank or control
+---character. Nothing else (`javascript:`, `file:`, a relative path) is a link: a front end draws it clickable.
+---@param s any
+---@return boolean
+function M.is_web_link(s)
+  if type(s) ~= "string" or s:find("[%s%c]") then
+    return false
+  end
+  local rest = s:match("^[Hh][Tt][Tt][Pp][Ss]?://(.+)$")
+  return rest ~= nil and rest:match("^[^/?#]+") ~= nil
+end
+
 ---The slug of a task file: the filename without `.md`, and without the
 ---`YYYY-MM-DD_` prefix `done` gives files in `Backlog/`.
 ---@param path string
@@ -539,6 +551,7 @@ function M.parse_text(text, ctx)
     blocked_by = {},
     after = {},
     refs = {},
+    links = {},
     summary = "",
     meta = {},
     errors = errors,
@@ -668,6 +681,12 @@ function M.parse_text(text, ctx)
 
     task.tags = as_list(meta.tags, "tags", bad)
     task.refs = as_list(meta.refs, "refs", bad)
+    task.links = as_list(meta.links, "links", bad)
+    for _, link in ipairs(task.links) do
+      if not M.is_web_link(link) then
+        bad("bad-link", ("links entry '%s' is not an http:// or https:// address"):format(link))
+      end
+    end
     task.category = as_list(meta.category, "category", bad)
     for _, c in ipairs(task.category) do
       if not M.is_category(c) then

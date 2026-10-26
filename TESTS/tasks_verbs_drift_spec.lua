@@ -76,6 +76,7 @@ return function(H)
         "effort",
         "kind",
         "lang",
+        "links",
         "no-index",
         "order",
         "phase",

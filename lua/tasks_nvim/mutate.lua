@@ -280,7 +280,7 @@ local function check_lang(lang)
 end
 
 ---Frontmatter keys in the order concept section 3 shows them.
----@param meta { title: string, status: string, kind?: string, prio?: integer|string, effort?: string, value?: integer|string, actor?: string, after?: string[], order?: number|string, plan?: string, phase?: string, tags?: string[], category?: string[], severity?: string, refs?: string[], created: string, updated: string }
+---@param meta { title: string, status: string, kind?: string, prio?: integer|string, effort?: string, value?: integer|string, actor?: string, after?: string[], order?: number|string, plan?: string, phase?: string, tags?: string[], category?: string[], severity?: string, refs?: string[], links?: string[], created: string, updated: string }
 ---@return table[] pairs
 local function meta_pairs(meta)
   local pairs_ = {
@@ -327,6 +327,9 @@ local function meta_pairs(meta)
   pairs_[#pairs_ + 1] = { "updated", meta.updated }
   if meta.refs then
     pairs_[#pairs_ + 1] = { "refs", meta.refs }
+  end
+  if meta.links then
+    pairs_[#pairs_ + 1] = { "links", meta.links }
   end
   if meta.rules then
     pairs_[#pairs_ + 1] = { "rules", meta.rules }
@@ -420,6 +423,29 @@ local function string_list(value, what, strict)
       return nil, ("%s item '%s' must not contain , [ ] quotes or #"):format(what, t)
     end
     out[#out + 1] = t
+  end
+  return out, nil
+end
+
+---The web addresses of a `links` value: a list of strings (a string is split at commas), each an `http://` or
+---`https://` address (`model.is_web_link`), once each.
+---@param value any
+---@return string[]|nil list
+---@return string|nil err
+local function link_list(value)
+  local list, err = string_list(value, "links")
+  if not list then
+    return nil, err
+  end
+  local seen, out = {}, {}
+  for _, link in ipairs(list) do
+    if not model.is_web_link(link) then
+      return nil, ("links item '%s' is not an http:// or https:// address"):format(link)
+    end
+    if not seen[link] then
+      seen[link] = true
+      out[#out + 1] = link
+    end
   end
   return out, nil
 end
@@ -531,6 +557,7 @@ local SETTABLE = {
   "plan",
   "phase",
   "refs",
+  "links",
   "rules",
   "done_in",
   "commits",
@@ -669,6 +696,12 @@ local function normalize_patch(patch, opts)
           )
       end
       result[#result + 1] = { key, value }
+    elseif key == "links" then
+      local list, err = link_list(value)
+      if not list then
+        return nil, err
+      end
+      result[#result + 1] = { key, #list > 0 and list or M.REMOVE }
     elseif key == "category" then
       local list, err = category_list(value)
       if not list then
@@ -954,6 +987,14 @@ function M.new(area, opts)
     end
     refs = #list > 0 and list or nil
   end
+  local links
+  if opts.web_links ~= nil then
+    local list, lerr2 = link_list(opts.web_links)
+    if not list then
+      return nil, lerr2
+    end
+    links = #list > 0 and list or nil
+  end
   local rules
   if opts.rules ~= nil then
     -- rule ids are single tokens, as tags are
@@ -1017,6 +1058,7 @@ function M.new(area, opts)
       category = category,
       severity = opts.severity,
       refs = refs,
+      links = links,
       rules = rules,
       created = today,
       updated = today,

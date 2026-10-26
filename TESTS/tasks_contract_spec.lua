@@ -231,7 +231,8 @@ return function(H)
     alpha.refs,
     { "docs/shared.md", "<external>/secret.md", "<external>/notes.md", "repo@abc1234" }
   )
-  ok(not snap_text:find("%a:[/\\]", 1), "no drive path at all in the document")
+  -- a drive letter stands alone (`C:/`); the `p:/` of a web address in `links` is no drive
+  ok(not snap_text:find("%f[%a]%a%f[%A]:[/\\]", 1), "no drive path at all in the document")
 
   -- ── determinism ──
   local _, again = call("snapshot")

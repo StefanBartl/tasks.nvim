@@ -46,7 +46,7 @@
     "listed": 14,
     "unlisted": 2
   },
-  "digest": "sha256:c7d2636efa617529",
+  "digest": "sha256:a3094eac6786940d",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -160,7 +160,7 @@
       "title": "Old and done"
     }
   ],
-  "rev": "rev:080e29",
+  "rev": "rev:8d1bfb",
   "schema": 1,
   "tasks": [
     {
@@ -404,11 +404,15 @@
       ],
       "category": [],
       "created": "2026-01-01",
-      "etag": "sha256:d905b59b07b1ea58",
+      "etag": "sha256:6521f60ef65112d6",
       "file": "cascade.nvim/ROADMAP/tasks/theta.md",
       "folder": false,
       "group": "blocked|-",
       "id": "cascade.nvim/theta",
+      "links": [
+        "https://example.org/docs#intro",
+        "http://example.com"
+      ],
       "problems": [],
       "readiness": {
         "leverage": 0,

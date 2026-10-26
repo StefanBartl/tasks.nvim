@@ -257,6 +257,8 @@ local function task_entry(root, task, node, rank)
     refs = vim.tbl_map(function(r)
       return safe_path(root, r)
     end, task.refs or {}),
+    -- only when the task lists web links, so a document without them reads as before
+    links = (task.links and #task.links > 0) and vim.list_slice(task.links, 1) or nil,
     summary = clip(task.summary or "", M.LIMITS.summary),
     folder = task.folder,
     file = relative(root, task.path) or vim.fs.basename(task.path),
