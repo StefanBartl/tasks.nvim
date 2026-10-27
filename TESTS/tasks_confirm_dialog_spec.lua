@@ -6,14 +6,16 @@
 -- Why: the spec replaces `lib.nvim.ui.dialog` and `vim.ui.select` with test doubles on purpose.
 
 return function(H)
-  local eq = H.eq
+  local eq, ok = H.eq, H.ok
   local confirm = require("tasks_nvim.ui.confirm")
   local dialog = require("lib.nvim.ui.dialog")
 
+  local real_require = require
   local orig_confirm, orig_choose, orig_select = dialog.confirm, dialog.choose, vim.ui.select
   local function restore()
     dialog.confirm, dialog.choose, vim.ui.select = orig_confirm, orig_choose, orig_select
     package.loaded["lib.nvim.ui.dialog"] = dialog
+    _G.require = real_require
   end
 
   local good, failure = pcall(function()
@@ -27,14 +29,14 @@ return function(H)
       answers[#answers + 1] = yes
     end)
     eq(seen.question, "Delete it?", "the question is passed on unshortened")
-    eq(seen.choices, { "Yes, delete", "No" }, "the labels")
-    eq(seen.default, 2, "No starts focused: <CR> is never the destructive answer")
-    seen.on_answer("Yes, delete", 1)
+    eq(seen.choices, { "No", "Yes, delete" }, "the labels, the harmless one first")
+    eq(seen.default, 1, "No starts focused: <CR> is never the destructive answer")
+    seen.on_answer("Yes, delete", 2)
     eq(answers, { true }, "the yes label accepts")
     confirm.yesno("Delete it?", nil, function(yes)
       answers[#answers + 1] = yes
     end)
-    seen.on_answer("No", 2)
+    seen.on_answer("No", 1)
     eq(answers, { true, false }, "No refuses")
     confirm.yesno("Delete it?", "delete", function(yes)
       answers[#answers + 1] = yes
@@ -54,11 +56,11 @@ return function(H)
     eq(got.default, 1, "the first (harmless) choice starts focused")
     got.cb(2)
     got.cb(0)
-    eq(idx, { 2, "nil" }, "the callback is the dialog's: 0 becomes nil")
+    got.cb(nil)
+    eq(idx, { 2, "nil", "nil" }, "the callback is the dialog's: 0 and nil become nil")
 
     -- an older lib.nvim without the dialog module: vim.ui.select
     package.loaded["lib.nvim.ui.dialog"] = nil
-    local real_require = require
     local hide = true
     _G.require = function(name)
       if hide and name == "lib.nvim.ui.dialog" then
@@ -72,8 +74,9 @@ return function(H)
       on_choice(items[#items])
     end
     local res = {}
+    local long = string.rep("x", 300)
     local ok_call, err = pcall(function()
-      confirm.yesno("Really?", "go", function(yes)
+      confirm.yesno(long, "go", function(yes)
         res[#res + 1] = yes
       end)
       confirm.choose("Pick", { "a", "b" }, function(i)
@@ -85,6 +88,7 @@ return function(H)
     assert(ok_call, err)
     eq(prompts[1].items, { "No", "Yes, go" }, "fallback lists the harmless answer first")
     eq(res, { true, 2 }, "fallback answers")
+    ok(vim.fn.strchars(prompts[1].prompt) <= 100, "the native prompt does not wrap: it is cut")
   end)
   restore()
   assert(good, failure)

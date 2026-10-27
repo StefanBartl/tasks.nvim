@@ -153,10 +153,16 @@ function M.check()
   else
     info("mdview.nvim not found -- no browser preview")
   end
-  if pcall(require, "ui.kit") then
-    ok("ui.nvim -- themed confirmations")
+  local dialog_ok, dialog = pcall(require, "lib.nvim.ui.dialog")
+  if dialog_ok and type(dialog) == "table" and dialog.backend then
+    local backend = dialog.backend()
+    if backend == "native" then
+      info("confirmations use vim.ui.select (neither ui.nvim nor lib.nvim's ui.kit loads)")
+    else
+      ok("confirmations use the dialog of " .. backend)
+    end
   else
-    info("ui.nvim not found -- confirmations use vim.ui.select")
+    info("lib.nvim has no ui.dialog -- confirmations use vim.ui.select")
   end
   if pcall(require, "cascade") then
     ok("cascade.nvim -- cycling values in the task form")

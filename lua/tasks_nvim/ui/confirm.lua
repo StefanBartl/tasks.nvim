@@ -24,6 +24,18 @@ function M.shorten(s, max)
   return vim.fn.strcharpart(s, 0, max - 1) .. "…"
 end
 
+---Every line of `s` cut to `max` characters: for a native prompt, which does not wrap.
+---@param s string
+---@param max integer
+---@return string
+function M.cut_lines(s, max)
+  local out = {}
+  for _, line in ipairs(vim.split(s, "\n", { plain = true })) do
+    out[#out + 1] = M.shorten(line, max)
+  end
+  return table.concat(out, "\n")
+end
+
 ---@param msg string
 ---@param yes_label string|nil e.g. "delete" -- shown as "Yes, delete"
 ---@param cb fun(accepted: boolean)
@@ -33,16 +45,17 @@ function M.yesno(msg, yes_label, cb)
   if dialog then
     dialog.confirm({
       question = msg,
-      choices = { yes, "No" },
-      -- "No" starts focused: `<CR>` must not be the destructive answer.
-      default = 2,
+      -- "No" first, and named as the default: the dialog starts on it, so `<CR>` is never the destructive answer
+      -- even on a backend that ignores `default`.
+      choices = { "No", yes },
+      default = 1,
       on_answer = function(choice)
         cb(choice == yes)
       end,
     })
     return
   end
-  vim.ui.select({ "No", yes }, { prompt = msg }, function(choice)
+  vim.ui.select({ "No", yes }, { prompt = M.cut_lines(msg, 100) }, function(choice)
     cb(choice == yes)
   end)
 end
@@ -57,11 +70,11 @@ function M.choose(msg, choices, cb)
   local dialog = require("tasks_nvim.soft").require("lib.nvim.ui.dialog", { "choose" })
   if dialog then
     dialog.choose(msg, choices, 1, function(index)
-      cb(index > 0 and index or nil)
+      cb(type(index) == "number" and index > 0 and index or nil)
     end)
     return
   end
-  vim.ui.select(choices, { prompt = msg }, function(choice)
+  vim.ui.select(choices, { prompt = M.cut_lines(msg, 100) }, function(choice)
     for i, c in ipairs(choices) do
       if c == choice then
         return cb(i)
