@@ -3,3 +3,4 @@
 /.deps/
 /.claude/
 /contract/node_modules/
+/.ci-last.json
