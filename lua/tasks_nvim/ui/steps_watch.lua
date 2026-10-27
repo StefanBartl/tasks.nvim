@@ -69,7 +69,7 @@ function M.check_buffer(buf)
     return false
   end
   confirm.yesno(
-    ("All steps of %s are ticked.\n\nFinish the task?"):format(confirm.shorten(id, 60)),
+    ("All steps of %s are ticked.\n\nFinish the task?"):format(id),
     "finish",
     function(yes)
       if not yes or not vim.api.nvim_buf_is_valid(buf) then

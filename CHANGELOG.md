@@ -5,6 +5,12 @@ the version is not tagged yet (the repository is not published).
 
 ## [Unreleased]
 
+### Changed
+
+- Confirmations and choices (`ui/confirm.lua`) ask through `lib.nvim.ui.dialog`, the dialog every plugin shares: ui.nvim's
+  kit, else lib.nvim's copy of it, else `vim.ui.select`. The question wraps instead of being cut, "No" starts focused, and a
+  lib.nvim without the module keeps the `vim.ui.select` path.
+
 ### Added
 
 - `new <a>,<b> "title"` on the command line (and `mutate.new_many`): one task with the same text in each area; every area is

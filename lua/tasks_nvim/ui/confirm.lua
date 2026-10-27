@@ -1,23 +1,19 @@
 ---@module 'tasks_nvim.ui.confirm'
 ---@brief Confirm dialog for `:Tasks`' destructive confirmations.
 ---@description
---- ui.kit.confirm (ui.nvim) -- the same themed dialog every other
---- interactive prompt in this ecosystem uses (gopath.nvim, fileops.nvim,
---- filetree.nvim, ...) -- instead of a hand-rolled `getcharstr()`-driven
---- y/n reader printed via `print()`, which read on screen like a plain text
---- notification rather than an actual prompt. Falls back to `vim.ui.select`
---- when `ui.nvim` isn't installed, so this never hard-depends on it.
+--- Thin adapter over `lib.nvim.ui.dialog`, the one wrapper every plugin shares: the themed ui.kit dialog
+--- (keyboard and mouse buttons, wrapped question) when ui.nvim or the kit copy of lib.nvim is there, a native
+--- `vim.ui.select` otherwise. An older lib.nvim without that module takes the `vim.ui.select` path below, so
+--- this never hard-depends on it.
 ---
---- Async by nature (`ui.kit.confirm` is callback-based, not blocking):
---- `cb(accepted)` is called exactly once, never synchronously before this
---- function returns. Callers that used to write
---- `if not confirm.yesno(msg) then return end` need the rest of their logic
---- moved into `cb`.
+--- Async by nature: `cb(accepted)` is called exactly once, never synchronously before this function returns.
+--- Callers that used to write `if not confirm.yesno(msg) then return end` need the rest of their logic moved
+--- into `cb`.
 
 local M = {}
 
----`s` cut to `max` characters with an ellipsis. A dialog line wider than the editor pushes the buttons out of
----the window (the kit centres them on the widest line), so a task title goes through this first.
+---`s` cut to `max` characters with an ellipsis, for a line of a list or a button label. A question needs no
+---cutting: the dialog wraps it.
 ---@param s string
 ---@param max integer
 ---@return string
@@ -29,16 +25,17 @@ function M.shorten(s, max)
 end
 
 ---@param msg string
----@param yes_label string|nil e.g. "delete" — shown as "Yes, delete"
+---@param yes_label string|nil e.g. "delete" -- shown as "Yes, delete"
 ---@param cb fun(accepted: boolean)
 function M.yesno(msg, yes_label, cb)
   local yes = yes_label and ("Yes, " .. yes_label) or "Yes"
-  local kit = require("tasks_nvim.soft").require("ui.kit", { "confirm" })
-  if kit then
-    kit.confirm({
+  local dialog = require("tasks_nvim.soft").require("lib.nvim.ui.dialog", { "confirm" })
+  if dialog then
+    dialog.confirm({
       question = msg,
-      -- "No" first: the dialog starts on the first choice, and `<CR>` must not be the destructive one.
-      choices = { "No", yes },
+      choices = { yes, "No" },
+      -- "No" starts focused: `<CR>` must not be the destructive answer.
+      default = 2,
       on_answer = function(choice)
         cb(choice == yes)
       end,
@@ -57,27 +54,20 @@ end
 ---@param choices string[]
 ---@param cb fun(index: integer|nil)
 function M.choose(msg, choices, cb)
-  local function index_of(choice)
-    for i, c in ipairs(choices) do
-      if c == choice then
-        return i
-      end
-    end
-    return nil
-  end
-  local kit = require("tasks_nvim.soft").require("ui.kit", { "confirm" })
-  if kit then
-    kit.confirm({
-      question = msg,
-      choices = choices,
-      on_answer = function(choice)
-        cb(index_of(choice))
-      end,
-    })
+  local dialog = require("tasks_nvim.soft").require("lib.nvim.ui.dialog", { "choose" })
+  if dialog then
+    dialog.choose(msg, choices, 1, function(index)
+      cb(index > 0 and index or nil)
+    end)
     return
   end
   vim.ui.select(choices, { prompt = msg }, function(choice)
-    cb(index_of(choice))
+    for i, c in ipairs(choices) do
+      if c == choice then
+        return cb(i)
+      end
+    end
+    cb(nil)
   end)
 end
 

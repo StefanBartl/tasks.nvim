@@ -1862,7 +1862,7 @@ function M.task_done(ctx)
   confirm.yesno(
     ("Finish task %s?\n\n%s\n\nIt moves to Backlog/%s/%s_%s%s."):format(
       id,
-      confirm.shorten(task.title, 70),
+      task.title,
       bucket,
       date,
       task.slug,

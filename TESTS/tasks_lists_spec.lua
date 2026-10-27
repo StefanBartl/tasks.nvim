@@ -369,8 +369,16 @@ return function(H)
   ---@return boolean closed
   local function menu(state, choose, typed)
     local select_orig, input_orig = vim.ui.select, vim.ui.input
+    local dialog = require("lib.nvim.ui.dialog")
+    local confirm_orig = dialog.confirm
     vim.ui.select = function(items, opts, cb)
       cb(choose(items, opts or {}))
+    end
+    -- the confirmation is asked through the dialog (a float); the spec answers it like the native fallback
+    dialog.confirm = function(o)
+      vim.ui.select(o.choices, { prompt = o.question }, function(choice)
+        o.on_answer(choice)
+      end)
     end
     vim.ui.input = function(_, cb)
       cb(typed)
@@ -379,7 +387,7 @@ return function(H)
     local called, cerr2 = pcall(dash.lists_menu, state, function()
       closed = true
     end)
-    vim.ui.select, vim.ui.input = select_orig, input_orig
+    vim.ui.select, vim.ui.input, dialog.confirm = select_orig, input_orig, confirm_orig
     ok(called, tostring(cerr2))
     return closed
   end
