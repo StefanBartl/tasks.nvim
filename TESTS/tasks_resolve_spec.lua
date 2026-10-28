@@ -257,4 +257,128 @@ return function(H)
     { { "task", dupe_file, "Dupe as file" }, { "task", dupe_folder, "Dupe as folder" } },
     "a duplicate gives both of its files"
   )
+
+  -- ── group symbols: `[[group/<name>]]` resolves to `ALL/groups/<name>.md` ──
+  local perf = root .. "/ALL/groups/perf.md"
+  H.write(perf, '---\ntitle: "Performance"\n---\n\n# Performance\n\nWhat perf means here.\n')
+  local sec = root .. "/ALL/groups/sec.md"
+  H.write(sec, "Intro line\n\n# Security group\n\nText.\n")
+
+  eq(
+    token("see [[group/perf]] here", 10),
+    { "[[group/perf]]", 5, 18 },
+    "a group symbol, with its brackets"
+  )
+  eq(
+    token("see [[group/perf|Perf]] here", 13),
+    { "[[group/perf|Perf]]", 5, 23 },
+    "a group symbol with an alias"
+  )
+  eq(
+    token("see group/perf here", 8),
+    { "group/perf", 5, 14 },
+    "without brackets it is only an id shape"
+  )
+  eq(token("see [group/perf] here", 8), { "group/perf", 6, 15 }, "one bracket is no wikilink")
+  eq(
+    token("see [[lib.nvim/alpha]] here", 10),
+    { "lib.nvim/alpha", 7, 20 },
+    "a task wikilink stays a task id"
+  )
+
+  local g = resolve.resolve("[[group/perf]]", { roots = { root } })
+  eq(#g, 1, "a group resolves to its file")
+  eq(
+    { g[1].kind, g[1].id, g[1].path, g[1].title, g[1].line },
+    { "group", "group/perf", perf, "Performance", 5 },
+    "kind, id, path, the frontmatter title and the heading line"
+  )
+  local s = resolve.resolve("[[group/sec|Security]]", { roots = { root } })
+  eq({ s[1].title, s[1].line }, { "Security group", 3 }, "without frontmatter: the first heading")
+  eq(
+    resolve.resolve("[[group/missing]]", { roots = { root } }),
+    {},
+    "a group without a file is nothing"
+  )
+  eq(
+    resolve.resolve("group/perf", { roots = { root } }),
+    {},
+    "the bare form is a task id, and no area is called group"
+  )
+  eq(
+    resolve.resolve("[[group/../x]]", { roots = { root } }),
+    {},
+    "a name that would leave the folder is no group"
+  )
+
+  local buf2 = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf2, 0, -1, false, { "tagged [[group/sec]] in a note" })
+  local gat, gtok = resolve.resolve_at(buf2, 1, 12, { roots = { root } })
+  eq(gtok, "[[group/sec]]", "resolve_at finds the group symbol")
+  eq(gat[1].path, sec)
+  vim.api.nvim_buf_delete(buf2, { force = true })
+
+  H.write(root .. "/ALL/groups/not a group.md", "x\n")
+  H.write(root .. "/ALL/groups/notes.txt", "x\n")
+  eq(
+    vim.tbl_map(function(x)
+      return { x.name, x.title }
+    end, resolve.groups({ roots = { root } })),
+    { { "perf", "Performance" }, { "sec", "Security group" } },
+    "groups() lists the group files by name, and only those"
+  )
+
+  -- ── found in review: the frontmatter is lib.nvim's, not a hand-made parser ──
+  local function head_of(name, text)
+    H.write(root .. "/ALL/groups/" .. name .. ".md", text)
+    local r = resolve.resolve("[[group/" .. name .. "]]", { roots = { root } })[1]
+    return { r.title, r.line }
+  end
+  eq(
+    head_of("bom", "\239\187\191---\ntitle: Bom\n---\n# x comment-like\n"),
+    { "Bom", 4 },
+    "a BOM before the block"
+  )
+  eq(
+    head_of("crlf", "---\r\ntitle: Crlf\r\n---\r\n\r\n# Heading\r\n"),
+    { "Crlf", 5 },
+    "CRLF line ends"
+  )
+  eq(
+    head_of("empty", '---\ntitle: ""\n---\n# Empty title\n'),
+    { "Empty title", 4 },
+    'title: "" falls back to the heading'
+  )
+  eq(
+    head_of("open", "---\ntitle: Never closed\n# Heading\n"),
+    { "Heading", 3 },
+    "an unclosed block is no frontmatter"
+  )
+  eq(head_of("bare", "no heading at all\n"), { "bare", 1 }, "no title and no heading: the name")
+
+  eq(
+    token("see [[group/perf#Usage]] here", 10),
+    { "[[group/perf#Usage]]", 5, 24 },
+    "a group symbol with a heading"
+  )
+  eq(
+    token("see [[group/perf#Usage|P]] here", 10),
+    { "[[group/perf#Usage|P]]", 5, 26 },
+    "with a heading and an alias"
+  )
+  eq(
+    resolve.resolve("[[group/PERF]]", { roots = { root } }),
+    {},
+    "spelled exactly, on every system"
+  )
+  vim.fn.mkdir(root .. "/ALL/groups/folder.md", "p")
+  ok(
+    not vim.tbl_contains(
+      vim.tbl_map(function(x)
+        return x.name
+      end, resolve.groups({ roots = { root } })),
+      "folder"
+    ),
+    "a folder named like a group file is no group"
+  )
 end

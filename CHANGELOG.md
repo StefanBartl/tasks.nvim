@@ -5,6 +5,10 @@ the version is not tagged yet (the repository is not published).
 
 ## [Unreleased]
 
+### Added
+
+- `tasks_nvim.resolve` resolves group symbols: `[[group/<name>]]` leads to `ALL/groups/<name>.md` (`kind = "group"`), and `resolve.groups()` lists a vault's groups. A vault with an area named `group` loses `[[group/<slug>]]` as a task link (the bare `group/<slug>` still resolves).
+
 ### Fixed
 
 - The `:Tasks estimate --walk` value buttons "1".."5" are picked by their own digit key (the kit binds digits by position, `5` used to pick the fifth button, "3"); this needs a lib.nvim with the digit-label fix.

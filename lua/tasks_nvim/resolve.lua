@@ -18,8 +18,10 @@
 --- **Every target, not the first.** The same id can name a task in two vaults (`opts.roots`), and an open task and a
 --- finished one of the same slug can both exist after a reopen; the caller decides what to do with several.
 ---
---- Group symbols (a group named in text, resolved to where the group is explained) are planned and not here yet:
---- their written form is still to be decided.
+--- **Group symbols** are written as a wikilink, `[[group/<name>]]` (decision `tasks.nvim/gruppensymbole-format-entscheiden`),
+--- and resolve to the file that explains the group, `ALL/groups/<name>.md` in a vault. Only the wikilink counts:
+--- `group/perf` without the brackets is read as a task id like any other. A group is made by creating its file;
+--- `groups()` lists them for other plugins (completion, pickers).
 ---
 --- Not its job: opening anything, prompts, pickers, notifications. UI-free like the rest of the engine.
 
@@ -30,8 +32,8 @@ local M = {}
 
 ---One place a token resolves to.
 ---@class Tasks.ResolveTarget
----@field kind "task"|"done"  # an open task in `ROADMAP/tasks`, or a finished one in `Backlog/`
----@field id string           # `<area>/<slug>`
+---@field kind "task"|"done"|"group"  # an open task in `ROADMAP/tasks`, a finished one in `Backlog/`, or a group's explanation
+---@field id string           # `<area>/<slug>`, or `group/<name>`
 ---@field path string         # the task file, forward slashes; absolute when the vault was given absolute
 ---@field line integer        # 1-based line to land on (the first line of the file)
 ---@field title string        # the frontmatter title, or the slug
@@ -44,6 +46,46 @@ local M = {}
 
 ---Characters a run of path-like text is made of: what an area, a slug and the `/` between them can hold.
 local RUN = "[%w_.%-/]"
+
+---Where a vault explains its groups, relative to the vault root.
+M.GROUPS_DIR = "ALL/groups"
+
+---What a group name may be: starts with a letter or digit, then letters, digits, `_`, `.`, `-`.
+local GROUP_NAME = "^[%w][%w_.%-]*$"
+
+---@param name any
+---@return boolean
+local function is_group_name(name)
+  return type(name) == "string" and #name <= 128 and name:match(GROUP_NAME) ~= nil
+end
+
+---A group symbol around the run `s..e` of `line`: `[[group/<name>]]`, also with a heading (`#h`) or an alias
+---(`|Text`) as any wikilink may have, as the token with its brackets and where it starts and ends; nil when the run
+---is not exactly that. The cursor counts on the name only, as for a task wikilink: the run never holds `[`, `#`, `|`.
+---@param line string
+---@param s integer
+---@param e integer
+---@return string|nil token
+---@return integer|nil s
+---@return integer|nil e
+local function group_token(line, s, e)
+  if s < 3 or line:sub(s - 2, s - 1) ~= "[[" then
+    return nil
+  end
+  if not is_group_name(line:sub(s, e):match("^group/(.+)$")) then
+    return nil
+  end
+  local rest = line:sub(e + 1)
+  local skip = rest:match("^#[^%]|]*()")
+  local offset = skip and (skip - 1) or 0
+  local tail = rest:sub(offset + 1)
+  local after = tail:match("^%]%]()") or tail:match("^|[^%]]*%]%]()")
+  if not after then
+    return nil
+  end
+  local stop = e + offset + after - 1
+  return line:sub(s - 2, stop), s - 2, stop
+end
 
 ---@param line string
 ---@param col integer 1-based
@@ -96,6 +138,10 @@ function M.token_at(line, col)
   if not s or not e then
     return nil
   end
+  local group, gs, ge = group_token(line, s, e)
+  if group then
+    return group, gs, ge
+  end
   -- Trailing dots (the end of a sentence) and `_` on either side (`_lib.nvim/x_`, Markdown emphasis) are not part of
   -- an id: an area never starts with `.` or `_` that `is_area_dir` accepts, a slug never ends in either.
   while e > s and line:sub(e, e):match("[._]") do
@@ -141,6 +187,98 @@ local function roots_of(opts)
   return root and { root } or {}
 end
 
+---Title and line of a group file: the frontmatter `title`, else the first `# ` heading (and its line), else the name.
+---@param path string
+---@param name string
+---@return string title
+---@return integer line
+local function group_head(path, name)
+  local text = fsio.read(path)
+  local parsed = text and require("lib.nvim.markdown.frontmatter").parse(text)
+  if not parsed then
+    return name, 1
+  end
+  local title = parsed.has_block and parsed.meta.title or nil
+  if type(title) ~= "string" or not title:match("%S") then
+    title = nil
+  end
+  -- The body is the tail of the text: the lines before it are the frontmatter block (and nothing without one).
+  local before = select(2, text:sub(1, #text - #parsed.body):gsub("\n", ""))
+  local n = 0
+  for raw in (fsio.lf(parsed.body) .. "\n"):gmatch("([^\n]*)\n") do
+    n = n + 1
+    if raw:match("^#%s+%S") then
+      return title or fsio.trim((raw:gsub("^#%s+", ""))), before + n
+    end
+  end
+  return title or name, 1
+end
+
+---The group files of `root`, by name: `<name>.md` in `GROUPS_DIR`, a valid name, a file (a dead link or a folder
+---named so is none), the folder not leaving the vault (as `plans` reads its folder).
+---@param root string
+---@return string[] names
+local function group_names(root)
+  local dir = root .. "/" .. M.GROUPS_DIR
+  local names = {}
+  if not fsio.is_dir(dir) or vault.leaves(root, dir) then
+    return names
+  end
+  for entry, kind in vim.fs.dir(dir) do
+    local name = entry:match("^(.+)%.md$")
+    if
+      (kind == "file" or kind == "link")
+      and is_group_name(name)
+      and fsio.is_file(dir .. "/" .. entry)
+    then
+      names[#names + 1] = name
+    end
+  end
+  table.sort(names)
+  return names
+end
+
+---The groups of every vault asked, by name within each vault.
+---@param opts? Tasks.ResolveOpts
+---@return { name: string, path: string, title: string, line: integer, root: string }[]
+function M.groups(opts)
+  local out = {}
+  for _, root in ipairs(roots_of(opts)) do
+    for _, name in ipairs(group_names(root)) do
+      local path = root .. "/" .. M.GROUPS_DIR .. "/" .. name .. ".md"
+      local title, line = group_head(path, name)
+      out[#out + 1] = { name = name, path = path, title = title, line = line, root = root }
+    end
+  end
+  return out
+end
+
+---@param name string
+---@param opts? Tasks.ResolveOpts
+---@return Tasks.ResolveTarget[]
+local function resolve_group(name, opts)
+  local out = {}
+  if not is_group_name(name) then
+    return out
+  end
+  for _, root in ipairs(roots_of(opts)) do
+    -- Spelled exactly, like an area (`has_area`): `PERF` must not find `perf.md` on Windows only.
+    if vim.list_contains(group_names(root), name) then
+      local path = root .. "/" .. M.GROUPS_DIR .. "/" .. name .. ".md"
+      local title, line = group_head(path, name)
+      out[#out + 1] = {
+        kind = "group",
+        id = "group/" .. name,
+        path = path,
+        line = line,
+        title = title,
+        root = root,
+      }
+    end
+  end
+  return out
+end
+
 ---Where the task `token` names is, in every vault asked: open tasks first, then finished ones, vault by vault.
 ---
 --- `token` is an id (`<area>/<slug>`), also as a wikilink (`[[<area>/<slug>]]`, an alias or heading after it is
@@ -156,6 +294,10 @@ end
 function M.resolve(token, opts)
   if type(token) ~= "string" then
     return {}
+  end
+  local group = token:match("^%[%[group/([^%]|#]+)[^%]]*%]%]$")
+  if group then
+    return resolve_group(group, opts)
   end
   local id = token:match("^%[%[([^%]|#]+)[^%]]*%]%]$") or token
   local area, slug = vault.parse_id(id)

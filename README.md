@@ -197,8 +197,12 @@ resolve.resolve("lib.nvim/alpha", { roots = { vault_a, vault_b } })  -- several 
   only the vaults named there, an entry that is no directory skipped.
 - A wikilink (`[[lib.nvim/alpha|Alpha]]`) resolves like the id inside it, and backticks around an id are no part of
   it.
-- Group symbols (a group named in text, resolved to where it is explained) are planned; their written form is not
-  decided yet.
+- **Group symbols** are wikilinks, `[[group/<name>]]` (also `[[group/<name>|Text]]`), and resolve to the file that
+  explains the group, `ALL/groups/<name>.md` in the vault (`kind = "group"`, `line` = its first `#` heading, `title` =
+  the frontmatter `title` or that heading). Only the wikilink counts; `group/perf` without brackets is read as a task
+  id. A group is made by creating its file; `resolve.groups(opts)` lists them (`name`, `path`, `title`, `line`,
+  `root`), for completion or a picker. The name is spelled exactly; the cursor must be on the name (not on the
+  brackets or the alias), as for a task wikilink.
 
 ## Documentation
 
