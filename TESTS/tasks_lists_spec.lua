@@ -376,7 +376,11 @@ return function(H)
     end
     -- the confirmation is asked through the dialog (a float); the spec answers it like the native fallback
     dialog.confirm = function(o)
-      vim.ui.select(o.choices, { prompt = o.question }, function(choice)
+      local labels = {}
+      for label in vim.gsplit(o.choices, "\n", { plain = true }) do
+        labels[#labels + 1] = (label:gsub("^&", ""))
+      end
+      vim.ui.select(labels, { prompt = o.question }, function(choice)
         o.on_answer(choice)
       end)
     end

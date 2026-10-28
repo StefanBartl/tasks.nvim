@@ -5,6 +5,11 @@ the version is not tagged yet (the repository is not published).
 
 ## [Unreleased]
 
+### Fixed
+
+- The `:Tasks estimate --walk` value buttons "1".."5" are picked by their own digit key (the kit binds digits by position, `5` used to pick the fifth button, "3"); this needs a lib.nvim with the digit-label fix.
+- The "all steps ticked" question raised by the file watcher waits behind an open dialog and ignores keys typed ahead (`dialog.ask`); a dialog that raises falls back to `vim.ui.select`; N and Y are keys of the Yes/No dialog; `confirm.shorten` cuts by display width and survives a NUL byte.
+
 ### Changed
 
 - Confirmations and choices (`ui/confirm.lua`) ask through `lib.nvim.ui.dialog`, the dialog every plugin shares: ui.nvim's

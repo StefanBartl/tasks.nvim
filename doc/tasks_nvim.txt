@@ -32,7 +32,7 @@ blockers, plan or estimate is valid and stays visible everywhere.
 
   Neovim 0.10+ and lib.nvim (required).
   Optional: snacks.nvim (dashboard), mdview.nvim (browser preview), ui.nvim
-  (themed confirmations), pickers.nvim (`:Tasks folder`), cascade.nvim (form),
+  (your theme preset for the confirmations; lib.nvim ships a copy of the kit), pickers.nvim (`:Tasks folder`), cascade.nvim (form),
   git (dates for `--stale=refs`).
 
 ==============================================================================

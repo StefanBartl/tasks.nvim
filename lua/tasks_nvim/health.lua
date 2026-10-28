@@ -154,15 +154,19 @@ function M.check()
     info("mdview.nvim not found -- no browser preview")
   end
   local dialog_ok, dialog = pcall(require, "lib.nvim.ui.dialog")
-  if dialog_ok and type(dialog) == "table" and dialog.backend then
-    local backend = dialog.backend()
+  if dialog_ok and type(dialog) == "table" and dialog.confirm then
+    local backend = type(dialog.backend) == "function" and dialog.backend() or "?"
+    local load_errors = type(dialog.load_errors) == "function" and dialog.load_errors() or {}
+    for name, err in pairs(load_errors) do
+      warn(("%s is installed but failed to load: %s"):format(name, err))
+    end
     if backend == "native" then
-      info("confirmations use vim.ui.select (neither ui.nvim nor lib.nvim's ui.kit loads)")
+      info("confirmations use vim.ui.select (no kit loads: ui.nvim and lib.nvim's ui.kit)")
     else
       ok("confirmations use the dialog of " .. backend)
     end
   else
-    info("lib.nvim has no ui.dialog -- confirmations use vim.ui.select")
+    warn("this lib.nvim has no ui.dialog -- confirmations use vim.ui.select; update lib.nvim")
   end
   if pcall(require, "cascade") then
     ok("cascade.nvim -- cycling values in the task form")

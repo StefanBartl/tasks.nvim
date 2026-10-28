@@ -87,7 +87,9 @@ function M.check_buffer(buf)
         end
       end
       require("tasks_nvim.ui.cmd").finish(id, {})
-    end
+    end,
+    -- raised by a file watcher while the person is typing: it waits behind an open dialog and ignores typed-ahead keys
+    { unprompted = true }
   )
   return true
 end
