@@ -134,6 +134,9 @@ commands:
   bootstrap <area> [--from-rules=<file|->] [--apply] [--lang=de|en]
                                           make the area (folders, READMEs, index; nothing overwritten), then import;
                                           a dry run unless --apply
+  init-vault <dir> [--area=<name>] [--lang=de|en] [--force] [--apply]
+                                          a new vault in <dir>: README, a first area (default Inbox) and an example
+                                          task; nothing overwritten; a dry run unless --apply (try examples/vault first)
 
 global options: --vault=<dir> (default: $TASKS_VAULT; no built-in default path)
                 --today=YYYY-MM-DD (for reproducible runs); --no-index on new/set/done
@@ -307,6 +310,7 @@ local SPECS = {
   export = { value = { "top", "link-prefix" }, flag = { "no-links" } },
   import = { value = { "from-rules", "lang" }, flag = { "apply", "dry-run" } },
   bootstrap = { value = { "from-rules", "lang" }, flag = { "apply", "dry-run" } },
+  ["init-vault"] = { value = { "area", "lang" }, flag = { "apply", "dry-run", "force" } },
 }
 
 local GLOBAL_VALUE = { "vault", "today" }
@@ -1784,6 +1788,147 @@ end
 
 function commands.bootstrap(ctx)
   return import_command(ctx, true)
+end
+
+---The example task of `init-vault`, by language.
+local FIRST_TASK = {
+  de = {
+    title = "Erste Task: anlegen, bearbeiten, erledigen",
+    summary = "Eine Beispiel-Task: ändere sie, setze status=doing und schließe sie mit done ab.",
+  },
+  en = {
+    title = "First task: create, edit, finish",
+    summary = "An example task: change it, set status=doing and finish it with done.",
+  },
+}
+
+---Whether `area` of the vault `root` holds a task (a file or a folder task).
+---@param root string
+---@param area string
+---@return boolean
+local function has_tasks(root, area)
+  if not fsio.is_dir(root .. "/" .. area .. "/ROADMAP/tasks") then
+    return false
+  end
+  local tasks = require("tasks_nvim.scan").area(area, { root = root })
+  return tasks ~= nil and #tasks > 0
+end
+
+---Whether `root` is a folder with things in it that do not look like a vault: no `README.md` and no folder with a
+---`ROADMAP/` or `Backlog/` in it. A home or project folder must not become a vault by a typo.
+---@param root string
+---@return boolean
+local function is_foreign_folder(root)
+  if not fsio.is_dir(root) or fsio.is_file(root .. "/README.md") then
+    return false
+  end
+  local any = false
+  for name, kind in vim.fs.dir(root) do
+    any = true
+    if kind == "directory" then
+      local sub = root .. "/" .. name
+      if fsio.is_dir(sub .. "/ROADMAP") or fsio.is_dir(sub .. "/Backlog") then
+        return false
+      end
+    end
+  end
+  return any
+end
+
+---`init-vault <dir>`: a new vault in `dir` with a first area and an example task; nothing overwritten, a dry run
+---unless `--apply`. The vault is the positional folder, not `--vault`.
+---@param ctx Tasks.CliCtx
+---@return integer
+commands["init-vault"] = function(ctx)
+  local args = ctx.args
+  local opt = args.opt
+  local dir = args.pos[1]
+  if not dir or #args.pos > 1 then
+    ctx.warn("error: usage: init-vault <dir> [--area=<name>] [--lang=de|en] [--force] [--apply]")
+    return 2
+  end
+  if opt.vault then
+    ctx.warn("warn: init-vault takes the folder as its argument; --vault is ignored")
+  end
+  if opt.apply and opt["dry-run"] then
+    ctx.warn("error: --apply and --dry-run exclude each other")
+    return 2
+  end
+  local lang = opt.lang or "de"
+  if lang ~= "de" and lang ~= "en" then
+    ctx.warn("error: --lang must be de or en")
+    return 2
+  end
+  local area = type(opt.area) == "string" and opt.area or "Inbox"
+  local vault_ops = require("tasks_nvim.vault_ops")
+  local rules_import = require("tasks_nvim.rules_import")
+  local root, terr = vault_ops.check_vault_target(dir, { area })
+  if not root then
+    ctx.warn("error: " .. tostring(terr))
+    return 1
+  end
+  if is_foreign_folder(root) and not opt.force then
+    ctx.warn(
+      ("error: %s has files and is no vault (no README.md, no area); --force makes the vault there anyway"):format(
+        root
+      )
+    )
+    return 1
+  end
+
+  if not opt.apply then
+    if not fsio.is_file(root .. "/README.md") then
+      ctx.say("would-make\tREADME.md")
+    end
+    local missing, berr = rules_import.bootstrap_plan(root, area)
+    if not missing then
+      ctx.warn("error: " .. tostring(berr))
+      return 1
+    end
+    for _, p in ipairs(missing) do
+      ctx.say("would-make\t" .. p)
+    end
+    if not has_tasks(root, area) then
+      ctx.say(("would-make\t%s/ROADMAP/tasks/ (an example task)"):format(area))
+    end
+    ctx.say(("init-vault\tdry-run\tnothing written to %s; --apply makes it"):format(root))
+    return 0
+  end
+
+  local res, cerr = vault_ops.create_vault(root, { area })
+  if not res then
+    ctx.warn("error: " .. tostring(cerr))
+    return 1
+  end
+  for _, p in ipairs(res.created) do
+    -- folders end in `/`, as `bootstrap` prints them
+    ctx.say("made\t" .. p .. (p:match("%.md$") and "" or "/"))
+  end
+  local made, merr = rules_import.bootstrap(res.root, area)
+  if not made then
+    ctx.warn("error: " .. tostring(merr))
+    return 1
+  end
+  for _, p in ipairs(made) do
+    ctx.say("made\t" .. p)
+  end
+  if not has_tasks(res.root, area) then
+    local first = FIRST_TASK[lang]
+    local task, nerr = require("tasks_nvim.mutate").new(area, {
+      root = res.root,
+      title = first.title,
+      summary = first.summary,
+      lang = lang,
+      today = ctx.eo.today,
+    })
+    if not task then
+      ctx.warn("error: the vault is made, the example task is not: " .. tostring(nerr))
+      return 1
+    end
+    ctx.say(("created\t%s\t%s"):format(task.id, task.path))
+  end
+  ctx.say(("init-vault\t%s\tuse it with --vault=%s or $TASKS_VAULT"):format(res.root, res.root))
+  return 0
 end
 
 ---The options of every CLI verb (`value`: needs `=value`; `flag`: none), a copy of the table the parser reads. The

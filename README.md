@@ -113,6 +113,9 @@ register your own verb from `tasks_nvim.ui.routes` instead. There is no built-in
 :Tasks done my-area/fix-the-thing done_in=my-repo@abc1234
 ```
 
+No vault yet? `nvim --headless -u NONE -l scripts/tasks.lua init-vault <dir> --apply` makes one with a first area and
+an example task; `examples/vault` is a small finished vault to try every verb on (`--vault=examples/vault`).
+
 An area is any folder in the vault that holds `ROADMAP/` or `Backlog/`; create the folders once (or name the area
 in `extra_areas`). Every verb, flag and filter: [docs/COMMANDS.md](docs/COMMANDS.md).
 

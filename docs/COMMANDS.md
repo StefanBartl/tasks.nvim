@@ -622,6 +622,22 @@ nvim --headless -u NONE -l scripts/tasks.lua bootstrap new.nvim --from-rules=- -
   `Backlog/README.md` and the index `ROADMAP/TASKS.md`, whatever is missing (nothing existing is overwritten), then
   imports `--from-rules` if given. Its dry run lists `would-make <path>` and the tasks.
 
+### Headless: `init-vault` (a new vault)
+
+```sh
+nvim --headless -u NONE -l scripts/tasks.lua init-vault ~/my-vault                  # what it would make
+nvim --headless -u NONE -l scripts/tasks.lua init-vault ~/my-vault --apply          # make it
+nvim --headless -u NONE -l scripts/tasks.lua init-vault ~/my-vault --area=work --lang=en --apply   # --force: into a folder that has other files
+```
+
+The folder is the positional argument, not `--vault`. It gets a `README.md`, a first area (`Inbox` unless `--area`
+names another, laid out as `bootstrap` does) and, when that area has no task yet, an example task in German or English
+(`--lang`). Nothing that exists is overwritten, a second run makes nothing; a drive or filesystem root, a file and an
+area name that is no folder of a vault (`TOOLS`, `_x`, `../x`) are refused, and so is a folder that has files but is no
+vault (no `README.md`, no area: a home or project folder named by mistake) unless `--force`. Point `--vault=` or `$TASKS_VAULT` at the
+folder afterwards. To look around first, `examples/vault` in this repository is a small finished vault (two areas,
+open, blocked, decision and finished tasks, a plan): `--vault=examples/vault`.
+
 ## `:TasksVault`: the vault itself
 
 `:Tasks` works on tasks; `:TasksVault` works on **where they live**: open, copy, paste and search the Backlog (or

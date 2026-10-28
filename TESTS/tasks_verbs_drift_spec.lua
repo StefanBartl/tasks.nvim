@@ -21,6 +21,7 @@ return function(H)
     "ci",
     "export",
     "import",
+    "init-vault",
     "migrate-actor",
     "plan-new",
     "plans",

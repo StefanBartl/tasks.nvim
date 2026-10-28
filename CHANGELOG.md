@@ -7,6 +7,8 @@ the version is not tagged yet (the repository is not published).
 
 ### Added
 
+- `init-vault <dir> [--area=<name>] [--lang=de|en] [--force] [--apply]` makes a new vault: README, a first area and an example task; a dry run unless `--apply`, nothing overwritten; a folder with other files and no vault in it needs `--force`.
+- `examples/vault`: a small finished vault (two areas, a plan, open, blocked, decision and finished tasks) to try the verbs on; a spec keeps it valid.
 - `tasks_nvim.resolve` resolves group symbols: `[[group/<name>]]` leads to `ALL/groups/<name>.md` (`kind = "group"`), and `resolve.groups()` lists a vault's groups. A vault with an area named `group` loses `[[group/<slug>]]` as a task link (the bare `group/<slug>` still resolves).
 
 ### Fixed
