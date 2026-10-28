@@ -62,9 +62,13 @@ function M.yesno(msg, yes_label, cb, opts)
       return
     end
   end
-  vim.ui.select({ "No", yes }, { prompt = native_text(msg) }, function(choice)
-    answer(choice == yes)
-  end)
+  vim.ui.select(
+    { "No", yes },
+    { prompt = native_text(msg) },
+    function(choice) -- native-prompt: lib.nvim without ui.dialog (soft dependency)
+      answer(choice == yes)
+    end
+  )
 end
 
 ---A question with several answers. The FIRST choice is the one the dialog starts on, so it must be the harmless one.
