@@ -157,8 +157,8 @@ function M.check()
   if dialog_ok and type(dialog) == "table" and dialog.confirm then
     local backend = type(dialog.backend) == "function" and dialog.backend() or "?"
     local load_errors = type(dialog.load_errors) == "function" and dialog.load_errors() or {}
-    for name, err in pairs(load_errors) do
-      warn(("%s is installed but failed to load: %s"):format(name, err))
+    for name, load_err in pairs(load_errors) do
+      warn(("%s is installed but failed to load: %s"):format(name, load_err))
     end
     if backend == "native" then
       info("confirmations use vim.ui.select (no kit loads: ui.nvim and lib.nvim's ui.kit)")
