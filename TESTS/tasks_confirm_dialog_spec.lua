@@ -15,13 +15,14 @@ return function(H)
     confirm = dialog.confirm,
     choose = dialog.choose,
     ask = dialog.ask,
+    yesno = dialog.yesno,
     select = vim.ui.select,
     backend = dialog.backend,
     load_errors = dialog.load_errors,
   }
   local function restore()
-    dialog.confirm, dialog.choose, dialog.ask, vim.ui.select =
-      orig.confirm, orig.choose, orig.ask, orig.select
+    dialog.confirm, dialog.choose, dialog.ask, dialog.yesno, vim.ui.select =
+      orig.confirm, orig.choose, orig.ask, orig.yesno, orig.select
     dialog.backend, dialog.load_errors = orig.backend, orig.load_errors
     package.loaded["lib.nvim.ui.dialog"] = dialog
     _G.require = real_require
@@ -43,10 +44,10 @@ return function(H)
   end
 
   local good, failure = pcall(function()
-    -- yesno: "No" is the first button and the default, only "Yes, <label>" accepts; N and Y are keys
+    -- yesno: the shared recipe (lib.nvim.ui.dialog.yesno), the answer is a boolean
     local seen
-    dialog.confirm = function(opts)
-      seen = opts
+    dialog.yesno = function(question, label, cb, opts)
+      seen = { question = question, label = label, cb = cb, opts = opts }
     end
     local answers = {}
     local function push(yes)
@@ -54,38 +55,38 @@ return function(H)
     end
     confirm.yesno("Delete it?", "delete", push)
     eq(seen.question, "Delete it?", "the question is passed on unshortened")
-    eq(seen.choices, "&No\n&Yes, delete", "the harmless one first, with letter keys")
-    eq(seen.default, 1, "No starts focused: <CR> is never the destructive answer")
-    seen.on_answer("Yes, delete", 2)
-    eq(answers, { true }, "the yes label accepts")
-    confirm.yesno("Delete it?", nil, push)
-    seen.on_answer("No", 1)
-    eq(answers, { true, false }, "No refuses")
-    confirm.yesno("Delete it?", "delete", push)
-    seen.on_answer(nil)
-    eq(answers[3], false, "a dismissed dialog refuses")
-    confirm.yesno("Save A & B?", "save & go", push)
-    eq(seen.choices, "&No\n&Yes, save && go", "an ampersand in the label is a literal one")
-    seen.on_answer("Yes, save & go", 2)
-    eq(answers[4], true, "and the label comes back without the marks")
-
-    -- an unprompted question (a file watcher) goes through ask, a prompted one through confirm
-    local via
-    dialog.confirm = function()
-      via = "confirm"
-    end
-    dialog.ask = function(opts)
-      via = "ask"
-      seen = opts
-    end
+    eq(seen.label, "delete", "and the label")
+    seen.cb(true)
+    seen.cb(false)
+    eq(answers, { true }, "the callback runs once")
     confirm.yesno("All ticked?", "finish", push, { unprompted = true })
-    eq(
-      via,
-      "ask",
-      "unprompted -> dialog.ask (waits behind an open dialog, ignores typed-ahead keys)"
-    )
-    confirm.yesno("Delete?", "delete", push)
-    eq(via, "confirm", "prompted -> dialog.confirm")
+    eq(seen.opts, { unprompted = true }, "an unprompted question says so (it is asked through ask)")
+
+    -- a dialog that raises: the question is asked natively, once
+    dialog.yesno = function()
+      error("kit broke")
+    end
+    local prompts, res = {}, {}
+    vim.ui.select = function(items, o, on_choice)
+      prompts[#prompts + 1] = { items = items, prompt = o.prompt }
+      on_choice(items[#items], #items)
+    end
+    confirm.yesno("Really?", "go", function(yes)
+      res[#res + 1] = yes
+    end)
+    eq(res, { true }, "a dialog that raises does not cost the question: asked natively")
+    eq(prompts[1].items, { "No", "Yes, go" }, "the harmless answer is listed first")
+    -- ... but not twice when it raised after answering
+    dialog.yesno = function(_, _, cb)
+      cb(true)
+      error("late")
+    end
+    prompts, res = {}, {}
+    confirm.yesno("Really?", "go", function(yes)
+      res[#res + 1] = yes
+    end)
+    eq(res, { true }, "answered once")
+    eq(#prompts, 0, "and not asked again natively")
 
     -- choose: 1-based index, nil when dismissed (index 0 of the dialog or nothing at all)
     local got
@@ -109,32 +110,6 @@ return function(H)
     end)
     got.cb(nil)
     eq(idx, { 2, "nil", "nil" }, "0 and nil (dismissed) become nil")
-
-    -- a dialog that raises: the question is asked natively, once
-    dialog.confirm = function()
-      error("kit broke")
-    end
-    local prompts, res = {}, {}
-    vim.ui.select = function(items, o, on_choice)
-      prompts[#prompts + 1] = { items = items, prompt = o.prompt }
-      on_choice(items[#items], #items)
-    end
-    confirm.yesno("Really?", "go", function(yes)
-      res[#res + 1] = yes
-    end)
-    eq(res, { true }, "a dialog that raises does not cost the question: asked natively")
-    eq(prompts[1].items, { "No", "Yes, go" }, "the harmless answer is listed first")
-    -- ... but not twice when it raised after answering
-    dialog.confirm = function(o)
-      o.on_answer("Yes, go", 2)
-      error("late")
-    end
-    prompts, res = {}, {}
-    confirm.yesno("Really?", "go", function(yes)
-      res[#res + 1] = yes
-    end)
-    eq(res, { true }, "answered once")
-    eq(#prompts, 0, "and not asked again natively")
 
     -- an older lib.nvim without the dialog module: vim.ui.select, cut to the screen, the index of the provider
     prompts, res = {}, {}

@@ -40,21 +40,6 @@ local function native_text(s)
   return table.concat(out, "\n")
 end
 
----Ask through `lib.nvim.ui.dialog`; false when it is not there or raised before answering (then the caller asks
----natively). `ask` is the call for a question the user did not pick (it waits behind an open dialog and ignores
----keys typed ahead).
----@param name "confirm"|"ask"|"choose"
----@param ... any
----@return boolean asked
-local function through_dialog(name, ...)
-  local dialog = require("tasks_nvim.soft").require("lib.nvim.ui.dialog", { name })
-  if not dialog then
-    return false
-  end
-  local ok = pcall(dialog[name], ...)
-  return ok
-end
-
 ---@param msg string
 ---@param yes_label string|nil e.g. "delete" -- shown as "Yes, delete"
 ---@param cb fun(accepted: boolean)
@@ -69,18 +54,13 @@ function M.yesno(msg, yes_label, cb, opts)
     answered = true
     cb(accepted)
   end
-  -- "No" first, and named as the default: the dialog starts on it, so `<CR>` is never the destructive answer even on
-  -- a backend that ignores `default`. The `&` marks give N and Y as keys (`&&` is a literal ampersand).
-  local asked = through_dialog(opts and opts.unprompted and "ask" or "confirm", {
-    question = msg,
-    choices = "&No\n&" .. yes:gsub("&", "&&"),
-    default = 1,
-    on_answer = function(choice)
-      answer(choice == yes)
-    end,
-  })
-  if asked or answered then
-    return
+  -- the shared recipe: "No" first and focused, N and Y as keys, `ask` for a question nobody asked for
+  local dialog = require("tasks_nvim.soft").require("lib.nvim.ui.dialog", { "yesno" })
+  if dialog then
+    local shown = pcall(dialog.yesno, msg, yes_label, answer, opts)
+    if shown or answered then
+      return
+    end
   end
   vim.ui.select({ "No", yes }, { prompt = native_text(msg) }, function(choice)
     answer(choice == yes)
