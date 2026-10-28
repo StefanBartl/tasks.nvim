@@ -1815,7 +1815,8 @@ local function has_tasks(root, area)
 end
 
 ---Whether `root` is a folder with things in it that do not look like a vault: no `README.md` and no folder with a
----`ROADMAP/` or `Backlog/` in it. A home or project folder must not become a vault by a typo.
+---`ROADMAP/` or `Backlog/` in it. A home or project folder must not become a vault by a typo. Hidden entries
+---(`.git`, `.obsidian`) do not count: `git init` first and the vault after is the usual order.
 ---@param root string
 ---@return boolean
 local function is_foreign_folder(root)
@@ -1824,7 +1825,7 @@ local function is_foreign_folder(root)
   end
   local any = false
   for name, kind in vim.fs.dir(root) do
-    any = true
+    any = any or name:sub(1, 1) ~= "."
     if kind == "directory" then
       local sub = root .. "/" .. name
       if fsio.is_dir(sub .. "/ROADMAP") or fsio.is_dir(sub .. "/Backlog") then
@@ -1857,6 +1858,11 @@ commands["init-vault"] = function(ctx)
   local lang = opt.lang or "de"
   if lang ~= "de" and lang ~= "en" then
     ctx.warn("error: --lang must be de or en")
+    return 2
+  end
+  -- Checked before anything is made: a bad date would otherwise fail the example task after the vault exists.
+  if ctx.eo.today ~= nil and not model.is_date(ctx.eo.today) then
+    ctx.warn("error: --today must be YYYY-MM-DD, got '" .. tostring(ctx.eo.today) .. "'")
     return 2
   end
   local area = type(opt.area) == "string" and opt.area or "Inbox"

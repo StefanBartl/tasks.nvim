@@ -94,6 +94,28 @@ return function(H)
 
   has(run({ "init-vault", H.tmpdir() .. "/z", "--vault=" .. dir }).err, "--vault is ignored")
 
+  -- ── found in the second review ─────────────────────────────────────────
+  local bad_date = H.tmpdir() .. "/bad-date"
+  local errs = {}
+  local code = cli.run({ "init-vault", bad_date, "--apply", "--today=2026-13-45" }, {
+    out = function() end,
+    err = function(t)
+      errs[#errs + 1] = t
+    end,
+  })
+  eq(code, 2, "a bad --today is a usage error")
+  has(table.concat(errs, "\n"), "--today must be YYYY-MM-DD")
+  ok(not vim.uv.fs_stat(bad_date), "a bad --today left a half-made vault")
+
+  local repo_first = H.tmpdir() .. "/git-first"
+  vim.fn.mkdir(repo_first .. "/.git", "p")
+  H.write(repo_first .. "/.gitignore", "x\n")
+  eq(
+    run({ "init-vault", repo_first, "--apply" }).code,
+    0,
+    "a folder with only hidden entries (git init first) needs no --force"
+  )
+
   -- ── examples/vault: valid and its indexes current ──────────────────────
   local here = vim.fs.dirname(debug.getinfo(1, "S").source:sub(2))
   local example = vim.fs.normalize(here .. "/../examples/vault")
