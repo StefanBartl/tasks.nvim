@@ -371,6 +371,24 @@ return function(H)
     {},
     "spelled exactly, on every system"
   )
+  -- a minified megabyte after the name: only a window after it is read, so a `]]` past it closes no symbol;
+  -- the run is then read as an id, as without brackets
+  local huge = "x [[group/perf|" .. string.rep("y", 1024 * 1024) .. "]]"
+  eq(token(huge, 8), { "group/perf", 5, 14 }, "an alias of a megabyte is no group symbol")
+  eq(
+    token("[[group/perf#" .. string.rep("h", 300) .. "]]", 4),
+    { "group/perf", 3, 12 },
+    "a heading longer than the window"
+  )
+
+  -- a group file that is a link out of the vault is no group
+  local outside = H.tmpdir() .. "/outside.md"
+  H.write(outside, "# Outside\n")
+  local linked = vim.uv.fs_symlink(outside, root .. "/ALL/groups/escape.md")
+  if linked then
+    eq(resolve.resolve("[[group/escape]]", { roots = { root } }), {}, "a link out of the vault")
+  end
+
   vim.fn.mkdir(root .. "/ALL/groups/folder.md", "p")
   ok(
     not vim.tbl_contains(

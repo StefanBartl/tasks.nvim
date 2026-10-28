@@ -53,6 +53,9 @@ M.GROUPS_DIR = "ALL/groups"
 ---What a group name may be: starts with a letter or digit, then letters, digits, `_`, `.`, `-`.
 local GROUP_NAME = "^[%w][%w_.%-]*$"
 
+---How far after the name a group symbol's heading, alias and `]]` may reach, in bytes.
+local MAX_GROUP_TAIL = 256
+
 ---@param name any
 ---@return boolean
 local function is_group_name(name)
@@ -75,7 +78,8 @@ local function group_token(line, s, e)
   if not is_group_name(line:sub(s, e):match("^group/(.+)$")) then
     return nil
   end
-  local rest = line:sub(e + 1)
+  -- Only a window after the name: the line may be a minified megabyte, and this runs on every cursor pause.
+  local rest = line:sub(e + 1, e + MAX_GROUP_TAIL)
   local skip = rest:match("^#[^%]|]*()")
   local offset = skip and (skip - 1) or 0
   local tail = rest:sub(offset + 1)
@@ -226,10 +230,13 @@ local function group_names(root)
   end
   for entry, kind in vim.fs.dir(dir) do
     local name = entry:match("^(.+)%.md$")
+    local path = dir .. "/" .. entry
     if
       (kind == "file" or kind == "link")
       and is_group_name(name)
-      and fsio.is_file(dir .. "/" .. entry)
+      and fsio.is_file(path)
+      -- a link may point anywhere: only one that stays in the vault is a group
+      and (kind ~= "link" or not vault.leaves(root, path))
     then
       names[#names + 1] = name
     end
