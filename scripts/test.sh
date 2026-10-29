@@ -176,9 +176,18 @@ if [[ "${1:-}" == "conformance" ]]; then
 fi
 if [[ "${1:-}" == "ci" ]]; then
   shift
-  state_args=()
-  [[ -n "$real_state" ]] && state_args=(--state-dir "$real_state")
-  nvim -n -i NONE --headless -u NONE -l "$DRIVER" ci ${state_args[@]+"${state_args[@]}"} "$@"
+  # `verify`, `list` and `hook` are subcommands of `testing ci`: --state-dir goes after `verify` (it reads the proof
+  # there); `list` and `hook` take none
+  ci_args=()
+  case "${1:-}" in
+    verify)
+      shift
+      ci_args=(verify --state-dir "$real_state")
+      ;;
+    list | hook) ;;
+    *) ci_args=(--state-dir "$real_state") ;;
+  esac
+  nvim -n -i NONE --headless -u NONE -l "$DRIVER" ci ${ci_args[@]+"${ci_args[@]}"} "$@"
   exit $?
 fi
 nvim -n -i NONE --headless -u NONE -l "$DRIVER" run . --sentinel 'TASKS_TESTS_OK' "$@"
