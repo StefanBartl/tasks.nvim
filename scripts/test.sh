@@ -32,9 +32,15 @@ DEPS=('testing.nvim' 'lib.nvim')
 # What the specs use when it is there. Not a `deps` entry: the runner would fail the whole run without it.
 OPTIONAL_DEPS=('snacks.nvim')
 
+# `ci`: a missing nvim, runner or dependency is infrastructure (exit 3, as `testing ci` reports it), not a failed step
+FAIL_CODE=1
+if [[ "${1:-}" == "ci" ]]; then
+  FAIL_CODE=3
+fi
+
 fail() {
   printf '\033[31m%s\033[0m\n' "$1" >&2
-  exit 1
+  exit "$FAIL_CODE"
 }
 
 command -v nvim >/dev/null 2>&1 || fail "error: nvim is not on PATH."
