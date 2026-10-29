@@ -141,6 +141,15 @@ for name in "${OPTIONAL_DEPS[@]}"; do
   fi
 done
 
+# `ci`: the pipeline's document (ci.json) and the suite's stamp must outlive the scratch directory below. The
+# developer's real state directory is asked for BEFORE the isolation and handed to `testing ci --state-dir` (an
+# argument, not the environment: the specs must not inherit it).
+real_state=""
+if [[ "${1:-}" == "ci" ]]; then
+  real_state="$(nvim -n -i NONE --headless -u NONE --cmd 'lua io.stdout:write(vim.fn.stdpath("state"))' --cmd 'qa!' 2>/dev/null)"
+  [[ -n "$real_state" ]] || fail 'error: cannot ask nvim for stdpath("state"); the ci document would be lost.'
+fi
+
 # Throwaway app name: the run gets its own stdpath("config"/"data"/"state"), never the developer's.
 export NVIM_APPNAME="${NVIM_APPNAME:-tasks_nvim-tests}"
 # A run with `isolated = "none"` writes the plugin's state where Neovim keeps it: point state and
@@ -157,6 +166,13 @@ export XDG_CACHE_HOME="$scratch/cache"
 if [[ "${1:-}" == "conformance" ]]; then
   shift
   nvim -n -i NONE --headless -u NONE -l "$DRIVER" conformance . "$@"
+  exit $?
+fi
+if [[ "${1:-}" == "ci" ]]; then
+  shift
+  state_args=()
+  [[ -n "$real_state" ]] && state_args=(--state-dir "$real_state")
+  nvim -n -i NONE --headless -u NONE -l "$DRIVER" ci ${state_args[@]+"${state_args[@]}"} "$@"
   exit $?
 fi
 nvim -n -i NONE --headless -u NONE -l "$DRIVER" run . --sentinel 'TASKS_TESTS_OK' "$@"
