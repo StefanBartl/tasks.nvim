@@ -233,9 +233,9 @@ temporary fixture vault, never a real one. testing.nvim and lib.nvim are looked 
 picker: `scripts/test.sh` looks for it in the same places (override `$SNACKS_DIR`) and passes the folder on, because the
 runner gives every spec its own sandboxed data folder. Without snacks.nvim the script says so and the two picker specs
 (`tasks_dash_picker_spec`, `tasks_dash_refresh_spec`) report a skip (CI requires it); the dashboard's plain
-`vim.ui.select` fallback has its own spec that always runs. The same goes for the option-float texts: with a lib.nvim
-that cannot list the undescribed options (`composer.help.undocumented`) `tasks_usrcmds_help_spec` reports a skip, and
-`tasks_usrcmds_help_style_spec` (shape of the texts) still runs.
+`vim.ui.select` fallback has its own spec that always runs. The option-float texts are different: a lib.nvim that
+cannot list the undescribed options (`composer.help.undocumented`) is too old, and `tasks_usrcmds_help_spec` fails with
+a message that says so (update lib.nvim); `tasks_usrcmds_help_style_spec` (shape of the texts) runs on any lib.nvim.
 
 ## License
 

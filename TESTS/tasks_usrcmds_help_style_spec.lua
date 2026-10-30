@@ -4,7 +4,7 @@
 --
 -- This reads the route tree (`tasks_nvim.ui.routes`) and the registered argument types only, so it runs on any lib.nvim.
 -- The question "which option shows up as a bare row" needs `composer.help.undocumented`, which an older lib.nvim lacks:
--- that is tasks_usrcmds_help_spec.lua, which skips there. Keeping the two apart matters because testing.nvim turns a
+-- that is tasks_usrcmds_help_spec.lua, which fails there by name. Keeping the two apart matters because testing.nvim turns a
 -- printed `skip` line into a SKIP only for a spec that has asserted nothing -- this one must not be switched off with it.
 
 return function(H)

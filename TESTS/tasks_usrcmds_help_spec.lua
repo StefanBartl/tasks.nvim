@@ -9,28 +9,28 @@
 -- each route needs its own, correct text.
 --
 -- The shape of the texts (one line, no closing full stop, length, `enum_desc` keys) is tasks_usrcmds_help_style_spec.lua,
--- which needs no `undocumented` and so always runs; this file skips on a lib.nvim that cannot answer the question.
+-- which needs no `undocumented` and so always runs; this file fails by name on a lib.nvim that cannot answer the
+-- question (NEW-43: a missing feature of the dependency is no skip).
 
 return function(H)
   local ok, eq = H.ok, H.eq
 
   local loaded, composer = pcall(require, "lib.nvim.bindings.usercmd.composer")
-  -- A lib.nvim older than `help.undocumented` cannot answer the question; that is a missing feature of the
-  -- dependency, not a defect of this plugin. Older still, `composer.help` does not exist at all, and where the module
-  -- is gone the lazy `composer.help` raises on the first key: ask through pcall. A composer that does not load at all
-  -- is no skip, it fails below.
+  ok(loaded, "the composer loads")
+  -- A lib.nvim older than `help.undocumented` cannot answer the question. Older still, `composer.help` does not exist
+  -- at all, and where the module is gone the lazy `composer.help` raises on the first key: ask through pcall. Either
+  -- way the spec fails by name instead of being skipped (NEW-43).
   local asked, undocumented = pcall(function()
     return composer.help.undocumented
   end)
-  if loaded and (not asked or type(undocumented) ~= "function") then
-    -- This sits before the first assertion on purpose: testing.nvim turns a printed `skip` line into a SKIP only for a
-    -- spec that has asserted nothing (a spec that asserted first keeps its verdict, a green PASS).
-    io.stdout:write(
-      "skip  tasks_usrcmds_help_spec.lua: lib.nvim has no composer.help.undocumented\n"
-    )
+  local supported = loaded and asked and type(undocumented) == "function"
+  ok(
+    supported,
+    "lib.nvim lacks composer.help.undocumented: update lib.nvim, this spec cannot run without it"
+  )
+  if not supported then
     return
   end
-  ok(loaded, "the composer loads")
 
   local routes = require("tasks_nvim.ui.routes")
   local usrcmds = require("tasks_nvim.bindings.usrcmds")
