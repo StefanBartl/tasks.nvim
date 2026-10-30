@@ -125,7 +125,11 @@ commands:
                                           generated indexes; exit 0/1 (--strict: warnings fail too).
                                           md_lint is a script RUN from the vault (TOOLS/scripts/md_lint.lua): it runs only with
                                           --trust-vault-lint (or TASKS_TRUST_VAULT_LINT=1); else --md-lint=<own copy> or --no-lint
-  areas [--format=names|tsv|json]        list the vault's areas (tsv: with the open counts; json: the tasks.areas document)
+  areas [--format=names|tsv|json]        list the vault's areas (tsv: with the open counts, then the area groups as
+                                          <name> <open> group <members>; json: the tasks.areas document with area_groups)
+                                          (an area group of <vault>/area-groups.json, e.g. nvim = *.nvim, stands for its
+                                          member areas wherever list, plan, next, plans, estimate, quickwins take <area>;
+                                          new refuses one: a task lives in one area)
   export [--top=N] [--no-links]           all-areas overview as Markdown on stdout (never written)
   import <area> --from-rules=<file|-> [--apply] [--lang=de|en]
                                           a work list of rules.nvim (rules-work-list/1) becomes tasks of the area: one
@@ -507,7 +511,8 @@ function commands.list(ctx)
       ctx.warn("error: " .. tostring(rerr))
       return 1
     end
-    if not vault.has_area(root, args.pos[1]) then
+    -- an area group (`list nvim`) is a filter name like an area
+    if not vault.area_scope(root, args.pos[1]) then
       ctx.warn("error: unknown area: " .. args.pos[1])
       return 1
     end
@@ -589,7 +594,7 @@ function commands.list(ctx)
   return 0
 end
 
----The area argument shared by `plan`, `next` and `estimate`.
+---The area argument shared by `plan`, `next` and `estimate`: an area or an area group.
 ---@param ctx Tasks.CliCtx
 ---@param name string  The command, for the message.
 ---@return string|nil area
@@ -608,7 +613,7 @@ local function area_arg(ctx, name)
     ctx.warn("error: " .. tostring(rerr))
     return nil, false
   end
-  if not vault.has_area(root, given) then
+  if not vault.area_scope(root, given) then
     ctx.warn("error: unknown area: " .. given)
     return nil, false
   end
@@ -674,6 +679,7 @@ local function write_plan_block(ctx, scope, path)
       area = area,
       plan_id = opt.plan --[[@as string|nil]],
       for_id = opt["for"] --[[@as string|nil]],
+      root = ctx.eo.root,
     },
     key
   )

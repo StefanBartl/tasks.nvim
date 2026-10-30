@@ -8,7 +8,10 @@ parses the command line, asks, notifies and opens windows. The same engine runs 
 
 The grammar is **verb-first** (`:Tasks list my-area`): the composer routes over literal path segments and
 has no dynamic first segment. An *area* is a folder of the vault holding `ROADMAP/` or `Backlog/` (plus the
-`extra_areas` of `setup()`), which is why areas are read from the vault (argument type `TASK_AREA`).
+`extra_areas` of `setup()`), which is why areas are read from the vault (argument type `TASK_AREA`). Where a command filters (`list`, `plan`,
+`next`, `estimate`, `quickwins`), an *area group* of `<vault>/area-groups.json` (e.g. `nvim` for every `*.nvim`
+area) is accepted and completed like an area and stands for its member areas; a write target (`task new`) takes one
+area only.
 `<Tab>` completes areas, task ids (`<area>/<slug>` of the *open* tasks,
 type `TASK_ID`), the filter and `--to=` values and, for `task set`, every settable `key=`.
 

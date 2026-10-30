@@ -26,6 +26,7 @@
 
 local model = require("tasks_nvim.model")
 local plan = require("tasks_nvim.plan")
+local vault = require("tasks_nvim.vault")
 
 local M = {}
 
@@ -35,6 +36,7 @@ local M = {}
 ---@field is_done? (fun(id: string): boolean)|table<string, boolean>  # Finished ids (default: none known).
 ---@field done? { id: string, area: string }    # The task that was just finished.
 ---@field area? string                          # Area that ranks first (default: the finished task's).
+---@field area_set? table<string, boolean>      # The areas `area` stands for when it is an area group.
 ---@field actor? string                         # `cdx`, `me`, `pair` or `none`: that queue instead of the human's.
 ---@field n? integer                            # Runners-up to return (default 2).
 ---@field cdx? integer                          # Tasks for an AI session to list apart (default 3).
@@ -86,6 +88,8 @@ function M.pick(opts)
   local built = plan.build(opts.tasks, index)
   local done = opts.done
   local home = opts.area or (done and done.area) or nil
+  -- an area group weighs all its member areas as home
+  local home_set = opts.area and opts.area_set or (home and { [home] = true }) or nil
 
   ---@type Tasks.NextPick
   local result = {
@@ -121,7 +125,7 @@ function M.pick(opts)
 
   for _, t in ipairs(opts.tasks) do
     result.open.vault = result.open.vault + 1
-    if home and t.area == home then
+    if home_set and home_set[t.area] then
       result.open.area = result.open.area + 1
     end
   end
@@ -132,7 +136,7 @@ function M.pick(opts)
     if freed[t.id] then
       return 1
     end
-    if home and t.area == home then
+    if home_set and home_set[t.area] then
       return 2
     end
     return 3
@@ -145,7 +149,7 @@ function M.pick(opts)
     if wanted(node.task, opts.actor) then
       candidates[#candidates + 1] = node.task
       result.ready.vault = result.ready.vault + 1
-      if home and node.task.area == home then
+      if home_set and home_set[node.task.area] then
         result.ready.area = result.ready.area + 1
       end
     elseif not opts.actor and model.actor(node.task) == "cdx" then
@@ -194,7 +198,9 @@ function M.pick(opts)
   local top = candidates[1]
   if top then
     result.task = top
-    result.reason = freed[top.id] and "freed" or (home and top.area == home) and "area" or "vault"
+    result.reason = freed[top.id] and "freed"
+      or (home_set and home_set[top.area]) and "area"
+      or "vault"
     for i = 2, math.min(#candidates, 1 + (opts.n or 2)) do
       result.alternatives[#result.alternatives + 1] = candidates[i]
     end
@@ -294,6 +300,7 @@ function M.pick_from_vault(opts)
     unreadable = type(errors) == "table" and #errors or 0,
     done = opts.done,
     area = opts.area,
+    area_set = opts.area and scan.area_set(vault.root(opts) or "", opts.area) or nil,
     actor = opts.actor,
     n = opts.n,
     cdx = opts.cdx,

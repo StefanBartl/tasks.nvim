@@ -18,7 +18,7 @@ local state = vim.deepcopy(DEFAULTS)
 ---@type table<string, boolean>
 local given = {}
 
----@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"|"value"|"effort"|"lists"|"finished_window"|"links"|"form_mode"
+---@alias Tasks.ConfigType "string"|"boolean"|"string_list"|"posint"|"keymap"|"backend"|"value"|"effort"|"lists"|"area_groups"|"finished_window"|"links"|"form_mode"
 
 ---@type table<string, Tasks.ConfigType|table<string, Tasks.ConfigType>>
 local SCHEMA = {
@@ -32,6 +32,7 @@ local SCHEMA = {
   chain = { marker_docs = "string_list" },
   quick_wins = { min_value = "value", max_effort = "effort" },
   lists = "lists",
+  area_groups = "area_groups",
   steps = { ask_finish = "boolean" },
   reminders = { on_start = "boolean" },
   attach = { screenshot_dirs = "string_list", max_age_s = "posint" },
@@ -124,6 +125,12 @@ local function check(kind, value)
       return true, vim.deepcopy(value), nil
     end
     return false, nil, "a table of name = list definition"
+  elseif kind == "area_groups" then
+    -- Only the shape here; every group is checked, and named in its complaint, by `tasks_nvim.area_groups`.
+    if type(value) == "table" and (next(value) == nil or not vim.islist(value)) then
+      return true, vim.deepcopy(value), nil
+    end
+    return false, nil, "a table of name = { include = {...}, exclude = {...} }"
   elseif kind == "value" then
     if type(value) == "number" and value >= 1 and value <= 5 and value == math.floor(value) then
       return true, value, nil
@@ -245,6 +252,10 @@ function M.merge(opts)
   if checked.lists then
     -- The named lists are replaced as a whole, not merged: a later `setup({ lists })` is the complete set.
     state.lists = checked.lists
+  end
+  if checked.area_groups then
+    -- Same for the area groups: a group left out is gone, not kept from the defaults.
+    state.area_groups = checked.area_groups
   end
   return vim.deepcopy(state)
 end

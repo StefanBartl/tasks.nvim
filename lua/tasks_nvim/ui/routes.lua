@@ -18,7 +18,8 @@
 --- new area or task shows up at once, and both fail soft: no vault means no
 --- candidates, never an error in the middle of typing):
 ---  - `TASK_AREA`: an area of the vault (the `extra_areas` of `setup()` included); with
----    `allow_all = true` the keyword `all` (every area) too
+---    `allow_all = true` the keyword `all` (every area) and the area groups (`tasks_nvim.area_groups`) too: those
+---    routes filter, a write target (`new`, `folder`, `index`) takes one area only
 ---  - `TASK_ID`: `<area>/<slug>` of an open task; `allow_done = true` also
 ---    accepts a finished one (and completes it, unless `complete_done = false`: `task set` takes a finished task
 ---    for `remind=` only, so its candidates stay the open ones)
@@ -211,6 +212,16 @@ local function area_names()
   return names
 end
 
+---The area groups in force, for the filter routes. Fails soft like `area_names`.
+---@return string[]
+local function group_names()
+  local root = vault.root()
+  if not root then
+    return {}
+  end
+  return require("tasks_nvim.area_groups").names(root)
+end
+
 ---Register `TASK_AREA` and `TASK_ID` with the composer. Safe to call twice.
 ---@return nil
 function M.register_types()
@@ -230,6 +241,9 @@ function M.register_types()
       -- Exact spelling, from the listing: a case-insensitive file system
       -- (Windows, macOS) would otherwise take `all` for the folder `ALL`.
       if not vim.tbl_contains(area_names(), raw) then
+        if spec and spec.allow_all and vim.tbl_contains(group_names(), raw) then
+          return true, raw, nil
+        end
         return false, nil, vault.not_an_area_message(raw, area_names())
       end
       return true, raw, nil
@@ -238,6 +252,7 @@ function M.register_types()
       local names = area_names()
       if spec and spec.allow_all then
         names[#names + 1] = "all"
+        vim.list_extend(names, group_names())
       end
       return prefix_ci(names, arg_lead)
     end,

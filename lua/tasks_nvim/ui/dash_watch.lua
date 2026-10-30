@@ -141,7 +141,11 @@ function M.dirs(root, area, opts)
   local with_backlog = not (opts and opts.backlog == false)
   local names = {}
   if area then
-    if vault.valid_area(area) then
+    -- an area group: its member areas (an area of that name wins)
+    local scope = vault.area_scope(root, area)
+    if scope then
+      names = scope.areas
+    elseif vault.valid_area(area) then
       names[1] = area
     end
   else

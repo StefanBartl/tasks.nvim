@@ -83,6 +83,10 @@ export type Snapshot = Head & {
   };
   areas: Area[];
   /**
+   * The area groups in force with their members; left out when the vault has none.
+   */
+  area_groups?: AreaGroup[];
+  /**
    * Finished tasks that carry a reminder (`remind`), the oldest date first, at most 100. An open task's reminder is on its entry; a finished task is not in `tasks`, and a reminder is most often set when a task is finished.
    */
   reminders?: {
@@ -453,6 +457,10 @@ export type Next = Head & {
  */
 export type Areas = Head & {
   kind: "tasks.areas";
+  /**
+   * The area groups in force with their members; left out when the vault has none.
+   */
+  area_groups?: AreaGroup[];
   digest: Digest;
   areas: Area[];
 };
@@ -646,6 +654,19 @@ export interface Area {
   name: string;
   open: number;
   by_status: StatusCounts;
+}
+/**
+ * An area group (`<vault>/area-groups.json`, in Neovim also `setup({ area_groups })`): a filter name that stands for several areas. The methods `list`, `order`, `next` and `finished` take a group name for `area` too (`check` takes one area); a write target never is one. Only groups in force are listed (an area of the same name wins).
+ */
+export interface AreaGroup {
+  name: string;
+  /**
+   * The areas of the vault the group stands for, sorted.
+   */
+  members: string[];
+  open: number;
+  by_status: StatusCounts;
+  desc?: string;
 }
 /**
  * One task. A broken task is still here (`valid: false`, `problems`); a field that is missing is unknown, never 0 (no `effort` means no `effort_days` and no `roi`).

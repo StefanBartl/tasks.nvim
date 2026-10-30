@@ -435,4 +435,14 @@ function M.not_an_area_message(area, names)
   return ("'%s' is not an area of the vault%s"):format(area, hint)
 end
 
+---What a name a filter takes (`list`, `next`, `plans`, the dashboard) stands for: an area, which wins, or an
+---area group's members (`tasks_nvim.area_groups`). A write (`new`, a move) keeps asking `has_area`.
+---@param root string
+---@param name string
+---@return Tasks.AreaScope|nil scope
+---@return string|nil err
+function M.area_scope(root, name)
+  return require("tasks_nvim.area_groups").resolve(root, name)
+end
+
 return M

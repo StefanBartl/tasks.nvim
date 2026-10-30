@@ -175,10 +175,10 @@ local function apply_list(ctx, unsupported)
     if not root then
       return false
     end
-    if not vault.has_area(root, area) then
-      notify.error(
-        ("list '%s': %s"):format(name, vault.not_an_area_message(area, vault.area_names(root)))
-      )
+    -- a list may name an area group: it filters like an area
+    local _, aerr = vault.area_scope(root, area)
+    if aerr then
+      notify.error(("list '%s': %s"):format(name, aerr))
       return false
     end
   end

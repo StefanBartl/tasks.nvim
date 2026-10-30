@@ -62,6 +62,7 @@
 ---@field chain Tasks.ChainConfig
 ---@field quick_wins Tasks.QuickWinsConfig
 ---@field lists table<string, Tasks.ListDef>  Named lists (a filter combination plus a sort order): `{ ["my-list"] = { effort = "<=S", value = ">=4", sort = "roi" } }`. See `tasks_nvim.lists`.
+---@field area_groups table<string, Tasks.AreaGroupDef>  Area groups on top of `<vault>/area-groups.json` (same shape, a group here wins by name; only inside Neovim, the headless CLI and tasks-desktop read the file): `{ nvim = { include = { "*.nvim" } } }`. A group is a filter name for `list`, `next`, `plans` and the dashboard. See `tasks_nvim.area_groups`.
 ---@field steps Tasks.StepsConfig
 ---@field reminders Tasks.RemindersConfig
 ---@field attach Tasks.AttachConfig
@@ -84,6 +85,7 @@ return {
   chain = { marker_docs = {} },
   quick_wins = { min_value = 4, max_effort = "S" },
   lists = {},
+  area_groups = {},
   steps = { ask_finish = false },
   reminders = { on_start = true },
   attach = { screenshot_dirs = {}, max_age_s = 300 },

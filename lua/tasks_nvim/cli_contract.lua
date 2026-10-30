@@ -159,6 +159,16 @@ function M.areas(ctx, format)
   for _, a in ipairs(doc.areas) do
     ctx.say(("%s\t%d"):format(fsio.clean(a.name), a.open))
   end
+  -- area groups after the areas, marked by a third column (an area line has two)
+  for _, g in ipairs(doc.area_groups or {}) do
+    ctx.say(
+      ("%s\t%d\tgroup\t%s"):format(
+        fsio.clean(g.name),
+        g.open,
+        fsio.clean(table.concat(g.members, ","))
+      )
+    )
+  end
   return 0
 end
 
@@ -244,7 +254,19 @@ local function run_plans(ctx, helpers)
     return 2
   end
   local files, err
-  if area then
+  local scope = area and vault.area_scope(vault.root({ root = ctx.eo.root }) or "", area) or nil
+  if scope and scope.group then
+    -- an area group: the plans of every member area, in area order
+    files = {}
+    for _, name in ipairs(scope.areas) do
+      local found, ferr = plans.area(name, { root = ctx.eo.root })
+      if not found then
+        files, err = nil, ferr
+        break
+      end
+      vim.list_extend(files, found)
+    end
+  elseif area then
     files, err = plans.area(area, { root = ctx.eo.root })
   else
     files, err = plans.all({ root = ctx.eo.root })
@@ -319,7 +341,9 @@ function M.list_done(ctx, filter, area, format, helpers)
     ctx.warn("error: " .. tostring(rerr))
     return 1
   end
-  local areas = area and { area }
+  -- an area group stands for its member areas
+  local scope = area and vault.area_scope(root, area) or nil
+  local areas = area and (scope and scope.areas or { area })
     or vim.tbl_map(function(a)
       return a.name
     end, vault.areas(root))

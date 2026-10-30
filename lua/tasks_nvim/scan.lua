@@ -191,22 +191,38 @@ function M.all(opts)
     { root = root, link_resolver = opts.link_resolver or wikilinks.resolver(root) }
   )
   for _, area in ipairs(vault.areas(root)) do
-    local tasks, errors = M.area(area.name, area_opts)
-    for _, t in ipairs(tasks or {}) do
-      all[#all + 1] = t
-    end
-    for _, e in ipairs(type(errors) == "table" and errors or { errors }) do
-      all_errors[#all_errors + 1] = e
+    if not opts.only or opts.only[area.name] then
+      local tasks, errors = M.area(area.name, area_opts)
+      for _, t in ipairs(tasks or {}) do
+        all[#all + 1] = t
+      end
+      for _, e in ipairs(type(errors) == "table" and errors or { errors }) do
+        all_errors[#all_errors + 1] = e
+      end
     end
   end
   return all, all_errors
 end
 
----@class Tasks.OpenTasksOpts : Tasks.ScanOpts
----@field area? string   # One area (default: all of them).
+---The areas a filter name stands for, as a set: the area itself, or an area group's members. Nil for no name.
+---@param root string
+---@param name string|nil
+---@return table<string, boolean>|nil
+local function area_set(root, name)
+  if name == nil then
+    return nil
+  end
+  local scope = vault.area_scope(root, name)
+  return scope and scope.set or { [name] = true }
+end
+M.area_set = area_set
 
----The open tasks, the one list every front end starts from: one area (`opts.area`) or all of them, with
----the tasks whose status is not an open one (a `done` file that is still in `ROADMAP/`) counted, not listed.
+---@class Tasks.OpenTasksOpts : Tasks.ScanOpts
+---@field area? string   # One area or an area group (default: all of them).
+---@field only? table<string, boolean>  # `all`: only these areas.
+
+---The open tasks, the one list every front end starts from: one area (`opts.area`, also an area group) or all of
+---them, with the tasks whose status is not an open one (a `done` file that is still in `ROADMAP/`) counted, not listed.
 ---@param opts? Tasks.OpenTasksOpts
 ---@return Tasks.Task[]|nil open
 ---@return integer|string skipped_or_err  the number of tasks left out, or the error when `open` is nil
@@ -214,7 +230,11 @@ end
 function M.open_tasks(opts)
   opts = opts or {}
   local tasks, errors
-  if opts.area then
+  local root = opts.area and resolve_root(opts)
+  local scope = root and vault.area_scope(root, opts.area)
+  if scope and scope.group then
+    tasks, errors = M.all(vim.tbl_extend("force", opts, { root = root, only = scope.set }))
+  elseif opts.area then
     tasks, errors = M.area(opts.area, opts)
   else
     tasks, errors = M.all(opts)
@@ -457,8 +477,9 @@ function M.open_reminders(opts)
   local uv = vim.uv or vim.loop
   local now = os.time()
   local out, errors = {}, {}
+  local wanted = area_set(root, opts.area)
   for _, area in ipairs(vault.areas(root)) do
-    if not opts.area or area.name == opts.area then
+    if not wanted or wanted[area.name] then
       local dir = vault.tasks_dir(root, area.name)
       local files, walk_errors = markdown_files(dir, opts, root)
       for _, e in ipairs(walk_errors) do
@@ -500,8 +521,9 @@ function M.backlog_reminders(opts)
   local uv = vim.uv or vim.loop
   local now = os.time()
   local out, errors = {}, {}
+  local wanted = area_set(root, opts.area)
   for _, area in ipairs(vault.areas(root)) do
-    if not opts.area or area.name == opts.area then
+    if not wanted or wanted[area.name] then
       for _, bucket in ipairs({ "FEATURES", "TASKS" }) do
         local dir = vault.backlog_dir(root, area.name, bucket)
         local escape = vault.leaves(root, dir)

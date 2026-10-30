@@ -137,9 +137,11 @@ function M.load(opts)
     return nil, tostring(scan_errors)
   end
   local errors = type(scan_errors) == "table" and scan_errors or {}
+  -- an area group stands for its member areas
+  local wanted = scan.area_set(opts.root, opts.area)
   local open, skipped = {}, 0
   for _, t in ipairs(all) do
-    if not opts.area or t.area == opts.area then
+    if not wanted or wanted[t.area] then
       if model.is_open_status(t.status) then
         open[#open + 1] = t
       else

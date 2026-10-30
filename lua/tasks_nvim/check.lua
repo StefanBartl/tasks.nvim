@@ -43,6 +43,11 @@
 ---  - `symlink-task` (error): the task file is a symbolic link or a junction; it is not read (the vault must not point outside itself)
 ---  - `frontmatter-warning` (warning): a frontmatter line was kept but not understood
 ---  - `title-comment` (warning): the title has a trailing YAML comment (` #...`)
+---  - `area-groups-invalid` (error): `<vault>/area-groups.json` or one of its groups cannot be used;
+---    `area-groups-config` (warning): a group of `setup({ area_groups })` cannot be used;
+---    `area-group-shadowed`, `area-group-empty`, `area-group-unknown-member`, `area-group-nested` (warnings): a group
+---    named like an area (the area wins), one that matches no area, names an area that is none, or names a group
+---    (whole-vault runs only, area `""`)
 ---
 --- Not its job: fixing anything (`index.write_area` regenerates an index).
 
@@ -112,6 +117,75 @@ local function view_findings(findings, root, names)
         { area = area, path = root .. "/" .. p.file },
         "not a view: " .. p.message
       )
+    end
+  end
+end
+
+---The area groups (`<vault>/area-groups.json`): a file or definition that cannot be used is an error, a group that
+---misses its point (shadowed by an area, empty, naming an area or group that is none) a warning. Only on a run over the
+---whole vault: the file belongs to no area (the findings carry the area `""`).
+---@param findings Tasks.Finding[]
+---@param root string
+local function area_group_findings(findings, root)
+  local area_groups = require("tasks_nvim.area_groups")
+  local at = { area = "", path = area_groups.path(root) }
+  local groups = area_groups.all(root)
+  local problems = area_groups.problems(root)
+  for _, note in ipairs(problems.file) do
+    add(findings, "error", "area-groups-invalid", at, note)
+  end
+  -- a rejected group of setup(): the file is fine, Neovim's config is not (and the CLI never sees it)
+  for _, note in ipairs(problems.config) do
+    add(findings, "warn", "area-groups-config", at, note)
+  end
+  local is_area = {}
+  for _, n in ipairs(vault.area_names(root)) do
+    is_area[n] = true
+  end
+  local is_group = {}
+  for _, g in ipairs(groups) do
+    is_group[g.name] = true
+  end
+  for _, g in ipairs(groups) do
+    if g.shadowed then
+      add(
+        findings,
+        "warn",
+        "area-group-shadowed",
+        at,
+        ("area group '%s' has the name of an area; the area wins"):format(g.name)
+      )
+    else
+      for _, name in ipairs(g.include) do
+        if not name:find("[%*%?]") and not is_area[name] then
+          if is_group[name] then
+            add(
+              findings,
+              "warn",
+              "area-group-nested",
+              at,
+              ("area group '%s' names the group '%s': groups do not nest"):format(g.name, name)
+            )
+          else
+            add(
+              findings,
+              "warn",
+              "area-group-unknown-member",
+              at,
+              ("area group '%s' names '%s', which is no area of the vault"):format(g.name, name)
+            )
+          end
+        end
+      end
+      if #g.members == 0 then
+        add(
+          findings,
+          "warn",
+          "area-group-empty",
+          at,
+          ("area group '%s' matches no area"):format(g.name)
+        )
+      end
     end
   end
 end
@@ -611,6 +685,9 @@ function M.run(opts)
   plan_findings(findings, open_ids, names, scan_opts, is_finished)
   plan_file_findings(findings, open_ids, names, scan_opts, is_finished)
   view_findings(findings, root, names)
+  if not opts.area then
+    area_group_findings(findings, root)
+  end
 
   table.sort(findings, finding_less)
   local errors, warnings = 0, 0

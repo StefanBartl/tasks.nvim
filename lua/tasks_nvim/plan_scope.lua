@@ -198,7 +198,7 @@ function M.resolve_block(key, root, attrs, shared)
     end
     return { root = root, for_id = attrs["for"] }, nil
   elseif attrs.area then
-    if not vault.has_area(root, attrs.area) then
+    if not vault.area_scope(root, attrs.area) then
       return nil,
         ("the block `%s` names an area that does not exist: %s"):format(key, attrs.area),
         false
@@ -208,6 +208,8 @@ function M.resolve_block(key, root, attrs, shared)
   if key == "all" then
     return { root = root }, nil
   end
+  -- a bare key: an area, then a plan slug; an area group only by an explicit `area=` (a group named like a plan must
+  -- not take over a block written for that plan)
   if vault.has_area(root, key) then
     return { root = root, area = key }, nil
   end
@@ -287,8 +289,9 @@ local FILTER_FLAGS = { "stale_refs", "blocked", "unestimated", "quick_win" }
 ---(whitespace, `--`) is an error: it would silently not be recorded.
 ---@param filter_opt table                       # What `filter_opts.parse` was given (`today` is not recorded).
 ---@param view { ready?: boolean, steps?: boolean }
----@param target { area?: string, plan_id?: string, for_id?: string }
----@param key? string                            # The block's name: an area that IS the name needs no `area=`.
+---@param target { area?: string, plan_id?: string, for_id?: string, root?: string }
+---@param key? string                            # The block's name: an area that IS the name needs no `area=` (an
+---                                              # area group does: a bare name never resolves to a group).
 ---@return table<string, string>|nil attrs
 ---@return string|nil err
 function M.marker_attrs(filter_opt, view, target, key)
@@ -325,7 +328,13 @@ function M.marker_attrs(filter_opt, view, target, key)
   if view.steps then
     attrs.steps = "1"
   end
-  local area = target.area ~= key and target.area or nil
+  local area = target.area
+  if area and area == key then
+    local root = vault.root({ root = target.root })
+    if root and vault.has_area(root, area) then
+      area = nil
+    end
+  end
   for name, value in pairs({ plan = target.plan_id, ["for"] = target.for_id, area = area }) do
     local err = put(name, value)
     if err then
@@ -606,14 +615,17 @@ function M.load(opts, shared)
     tasks = closure
     title = "for " .. opts.for_id
   elseif opts.area then
+    -- an area group stands for its member areas; the history figure below only fits one area
+    local scope = vault.area_scope(vault.root({ root = opts.root }) or "", opts.area)
+    local wanted = scope and scope.set or { [opts.area] = true }
     tasks = {}
     for _, t in ipairs(open) do
-      if t.area == opts.area then
+      if wanted[t.area] then
         tasks[#tasks + 1] = t
       end
     end
     title = opts.area
-    whole_area = true
+    whole_area = not (scope and scope.group)
   else
     tasks = open
     title = "all areas"

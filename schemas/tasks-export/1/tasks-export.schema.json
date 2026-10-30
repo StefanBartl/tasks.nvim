@@ -507,6 +507,34 @@
       },
       "additionalProperties": false
     },
+    "AreaGroup": {
+      "description": "An area group (`<vault>/area-groups.json`, in Neovim also `setup({ area_groups })`): a filter name that stands for several areas. The methods `list`, `order`, `next` and `finished` take a group name for `area` too (`check` takes one area); a write target never is one. Only groups in force are listed (an area of the same name wins).",
+      "type": "object",
+      "required": ["name", "members", "open", "by_status"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "members": {
+          "description": "The areas of the vault the group stands for, sorted.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "open": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "by_status": {
+          "$ref": "#/$defs/StatusCounts"
+        },
+        "desc": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "Hello": {
       "description": "tasks.hello: what this engine is and can do. Reads no task.",
       "allOf": [
@@ -689,6 +717,13 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/Area"
+          }
+        },
+        "area_groups": {
+          "description": "The area groups in force with their members; left out when the vault has none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AreaGroup"
           }
         },
         "reminders": {
@@ -1848,6 +1883,13 @@
       "properties": {
         "kind": {
           "const": "tasks.areas"
+        },
+        "area_groups": {
+          "description": "The area groups in force with their members; left out when the vault has none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AreaGroup"
+          }
         },
         "digest": {
           "$ref": "#/$defs/Digest"

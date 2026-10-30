@@ -473,6 +473,37 @@ local function areas_of(view)
   return out
 end
 
+---The area groups in force (`tasks_nvim.area_groups`) with their members and open counts; nil when there are none,
+---so a vault without groups keeps its documents as they were. The groups are part of the content, so a changed
+---`area-groups.json` changes the digest (not `rev`).
+---@param view Tasks.ContractView
+---@return table[]|nil
+local function area_groups_of(view)
+  local groups = require("tasks_nvim.area_groups").all(view.root)
+  local by_area = {}
+  for _, t in ipairs(view.open) do
+    by_area[t.area] = by_area[t.area] or {}
+    table.insert(by_area[t.area], t.status)
+  end
+  local out = {}
+  for _, g in ipairs(groups) do
+    if not g.shadowed then
+      local statuses = {}
+      for _, name in ipairs(g.members) do
+        vim.list_extend(statuses, by_area[name] or {})
+      end
+      out[#out + 1] = json.object({
+        name = g.name,
+        members = g.members,
+        open = #statuses,
+        by_status = counts_of(statuses),
+        desc = g.desc,
+      })
+    end
+  end
+  return #out > 0 and out or nil
+end
+
 ---`rev`: what the vault looked like, from every task and plan file by id and version tag.
 ---@param view Tasks.ContractView
 ---@param entries table[]
@@ -574,6 +605,7 @@ function M.build_snapshot(opts)
     by_status = counts_of(statuses),
   })
   doc.areas = areas_of(view)
+  doc.area_groups = area_groups_of(view)
   doc.unlisted = view.unlisted
   local reminders, reminder_errors = done_reminders(view.root)
   doc.reminders = reminders
@@ -631,9 +663,19 @@ local function matching_tasks(params, opts)
   if not view then
     return nil, err
   end
-  if params.area ~= nil and not vault.has_area(view.root, params.area) then
-    return nil,
-      { code = "not_found", message = "unknown area: " .. tostring(params.area), retryable = false }
+  -- an area group is a filter name like an area: it stands for its member areas
+  local area_set = nil
+  if params.area ~= nil then
+    local scope = vault.area_scope(view.root, params.area)
+    if not scope then
+      return nil,
+        {
+          code = "not_found",
+          message = "unknown area: " .. tostring(params.area),
+          retryable = false,
+        }
+    end
+    area_set = scope.set
   end
   local want = nil
   if params.status then
@@ -648,7 +690,7 @@ local function matching_tasks(params, opts)
     return (view.rank[a.id] or math.huge) < (view.rank[b.id] or math.huge)
   end)
   for _, t in ipairs(ordered) do
-    if (params.area == nil or t.area == params.area) and (want == nil or want[t.status]) then
+    if (area_set == nil or area_set[t.area]) and (want == nil or want[t.status]) then
       matching[#matching + 1] = t
     end
   end
@@ -1453,7 +1495,7 @@ function M.next(params, opts)
   if not root then
     return nil, rerr
   end
-  if params.area ~= nil and not vault.has_area(root, params.area) then
+  if params.area ~= nil and not vault.area_scope(root, params.area) then
     return nil,
       { code = "not_found", message = "unknown area: " .. tostring(params.area), retryable = false }
   end
@@ -1508,6 +1550,7 @@ function M.areas(opts)
   end
   local doc = M.head("tasks.areas", view.root)
   doc.areas = areas_of(view)
+  doc.area_groups = area_groups_of(view)
   return seal(doc, nil), nil
 end
 
@@ -1626,13 +1669,22 @@ function M.finished(params, opts)
   if not root then
     return nil, rerr
   end
-  if params.area ~= nil and not vault.has_area(root, params.area) then
-    return nil,
-      { code = "not_found", message = "unknown area: " .. tostring(params.area), retryable = false }
+  local area_set = nil
+  if params.area ~= nil then
+    local scope = vault.area_scope(root, params.area)
+    if not scope then
+      return nil,
+        {
+          code = "not_found",
+          message = "unknown area: " .. tostring(params.area),
+          retryable = false,
+        }
+    end
+    area_set = scope.set
   end
   local names = {}
   for _, a in ipairs(vault.areas(root)) do
-    if params.area == nil or a.name == params.area then
+    if area_set == nil or area_set[a.name] then
       names[#names + 1] = a.name
     end
   end

@@ -136,6 +136,7 @@ require("tasks_nvim").setup({
   reminders = { on_start = true },                                              -- one line at startup when a reminder is due
   completion = { finished = true },                                             -- <Tab> offers finished tasks: true (all), false (none) or N (finished in the last N days)
   lists = {},                                                                   -- named lists, see below
+  area_groups = {},                                                             -- area groups on top of <vault>/area-groups.json, see below
   quick_wins = { min_value = 4, max_effort = "S" },                              -- what counts as a quick win (both written on the task)
 })
 ```
@@ -154,6 +155,25 @@ lists = {
 Three are built in (`quick-wins`, `small-and-important`, `unestimated`); a saved list of the same name replaces a
 built-in one, a list of `setup()` replaces a saved one ([docs/COMMANDS.md](docs/COMMANDS.md#tasks-lists)). The headless CLI
 has no `setup()`: it knows the built-in and the saved lists.
+
+**Area groups.** A group is a name that stands for several areas wherever a filter takes one: `tasks list nvim`,
+`tasks next nvim`, `tasks plans nvim`, `:Tasks list nvim`, the dashboard and tasks-desktop show the tasks of every
+member area. Members are the areas whose name matches `include` (exact names or `*`/`?` globs) and none of
+`exclude`, so a new `foo.nvim` area joins `nvim` by itself. Write them once in the vault, where the headless CLI and
+tasks-desktop read them too, as `<vault>/area-groups.json`:
+
+```json
+{ "version": 1, "groups": {
+  "nvim":   { "include": ["*.nvim"], "desc": "the Neovim plugins" },
+  "native": { "include": ["*-desktop", "takt"], "exclude": ["docmap-desktop"] }
+} }
+```
+
+`setup({ area_groups = { nvim = { include = { "*.nvim" } } } })` adds groups (or replaces one by name) inside Neovim
+only. A group is a filter, never a place: `tasks new nvim ...` is refused with the members named. An area may be in
+several groups, a group is never a member of another one, an area of the same name wins over a group, and `all` is reserved.
+`tasks areas --format=tsv|json` lists the groups after the areas; `tasks check` reports a broken file, a shadowed or
+empty group and a member that is no area.
 
 A wrong key or value is reported (and listed in `:checkhealth`) and the default stays. Every key of the
 dashboard and the form can be moved or switched off with `keys = { dashboard = {...}, dashboard_input = {...},

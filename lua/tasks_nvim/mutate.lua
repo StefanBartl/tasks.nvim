@@ -878,6 +878,11 @@ function M.new(area, opts)
     return nil, rerr
   end
   if not vault.has_area(root, area) then
+    -- an area group is a filter, never a place: a task lives in one area
+    local group = type(area) == "string" and require("tasks_nvim.area_groups").get(root, area)
+    if group then
+      return nil, require("tasks_nvim.area_groups").not_a_target_message(group)
+    end
     return nil, "unknown area: " .. tostring(area)
   end
 
