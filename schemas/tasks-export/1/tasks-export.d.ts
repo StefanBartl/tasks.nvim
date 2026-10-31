@@ -765,6 +765,10 @@ export interface Sheets {
     manual: number;
     green: number;
   };
+  /**
+   * Why the state is `unknown`: the block has no states line (an older testing.nvim), no state this engine knows is in it (a newer testing.nvim), or its markers are broken (two blocks, a begin without its end; testing.nvim does not write such a body). Absent otherwise.
+   */
+  reason?: "no-states-line" | "no-known-state" | "broken-markers";
 }
 /**
  * Where a task stands in the plan, from `blocked_by` alone.

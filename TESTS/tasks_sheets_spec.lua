@@ -53,17 +53,61 @@ return function(H)
   eq(sheets.parse(block("")).state, "unknown", "an empty states line")
   eq(sheets.parse(block("a=inbox"):gsub("\n", "\r\n")).state, "inbox", "CRLF")
 
-  ok(sheets.parse("\nNo block here.\n") == nil, "a body without the block: nil")
-  ok(
-    sheets.parse(sheets.BEGIN .. "\n" .. sheets.STATES_PREFIX .. " a=red -->\n") == nil,
+  -- review of ca44e86: the same rules as testing.nvim, and a states line that cannot stall a load
+  local function reason(body)
+    local r = sheets.parse(body)
+    return r and { r.state, r.reason } or nil
+  end
+  eq(
+    reason(block("a=red") .. "\n" .. block("b=green")),
+    { "unknown", "broken-markers" },
+    "two blocks"
+  )
+  eq(
+    reason(sheets.END .. "\n" .. block("a=red")),
+    { "unknown", "broken-markers" },
+    "an end in front of the begin"
+  )
+  eq(
+    reason(sheets.BEGIN .. "\n" .. sheets.STATES_PREFIX .. " a=red -->\n"),
+    { "unknown", "broken-markers" },
     "a begin without its end"
   )
+  has(sheets.describe(sheets.parse(block("a=red") .. "\n" .. block("b=red"))), "markers are broken")
+  eq(
+    sheets.parse(
+      "  " .. sheets.BEGIN .. "  \n" .. sheets.STATES_PREFIX .. " a=red -->  \n " .. sheets.END
+    ).state,
+    "red",
+    "markers and the states line are trimmed, as testing.nvim reads them"
+  )
+  for _, pre in ipairs({
+    "```text\n~~~~~~~~\n```\n",
+    "```\ncode\n```lua\n```\n",
+    "```code``` sample\n",
+  }) do
+    eq(sheets.parse(pre .. block("a=red")).state, "red", "the block after " .. vim.inspect(pre))
+  end
+  local unk = sheets.parse(block("a=skipped"))
+  eq(
+    { unk.state, unk.reason },
+    { "unknown", "no-known-state" },
+    "a state word of a newer testing.nvim"
+  )
+  has(sheets.describe(unk), "no state this tasks.nvim knows")
+  eq(old.reason, "no-states-line")
+  local started = os.clock()
+  sheets.parse(block(("a"):rep(40000)))
+  sheets.parse(block("a=red" .. ("-"):rep(40000)))
+  ok(os.clock() - started < 0.5, "a states line of 40000 characters without '=' stays linear")
+
+  ok(sheets.parse("\nNo block here.\n") == nil, "a body without the block: nil")
   ok(
     sheets.parse("```\n" .. block("a=red") .. "\n```\n") == nil,
     "a block quoted in a fenced code block is text"
   )
   ok(
-    sheets.parse("Text " .. sheets.BEGIN .. "\n" .. sheets.END) == nil,
+    sheets.parse("Text " .. sheets.BEGIN .. " and " .. sheets.END .. " in prose") == nil,
     "a marker inside a line is text"
   )
   eq(
@@ -133,6 +177,21 @@ return function(H)
   eq(doc.task.sheets.counts.inbox, 1)
   local plain_doc = assert(contract.task("lib.nvim/plain", { root = root }))
   ok(plain_doc.task.sheets == nil, "and nothing for a task without the block")
+  ok(doc.task.sheets.reason == nil, "no reason when the state is known")
+  F.task(
+    H,
+    root,
+    "lib.nvim",
+    "twice",
+    F.meta("Twice", "open", {}),
+    "\n" .. block("a=red") .. "\n\n" .. block("b=green")
+  )
+  local twice = assert(contract.task("lib.nvim/twice", { root = root }))
+  eq(
+    { twice.task.sheets.state, twice.task.sheets.reason },
+    { "unknown", "broken-markers" },
+    "the contract says why the state is unknown"
+  )
 
   local cli = require("tasks_nvim.cli")
   local function run(argv)
@@ -159,8 +218,8 @@ return function(H)
   local any = run({ "list", "lib.nvim", "--sheet=any", "--format=ids" })
   eq(
     vim.split(vim.trim(any.out), "\n"),
-    { "lib.nvim/checked", "lib.nvim/green" },
-    "list --sheet=any"
+    { "lib.nvim/checked", "lib.nvim/green", "lib.nvim/twice" },
+    "list --sheet=any (a block with broken markers too)"
   )
   eq(run({ "list", "--sheet=purple" }).code, 2, "an unknown state is bad usage")
 

@@ -287,6 +287,7 @@ local function task_entry(root, task, node, rank)
       state = task.sheets.state,
       total = task.sheets.total,
       counts = json.object(counts),
+      reason = task.sheets.reason,
     })
   end
   -- Only a task that waits for an answer says so: a document without open questions reads as before.

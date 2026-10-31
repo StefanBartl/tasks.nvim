@@ -106,8 +106,10 @@ A **task entry** (`tasks[]`, `items[]`, `task`) has: `id`, `area`, `slug`, `titl
 relative to the vault), `valid`, `problems` (`[{ code, msg }]`), `steps` (`total`, `ticked`, `dropped`, only when the
 task has a `## Plan` section), `open_questions` (how many questions of its `## Offene Fragen` section are not answered; only when
 there is one), `sheets` (the test-sheet block testing.nvim writes into a live-check task, read from its states line:
-`state` = the worst sheet, one of `red`, `stale`, `never`, `inbox`, `manual`, `green`, or `unknown` for a block without a
-states line; `total`; `counts` per state; only when the task has the block), `etag` and, for an open task, `readiness`:
+`state` = the worst sheet, one of `red`, `stale`, `never`, `inbox`, `manual`, `green`, or `unknown`; `total`; `counts` per
+state; `reason` only for `unknown`: `no-states-line` (an older testing.nvim), `no-known-state` (a newer one),
+`broken-markers` (two blocks, a begin without its end); markers and fences are found by the rules testing.nvim writes
+with; only when the task has the block), `etag` and, for an open task, `readiness`:
 
 ```json
 "readiness": { "state": "ready", "stage": 0, "rank": 3, "eff_prio": 1, "leverage": 4, "open_blockers": [] }
