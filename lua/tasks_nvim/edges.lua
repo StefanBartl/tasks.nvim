@@ -43,10 +43,12 @@ local function has(list, value)
   return vim.tbl_contains(list, value)
 end
 
----Check a proposed change of the relations of task `id`.
----@param id string
+---Check a proposed change of the relations of task `id`. With `opts.new` the task does not exist yet (`new` of
+---`tasks-ops/1`): `id` is nil, the relations are its first ones, and no circle can run through it (it blocks nobody
+---that it waits on: a stage gate only adds edges that the plan already had between the other tasks).
+---@param id string|nil
 ---@param proposal Tasks.EdgeProposal
----@param opts { root: string, shared?: Tasks.PlanShared }
+---@param opts { root: string, shared?: Tasks.PlanShared, new?: boolean }
 ---@return Tasks.EdgeProblem[]|nil problems  # empty: the change breaks nothing
 ---@return string|nil err
 function M.validate(id, proposal, opts)
@@ -59,9 +61,9 @@ function M.validate(id, proposal, opts)
     end
   end
   local index = shared.index
-  local task = index.open[id]
+  local task = opts.new and {} or index.open[id]
   if not task then
-    return nil, "no such open task: " .. id
+    return nil, "no such open task: " .. tostring(id)
   end
   ---@type Tasks.EdgeProblem[]
   local problems = {}
@@ -71,7 +73,7 @@ function M.validate(id, proposal, opts)
   ---@param dangling_code string
   local function targets(key, self_code, dangling_code)
     for _, ref in ipairs(proposal[key] or {}) do
-      if ref == id then
+      if id ~= nil and ref == id then
         problems[#problems + 1] = {
           code = self_code,
           key = key,
@@ -139,7 +141,7 @@ function M.validate(id, proposal, opts)
 
   -- a circle through the task: judged on the whole graph with the change applied
   local changes_graph = proposal.blocked_by ~= nil or proposal.plan ~= nil or proposal.phase ~= nil
-  if changes_graph and #problems == 0 then
+  if changes_graph and #problems == 0 and not opts.new then
     local changed = vim.tbl_extend("force", {}, task)
     changed.blocked_by = proposal.blocked_by or task.blocked_by
     changed.plan = plan_id

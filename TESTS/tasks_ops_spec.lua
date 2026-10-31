@@ -464,10 +464,67 @@ return function(H)
     one({ { op = "new", area = "lib.nvim", title = "x", fields = { colour = 1 } } }).error.code,
     "invalid_argument"
   )
+  -- the relations at birth: written as given, judged as `set` judges them
+  local related = one({
+    {
+      op = "new",
+      area = "lib.nvim",
+      title = "Born related",
+      fields = {
+        after = { "lib.nvim/gamma", "cascade.nvim/delta" },
+        plan = good.id,
+        phase = "ship",
+      },
+    },
+  })
+  eq({ related.ok, related.outcome }, { true, "created" }, vim.inspect(related))
+  local rt = find(related.id)
   eq(
-    one({ { op = "new", area = "lib.nvim", title = "x", fields = { plan = "lib.nvim/ship" } } }).error.code,
-    "invalid_argument",
-    "relations are set afterwards"
+    { rt.after, rt.plan, rt.phase },
+    { { "lib.nvim/gamma", "cascade.nvim/delta" }, good.id, "ship" }
+  )
+  eq(
+    find(one({
+      {
+        op = "new",
+        area = "lib.nvim",
+        title = "One after",
+        fields = { after = "lib.nvim/gamma" },
+      },
+    }).id).after,
+    { "lib.nvim/gamma" },
+    "a single id is a list of one"
+  )
+  ---@param fields table
+  ---@return table entry
+  local function born(fields)
+    local files_before = everything()
+    local e = one({ { op = "new", area = "lib.nvim", title = "Refused birth", fields = fields } })
+    eq(everything(), files_before, "a refused new writes nothing")
+    return e
+  end
+  local function problem(fields)
+    local e = born(fields)
+    eq(e.error.code, "invalid_argument", vim.inspect(e))
+    return e.error.details.problems[1].code
+  end
+  eq(problem({ after = { "lib.nvim/nowhere" } }), "after-dangling")
+  eq(problem({ after = "lib.nvim/alpha, lib.nvim/nowhere" }), "after-dangling")
+  eq(problem({ plan = "lib.nvim/no-plan" }), "plan-unknown")
+  eq(problem({ plan = good.id, phase = "nonsense" }), "plan-phase")
+  eq(born({ phase = "Not A Slug" }).error.code, "invalid_argument")
+  eq(born({ after = { "not an id" } }).error.code, "invalid_argument")
+  -- a dry run judges them too
+  eq(
+    one({
+      {
+        op = "new",
+        area = "lib.nvim",
+        title = "Dry related",
+        fields = { plan = "lib.nvim/no-plan" },
+      },
+    }, { dry_run = true }).error.details.problems[1].code,
+    "plan-unknown"
   )
   eq(
     one({ { op = "new", area = "lib.nvim", title = "x", fields = { kind = "mystery" } } }).error.code,

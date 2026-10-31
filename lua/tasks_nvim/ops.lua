@@ -14,8 +14,9 @@
 ---    cannot both win; a change of the relations (`blocked_by`, `after`, `plan`, `phase`) is judged first
 ---    (`tasks_nvim.edges`)
 ---  - `new` { area, title, fields?, body? }: create a task; `body` (text, at most 20000 characters) replaces the template
----    sections of the file; `fields` are the plain keys (kind, prio, effort, tags, category,
----    severity, value, actor, summary, refs, status, slug). Relations are set afterwards
+---    sections of the file; `fields` are the keys (kind, prio, effort, tags, category, severity, value, actor, summary,
+---    refs, links, status, slug, after, plan, phase); `after`, `plan` and `phase` are judged as `set` judges them
+---    (`tasks_nvim.edges`: a target that exists nowhere, a plan that is no plan file, a phase not in its `phase_order`)
 ---  - `reorder` { id, after?, before?, group?, if_match? }: move a task inside its group (`batch.reorder`)
 ---  - `done` { id, confirm, done_in?, commits?, remind? }: finish a task (`commits`: `repo@sha` entries added to the task's own). `confirm` is the token of `done_preview` for the version of the
 ---    file that was shown; a task that changed since is a `conflict`
@@ -209,8 +210,14 @@ local NEW_FIELDS = {
   links = true,
   status = true,
   slug = true,
+  after = true,
+  plan = true,
+  phase = true,
 }
 M.NEW_FIELDS = NEW_FIELDS
+
+---The keys of `NEW_FIELDS` that are relations: judged by `edges.validate` before the file is made.
+local NEW_RELATIONS = { "after", "plan", "phase" }
 
 -- ── what a front end may write ───────────────────────────────────────────────
 
@@ -708,6 +715,24 @@ local function do_new(op, ctx)
       if why then
         return refuse("invalid_argument", ("refs: '%s' has %s"):format(clip(ref), why))
       end
+    end
+  end
+  -- the relations, as `set` judges them: on the ids the values name (wikilinks resolved), before anything is written
+  local relation = {}
+  for _, key in ipairs(NEW_RELATIONS) do
+    relation[key] = fields[key]
+  end
+  if next(relation) ~= nil then
+    local pairs_, perr = mutate.check_patch(relation, { root = ctx.root })
+    if not pairs_ then
+      return refuse("invalid_argument", tostring(perr))
+    end
+    local problems, eerr = edges.validate(nil, proposal_of(pairs_), { root = ctx.root, new = true })
+    if not problems then
+      return fail(ctx, eerr)
+    end
+    if #problems > 0 then
+      return refuse("invalid_argument", problems[1].message, { problems = problems })
     end
   end
   -- `links` of the request is the frontmatter field; in `mutate.new` that name is the wikilink mode

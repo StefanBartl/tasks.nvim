@@ -92,6 +92,29 @@ G.cases = {
     end,
   },
   {
+    -- `new` with its relations: made with after, plan and phase; each relation that is wrong refused, nothing written
+    name = "result-new-relations",
+    method = "ops",
+    fresh = true,
+    request = function()
+      local function new(title, fields)
+        return { op = "new", area = "cascade.nvim", title = title, fields = fields }
+      end
+      return encode({
+        client_op_id = "golden-new-relations",
+        ops = {
+          new(
+            "Golden related task",
+            { after = { "lib.nvim/alpha" }, plan = "lib.nvim/the-plan", phase = "test" }
+          ),
+          new("Golden dangling after", { after = { "lib.nvim/nowhere" } }),
+          new("Golden unknown plan", { plan = "lib.nvim/no-plan" }),
+          new("Golden unknown phase", { plan = "lib.nvim/the-plan", phase = "deploy" }),
+        },
+      })
+    end,
+  },
+  {
     -- saved views for real: made, replaced on the version read, replaced on a stale one, deleted, a view that is not there
     name = "result-views",
     method = "ops",

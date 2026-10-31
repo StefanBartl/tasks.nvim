@@ -1,0 +1,101 @@
+{
+  "client_op_id": "golden-new-relations",
+  "digest": "sha256:512ab513118f9915",
+  "dry_run": false,
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "kind": "tasks.result",
+  "ok": false,
+  "plugin": "tasks.nvim",
+  "results": [
+    {
+      "changed_ids": [
+        "cascade.nvim/golden-related-task"
+      ],
+      "etag_after": "sha256:ffc98682caf08160",
+      "file": "cascade.nvim/ROADMAP/tasks/golden-related-task.md",
+      "id": "cascade.nvim/golden-related-task",
+      "index": {
+        "action": "written"
+      },
+      "n": 1,
+      "ok": true,
+      "op": "new",
+      "outcome": "created"
+    },
+    {
+      "changed_ids": [],
+      "error": {
+        "code": "invalid_argument",
+        "details": {
+          "problems": [
+            {
+              "code": "after-dangling",
+              "key": "after",
+              "message": "after lib.nvim/nowhere does not exist",
+              "target": "lib.nvim/nowhere"
+            }
+          ]
+        },
+        "message": "after lib.nvim/nowhere does not exist",
+        "retryable": false
+      },
+      "n": 2,
+      "ok": false,
+      "op": "new",
+      "outcome": "failed"
+    },
+    {
+      "changed_ids": [],
+      "error": {
+        "code": "invalid_argument",
+        "details": {
+          "problems": [
+            {
+              "code": "plan-unknown",
+              "key": "plan",
+              "message": "plan lib.nvim/no-plan is no plan file (ROADMAP/plans/\u003cslug>.md)",
+              "target": "lib.nvim/no-plan"
+            }
+          ]
+        },
+        "message": "plan lib.nvim/no-plan is no plan file (ROADMAP/plans/\u003cslug>.md)",
+        "retryable": false
+      },
+      "n": 3,
+      "ok": false,
+      "op": "new",
+      "outcome": "failed"
+    },
+    {
+      "changed_ids": [],
+      "error": {
+        "code": "invalid_argument",
+        "details": {
+          "problems": [
+            {
+              "code": "plan-phase",
+              "key": "phase",
+              "message": "phase 'deploy' is not in the phase_order of lib.nvim/the-plan (build, test)",
+              "target": "deploy"
+            }
+          ]
+        },
+        "message": "phase 'deploy' is not in the phase_order of lib.nvim/the-plan (build, test)",
+        "retryable": false
+      },
+      "n": 4,
+      "ok": false,
+      "op": "new",
+      "outcome": "failed"
+    }
+  ],
+  "schema": 1,
+  "vault": {
+    "id": "vault"
+  }
+}
