@@ -1,11 +1,11 @@
 # CI of tasks.nvim.
 #
-# Runs on a self-hosted runner (the author's Windows machine): the repository is private and has no paid plan, so
-# hosted runners do not start (billing/spending-limit errors, not a code problem). Runner: $REPOS_DIR/tasks-vault/
-# TOOLS/self-hosted-runner.md; start it with `scripts/runners.ps1 ensure tasks.nvim` of the nvim config (or
-# `:MyPlugins ci runners`). Without a running runner a push stays "Queued" (no red mark, discarded after 24 h).
-# Only for PRIVATE repos with trusted authors; no `pull_request` trigger on purpose (a PR would run its own workflow
-# with the author's rights on this machine). Windows only: the Linux and macOS legs of the former matrix are gone.
+# Runs on a self-hosted runner (the maintainer's local Windows machine) by choice, not on GitHub-hosted runners.
+# Without a running runner a push stays "Queued" (no red mark, discarded after 24 h); contributors' changes are
+# checked when the maintainer pushes them to main.
+# Only `push` to main triggers this workflow; there is deliberately no `pull_request`/`pull_request_target` trigger:
+# a pull request from a fork would otherwise run its own workflow code on the maintainer's machine. Windows only: the
+# Linux and macOS legs of the former matrix are gone.
 #
 # The tools (nvim, stylua, luacheck, node) are expected on the runner's PATH and are not pinned here (the hosted jobs
 # pinned stylua 2.5.2 and luacheck 1.2.0); every job prints the versions it used.
