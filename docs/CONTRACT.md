@@ -367,7 +367,7 @@ cd contract && npm ci && node check.mjs                    # `--write` regenerat
 scripts/test.sh                                            # the Lua specs
 ```
 
-The CI job `contract` runs the Node checks next to the Lua suite.
+The `contract` step of `scripts/ci.sh` (`scripts/contract.sh`, also run by the CI workflow) runs the Node checks next to the Lua suite.
 
 Size against a real vault (about 620 open tasks, read only): the snapshot is ~800 KB and takes about one second from a
 cold process (Neovim's start included); a page of `list` is a few KB.

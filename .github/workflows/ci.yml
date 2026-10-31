@@ -31,14 +31,15 @@ jobs:
   pipeline:
     name: testing ci (${{ matrix.name }})
     runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       # One platform failing must not cancel the other.
       fail-fast: false
       matrix:
-        # push: the whole `full` profile on the self-hosted runner. pull_request: the whole profile on ubuntu, and on
-        # windows the steps that depend on the platform (stylua, luacheck and the Node contract check do not).
-        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"name":"ubuntu","runs-on":"ubuntu-latest","hosted":true,"steps":""},{"name":"windows","runs-on":"windows-latest","hosted":true,"steps":"--step=suite,conformance"}]' || '[{"name":"windows","runs-on":["self-hosted","windows"],"hosted":false,"steps":""}]') }}
+        # Only a push to main uses the self-hosted runner (the whole `full` profile); every other event, also one
+        # added later (workflow_dispatch, pull_request_target, ...), gets hosted runners: the whole profile on ubuntu,
+        # and on windows the steps that depend on the platform (stylua, luacheck and the Node contract check do not).
+        include: ${{ fromJSON(github.event_name == 'push' && '[{"name":"windows","runs-on":["self-hosted","windows"],"hosted":false,"steps":""}]' || '[{"name":"ubuntu","runs-on":"ubuntu-latest","hosted":true,"steps":""},{"name":"windows","runs-on":"windows-latest","hosted":true,"steps":"--step=suite,conformance"}]') }}
     defaults:
       run:
         # One shell on every runner: `bash` is the WSL launcher on the self-hosted machine, pwsh is everywhere.
@@ -61,6 +62,8 @@ jobs:
           persist-credentials: false
           repository: folke/snacks.nvim
           path: .deps/snacks.nvim
+          # Pinned: third-party code runs inside the specs on the self-hosted runner. Bump on purpose.
+          ref: 882c996cf28183f4d63640de0b4c02ec886d01f2
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false

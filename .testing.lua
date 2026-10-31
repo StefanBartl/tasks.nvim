@@ -54,7 +54,6 @@ return {
     },
   },
   -- The pipeline `scripts/ci.sh` (a shim for `testing ci`) and the workflow run; `--fast` is the pre-push profile.
-  -- The schema contract check needs Node and runs in the CI job `contract` only.
   ci = {
     default = "full",
     profiles = {
