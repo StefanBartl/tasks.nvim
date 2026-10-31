@@ -1,11 +1,11 @@
 # CI of tasks.nvim.
 #
-# Runs on a self-hosted runner (the maintainer's local Windows machine) by choice, not on GitHub-hosted runners.
-# Without a running runner a push stays "Queued" (no red mark, discarded after 24 h); contributors' changes are
-# checked when the maintainer pushes them to main.
+# Pushes to main run on a self-hosted runner (the maintainer's local Windows machine) by choice. Without a running
+# runner a push stays "Queued" (no red mark, discarded after 24 h).
 # Only `push` to main triggers this workflow; there is deliberately no `pull_request`/`pull_request_target` trigger:
-# a pull request from a fork would otherwise run its own workflow code on the maintainer's machine. Windows only: the
-# Linux and macOS legs of the former matrix are gone.
+# a pull request from a fork would otherwise run its own workflow code on the maintainer's machine. Pull requests run
+# the same pipeline on GitHub-hosted runners instead (pr.yml). Windows only: the Linux and macOS legs of the former
+# matrix are gone.
 #
 # The tools (nvim, stylua, luacheck, node) are expected on the runner's PATH and are not pinned here (the hosted jobs
 # pinned stylua 2.5.2 and luacheck 1.2.0); every job prints the versions it used.
