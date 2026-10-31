@@ -271,6 +271,129 @@ function M.add_note(text, note, today)
     nil
 end
 
+---Longest step `add_steps` takes, in characters.
+M.MAX_STEP = 1000
+
+---Append open steps to the `## Plan` section: below its last step, numbered on from it when the plan numbers its steps
+---(`- [ ] 3. ...`) or has none yet, with the bullet and indentation of the last step. A task without the section gets
+---one before its notes (`## Notizen` / `## Notes`), or at the end. Existing steps and every other byte stay as they
+---were (line endings included). A step is the text of one line: no checkbox, no list marker, and no number of its own
+---when the engine numbers it.
+---@param text string
+---@param items string[]
+---@return string|nil new_text
+---@return string|nil err
+function M.add_steps(text, items)
+  if #items == 0 then
+    return nil, "there are no steps to add"
+  end
+  local summary = M.parse(text)
+  local last_item = summary and summary.items[#summary.items]
+  -- the plan is numbered when it has no step yet or its last step carries a number
+  local last_number = last_item and tonumber(last_item.text:match("^(%d+)%.%s"))
+  local numbered = last_item == nil or last_number ~= nil
+  local next_number = last_number or 0
+  local cr = text:find("\r\n", 1, true) and "\r" or ""
+  local lines = vim.split(text, "\n", { plain = true })
+  local prefix = "- "
+  if last_item then
+    prefix = bare_of(lines[last_item.line]):match("^(%s*[-*]%s+)") or prefix
+  end
+  local new_lines = {}
+  for i, item in ipairs(items) do
+    local step = fsio.trim(item)
+    if step == "" then
+      return nil, ("step %d is empty"):format(i)
+    end
+    if step:find("[%c\127]") then
+      return nil, ("step %d must be one line without control characters"):format(i)
+    end
+    if vim.fn.strchars(step) > M.MAX_STEP then
+      return nil, ("step %d is longer than %d characters"):format(i, M.MAX_STEP)
+    end
+    if step:match("^[-*+]%s") or step:match("^%[[ xX]%]") then
+      return nil,
+        ("step %d is a list line: give the text of the step, the checkbox is written here"):format(
+          i
+        )
+    end
+    if numbered and step:match("^%d+[.)]%s") then
+      return nil, ("step %d carries a number: the steps are numbered here"):format(i)
+    end
+    if numbered then
+      next_number = next_number + 1
+      step = next_number .. ". " .. step
+    end
+    new_lines[#new_lines + 1] = prefix .. "[ ] " .. step .. cr
+  end
+
+  ---Put `block` below line `at` (0: at the top). Below the last line of a text without a final line break, that line
+  ---gets the break and the block's last line goes without one.
+  ---@param at integer
+  ---@param block string[]
+  local function insert(at, block)
+    if at == #lines and lines[at] ~= "" then
+      lines[at] = lines[at] .. cr
+      block[#block] = (block[#block]:gsub("\r$", ""))
+    end
+    for k, line in ipairs(block) do
+      table.insert(lines, at + k, line)
+    end
+  end
+
+  if last_item then
+    insert(last_item.line, new_lines)
+    return table.concat(lines, "\n"), nil
+  end
+
+  local first, last = section(lines)
+  if first then
+    -- a section without steps: below its last line of text, a blank line between that text and the list
+    local at = last or first
+    while at >= first and bare_of(lines[at]) == "" do
+      at = at - 1
+    end
+    local block = { cr }
+    vim.list_extend(block, new_lines)
+    if at < #lines and bare_of(lines[at + 1]) == "" then
+      -- the blank line that followed the text now follows the list
+      insert(at, block)
+    else
+      block[#block + 1] = cr
+      insert(at, block)
+    end
+    return table.concat(lines, "\n"), nil
+  end
+
+  -- no section: a new one before the notes, or at the end
+  local fenced = false
+  for i, line in ipairs(lines) do
+    local bare = bare_of(line)
+    if bare:match("^```") or bare:match("^~~~") then
+      fenced = not fenced
+    elseif not fenced and (bare:match("^##%s+Notizen%s*$") or bare:match("^##%s+Notes%s*$")) then
+      local block = {}
+      if i > 1 and bare_of(lines[i - 1]) ~= "" then
+        block[#block + 1] = cr
+      end
+      block[#block + 1] = "## Plan" .. cr
+      block[#block + 1] = cr
+      vim.list_extend(block, new_lines)
+      block[#block + 1] = cr
+      insert(i - 1, block)
+      return table.concat(lines, "\n"), nil
+    end
+  end
+  local eol = cr .. "\n"
+  local body = text:gsub("[\r\n]+$", "")
+  local list = {}
+  for _, line in ipairs(new_lines) do
+    list[#list + 1] = (line:gsub("\r$", ""))
+  end
+  local head = body == "" and "" or (body .. eol .. eol)
+  return head .. "## Plan" .. eol .. eol .. table.concat(list, eol) .. eol, nil
+end
+
 ---The checklist items of the acceptance section (`## Akzeptanz` / `## Acceptance`), in order.
 ---@param lines string[]
 ---@return integer count

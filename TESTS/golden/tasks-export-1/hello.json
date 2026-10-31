@@ -1,5 +1,6 @@
 {
   "capabilities": [
+    "add_steps",
     "answer",
     "append_note",
     "areas",

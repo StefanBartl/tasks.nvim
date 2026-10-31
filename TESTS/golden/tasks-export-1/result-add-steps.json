@@ -1,0 +1,74 @@
+{
+  "client_op_id": "golden-add-steps",
+  "digest": "sha256:ba742101adab67cc",
+  "dry_run": false,
+  "engine": {
+    "git": "0000000",
+    "nvim": "0.0.0",
+    "version": "0.1.0-test"
+  },
+  "generated_at": "2026-01-01T00:00:00Z",
+  "kind": "tasks.result",
+  "ok": false,
+  "plugin": "tasks.nvim",
+  "results": [
+    {
+      "changed_ids": [
+        "lib.nvim/alpha"
+      ],
+      "etag_after": "sha256:e3b7c0d1d40613c2",
+      "etag_before": "sha256:790d4972b307e63b",
+      "id": "lib.nvim/alpha",
+      "index": {
+        "action": "written"
+      },
+      "inverse": {
+        "body": "\nThe body of alpha.\n\n## Plan\n\n- [x] 1. first\n- [ ] 2. second\n- [ ] 3. third (dropped)\n\n\n## Offene Fragen\n\n### Which format? [q1]\nA line of text.\n- [ ] Section (empfohlen)\n- [ ] Frontmatter\n\n### Settled already [q2]\n- [x] Yes\n- [ ] No\n\n\u003c!-- testing:sheets:begin -->\n## Test sheets\n\n- **One** (`one`): automated part green, waiting for your judgement\n\u003c!-- testing:sheets:states one=inbox two=green -->\n\u003c!-- testing:sheets:end -->\n",
+        "id": "lib.nvim/alpha",
+        "if_match": "sha256:e3b7c0d1d40613c2",
+        "op": "set_body"
+      },
+      "n": 1,
+      "ok": true,
+      "op": "add_steps",
+      "outcome": "changed"
+    },
+    {
+      "changed_ids": [
+        "lib.nvim/beta"
+      ],
+      "etag_after": "sha256:65d4f0792d83a841",
+      "etag_before": "sha256:caad77a51c2f538c",
+      "id": "lib.nvim/beta",
+      "index": {
+        "action": "written"
+      },
+      "inverse": {
+        "body": "\nA summary line for beta.\n",
+        "id": "lib.nvim/beta",
+        "if_match": "sha256:65d4f0792d83a841",
+        "op": "set_body"
+      },
+      "n": 2,
+      "ok": true,
+      "op": "add_steps",
+      "outcome": "changed"
+    },
+    {
+      "changed_ids": [],
+      "error": {
+        "code": "invalid_argument",
+        "message": "step 1 is a list line: give the text of the step, the checkbox is written here",
+        "retryable": false
+      },
+      "n": 3,
+      "ok": false,
+      "op": "add_steps",
+      "outcome": "failed"
+    }
+  ],
+  "schema": 1,
+  "vault": {
+    "id": "vault"
+  }
+}

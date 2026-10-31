@@ -957,6 +957,7 @@ export interface ResultEntry {
     | "move_area"
     | "plan_new"
     | "tick_step"
+    | "add_steps"
     | "answer"
     | "append_note"
     | "reopen"

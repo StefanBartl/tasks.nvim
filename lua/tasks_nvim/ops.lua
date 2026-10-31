@@ -22,6 +22,9 @@
 ---    file that was shown; a task that changed since is a `conflict`
 ---  - `tick_step` { id, n, done?, if_match? }: tick (`done` true, the default) or untick step `n` of the `## Plan` section of an
 ---    open task; a dropped step is refused; the answer has an `inverse`
+---  - `add_steps` { id, steps, if_match? }: append open steps (one line of text each, at most 100) to the `## Plan`
+---    section of an open task, numbered on from its last step; a task without the section gets one before its notes.
+---    Existing steps stay as they were; the answer has an `inverse` (a `set_body` with the old text)
 ---  - `append_note` { id, text, if_match? }: add one dated line to the notes of an open task (`## Notizen` / `## Notes`,
 ---    made when missing); no `inverse`
 ---  - `set_body` { id, body, if_match? }: replace the text below the frontmatter of an open task (at most 100000 characters, no
@@ -112,6 +115,7 @@ M.OPS = {
   "move_area",
   "plan_new",
   "tick_step",
+  "add_steps",
   "answer",
   "append_note",
   "reopen",
@@ -154,6 +158,7 @@ local FIELDS = {
   },
   move_area = { id = "string", to_area = "string", if_match = "string" },
   tick_step = { id = "string", n = "integer", done = "boolean", if_match = "string" },
+  add_steps = { id = "string", steps = "strings", if_match = "string" },
   answer = {
     id = "string",
     question = "string",
@@ -609,6 +614,31 @@ local function do_append_note(op, ctx)
   return text_entry(ctx, r)
 end
 
+---The answer of an operation that changed the text below the frontmatter (`set_body`, `add_steps`): the way back is
+---a `set_body` with the old text (`r.extra.old`); none when it could not be sent again (too long, a control character).
+---@param ctx Tasks.OpsCtx
+---@param r table  # What `mutate.edit_text` gave.
+---@return table entry
+local function body_entry(ctx, r)
+  local entry = text_entry(ctx, r)
+  local old = r.extra and r.extra.old
+  if
+    r.changed
+    and not ctx.dry
+    and type(old) == "string"
+    and not has_control(old)
+    and not too_long(old, M.MAX_SET_BODY)
+  then
+    entry.inverse = json.object({
+      op = "set_body",
+      id = r.id,
+      body = old,
+      if_match = r.etag_after,
+    })
+  end
+  return entry
+end
+
 ---@param op table
 ---@param ctx Tasks.OpsCtx
 ---@return table entry
@@ -645,24 +675,46 @@ local function do_set_body(op, ctx)
   if not r then
     return mutate_failure(ctx, err, info)
   end
-  local entry = text_entry(ctx, r)
-  -- the way back is the old text; none when it could not be sent again (too long, a control character)
-  local old = r.extra and r.extra.old
-  if
-    r.changed
-    and not ctx.dry
-    and type(old) == "string"
-    and not has_control(old)
-    and not too_long(old, M.MAX_SET_BODY)
-  then
-    entry.inverse = json.object({
-      op = "set_body",
-      id = r.id,
-      body = old,
-      if_match = r.etag_after,
-    })
+  return body_entry(ctx, r)
+end
+
+---@param op table
+---@param ctx Tasks.OpsCtx
+---@return table entry
+local function do_add_steps(op, ctx)
+  if op.id == nil or op.steps == nil then
+    return refuse("invalid_argument", "add_steps needs id and steps")
   end
-  return entry
+  local items = type(op.steps) == "string" and { op.steps } or op.steps
+  if #items > contract.LIMITS.list_items then
+    return refuse(
+      "invalid_argument",
+      ("steps has more than %d entries"):format(contract.LIMITS.list_items)
+    )
+  end
+  -- the steps module refuses what is not one line; the 8-bit controls, the Unicode line separators and broken UTF-8
+  -- are judged here, as for every other text
+  if has_control(items) then
+    return refuse("invalid_argument", "steps contains a control character")
+  end
+  local r, err, info = mutate.edit_text(op.id, function(text)
+    local new_text, serr = steps.add_steps(text, items)
+    if not new_text then
+      return nil, serr
+    end
+    local parsed = fm.parse(text)
+    return new_text, nil, { old = parsed and parsed.has_block and fsio.lf(parsed.body) or nil }
+  end, {
+    root = ctx.root,
+    today = ctx.today,
+    index = false,
+    if_match = op.if_match,
+    dry_run = ctx.dry,
+  })
+  if not r then
+    return mutate_failure(ctx, err, info)
+  end
+  return body_entry(ctx, r)
 end
 
 ---@param op table
@@ -1252,6 +1304,7 @@ local HANDLERS = {
   move_area = do_move_area,
   plan_new = do_plan_new,
   tick_step = do_tick_step,
+  add_steps = do_add_steps,
   answer = do_answer,
   append_note = do_append_note,
   reopen = do_reopen,

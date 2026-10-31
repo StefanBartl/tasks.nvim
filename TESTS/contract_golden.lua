@@ -115,6 +115,28 @@ G.cases = {
     end,
   },
   {
+    -- `add_steps` for real: appended below the last step of a plan, a section made for a task without one, a step that
+    -- is a list line refused (nothing written)
+    name = "result-add-steps",
+    method = "ops",
+    fresh = true,
+    request = function(root)
+      return encode({
+        client_op_id = "golden-add-steps",
+        ops = {
+          {
+            op = "add_steps",
+            id = "lib.nvim/alpha",
+            steps = { "fourth -- Akzeptanz 1", "fifth" },
+            if_match = etag(root, "lib.nvim/alpha"),
+          },
+          { op = "add_steps", id = "lib.nvim/beta", steps = "only step" },
+          { op = "add_steps", id = "lib.nvim/gamma", steps = { "- [ ] a list line" } },
+        },
+      })
+    end,
+  },
+  {
     -- saved views for real: made, replaced on the version read, replaced on a stale one, deleted, a view that is not there
     name = "result-views",
     method = "ops",

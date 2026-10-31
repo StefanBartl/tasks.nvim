@@ -65,6 +65,7 @@ return function(H)
   -- every method is a capability, plus the features that are no method of their own
   local expected_caps = api.methods()
   for _, feature in ipairs({
+    "add_steps",
     "answer",
     "append_note",
     "attach",

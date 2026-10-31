@@ -333,6 +333,121 @@ return function(H)
   eq({ dry_new.ok, dry_new.outcome }, { true, "would_create" })
   eq(fsio.is_file(root .. "/lib.nvim/ROADMAP/tasks/dry-body.md"), false)
 
+  -- ── add_steps ──────────────────────────────────────────────────────────────
+  -- appended below the last step (after the fence), numbered on, the existing steps and the rest byte for byte
+  local s1 = task("stepper")
+  local s1_before = H.read(s1)
+  local added = one({
+    op = "add_steps",
+    id = "lib.nvim/stepper",
+    steps = { "  fourth step -- Acceptance 1 ", "fifth step" },
+    if_match = etag(s1),
+  })
+  eq({ added.ok, added.outcome }, { true, "changed" }, vim.inspect(added))
+  eq(added.changed_ids, { "lib.nvim/stepper" })
+  local s1_after = H.read(s1)
+  eq(
+    without_updated(s1_after),
+    (
+      without_updated(s1_before):gsub(
+        "(%- %[ %] 3%. third step %(dropped%)\n)",
+        "%1- [ ] 4. fourth step -- Acceptance 1\n- [ ] 5. fifth step\n",
+        1
+      )
+    ),
+    "two lines below the last step, nothing else changed"
+  )
+  has(s1_after, "updated: " .. F.TODAY)
+  local parsed = steps.parse(s1_after)
+  eq(#parsed.items, 5)
+  eq({ parsed.items[4].text, parsed.items[4].done }, { "4. fourth step -- Acceptance 1", false })
+  eq(parsed.items[5].n, 5, "tick_step reaches the new step by its number")
+  -- the inverse is a set_body with the old text: it takes the steps away again
+  eq({ added.inverse.op, added.inverse.if_match }, { "set_body", added.etag_after })
+  eq(one(added.inverse).outcome, "changed")
+  eq(steps.parse(H.read(s1)).total, 2, "undone: the two new steps are gone")
+
+  -- a plan whose steps carry no number gets steps without one, with the bullet of the last step
+  local s2 = task("unnumbered", "\nSummary.\n\n## Plan\n\n* [ ] alpha\n* [x] beta\n\n## Notizen\n")
+  eq(one({ op = "add_steps", id = "lib.nvim/unnumbered", steps = "gamma" }).outcome, "changed")
+  has(H.read(s2), "* [x] beta\n* [ ] gamma\n\n## Notizen")
+
+  -- a task without the section gets one before its notes; one without notes at the end
+  local s3 =
+    task("plainbody", "\nSummary.\n\n## Akzeptanz\n\n- [ ] works\n\n## Notizen\n\n- a note\n")
+  eq(
+    one({ op = "add_steps", id = "lib.nvim/plainbody", steps = { "one", "two" } }).outcome,
+    "changed"
+  )
+  has(
+    H.read(s3),
+    "- [ ] works\n\n## Plan\n\n- [ ] 1. one\n- [ ] 2. two\n\n## Notizen\n\n- a note\n",
+    "the section stands before the notes, the acceptance list untouched"
+  )
+  local s4 = task("bare", "\nJust a line.")
+  eq(one({ op = "add_steps", id = "lib.nvim/bare", steps = { "one" } }).outcome, "changed")
+  has(H.read(s4), "Just a line.\n\n## Plan\n\n- [ ] 1. one\n")
+  -- a section with text but no step: the list goes below the text
+  local s5 = task("prose", "\nSummary.\n\n## Plan\n\nTo be planned.\n\n## Notizen\n")
+  eq(one({ op = "add_steps", id = "lib.nvim/prose", steps = { "one" } }).outcome, "changed")
+  has(H.read(s5), "## Plan\n\nTo be planned.\n\n- [ ] 1. one\n\n## Notizen\n")
+
+  -- CRLF stays CRLF
+  local s6 = task("crlfsteps", "\nSummary.\n\n## Plan\n\n- [ ] 1. one\n")
+  local s6_raw = H.read(s6):gsub("\r?\n", "\r\n")
+  local fh6 = assert(io.open(s6, "wb"))
+  fh6:write(s6_raw)
+  fh6:close()
+  eq(one({ op = "add_steps", id = "lib.nvim/crlfsteps", steps = { "two" } }).outcome, "changed")
+  local s6_after = H.read(s6)
+  has(s6_after, "- [ ] 1. one\r\n- [ ] 2. two\r\n")
+  eq(select(2, s6_after:gsub("\r\n", "")), select(2, s6_after:gsub("\n", "")), "no bare LF")
+
+  -- refused, nothing written: empty, a list line, a number of its own, two lines, a control character, too many,
+  -- too long, no steps at all, a stale version, a task that is not there
+  bytes = H.read(s1)
+  local function refused_steps(list, needle, code)
+    local e = one({ op = "add_steps", id = "lib.nvim/stepper", steps = list })
+    eq({ e.ok, e.outcome }, { false, "failed" }, vim.inspect(e))
+    eq(e.error.code, code or "invalid_argument", vim.inspect(e))
+    has(e.error.message, needle)
+  end
+  refused_steps({ "fine", "   " }, "step 2 is empty")
+  refused_steps({ "- [ ] boxed" }, "list line")
+  refused_steps({ "[x] boxed" }, "list line")
+  refused_steps({ "3. numbered" }, "carries a number")
+  refused_steps({ "two\nlines" }, "control character")
+  refused_steps({ "bell\7" }, "control character")
+  refused_steps({ "next\226\128\168line" }, "control character")
+  refused_steps({}, "no steps to add")
+  local many = {}
+  for i = 1, 101 do
+    many[i] = "step " .. i
+  end
+  refused_steps(many, "more than 100")
+  refused_steps({ string.rep("x", 1001) }, "longer than 1000")
+  local stale_steps = one({
+    op = "add_steps",
+    id = "lib.nvim/stepper",
+    steps = { "x" },
+    if_match = "sha256:0000000000000000",
+  })
+  eq(stale_steps.error.code, "conflict", vim.inspect(stale_steps))
+  eq(one({ op = "add_steps", id = "lib.nvim/missing", steps = { "x" } }).error.code, "not_found")
+  eq(H.read(s1), bytes, "a refused add_steps leaves the file as it was")
+  -- the shape: steps is asked for and is text or a list of text
+  refused_steps(nil, "needs id and steps")
+  local bad_shape = ops({ { op = "add_steps", id = "lib.nvim/stepper", steps = { 1 } } })
+  eq({ bad_shape.kind, bad_shape.code }, { "tasks.error", "invalid_argument" })
+
+  -- a dry run says it would change and writes nothing
+  local dry_steps = one(
+    { op = "add_steps", id = "lib.nvim/stepper", steps = { "x" } },
+    { dry_run = true }
+  )
+  eq({ dry_steps.ok, dry_steps.outcome, dry_steps.inverse }, { true, "would_change", nil })
+  eq(H.read(s1), bytes)
+
   -- the overview of the area is current
   local idx = require("tasks_nvim.index").write_area("lib.nvim", { root = root, check = true })
   eq(idx.action, "unchanged", "the overview of the area matches the files")
