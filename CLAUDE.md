@@ -9,7 +9,7 @@ Lua-Plugin für Neovim; zusätzlich der Vertrag `tasks-export/1` und `tasks-ops/
 stylua --check lua TESTS
 luacheck lua TESTS scripts            # 0 Warnungen: eine Warnung macht die CI rot
 LIB_NVIM_DIR=E:/repos/lib.nvim bash scripts/test.sh
-cd contract && node check.mjs         # schema, goldens, typen
+bash scripts/contract.sh              # schema, goldens, typen (Schritt `contract` von scripts/ci.sh)
 ```
 
 - Ein Fix ohne Spec, der ohne den Fix rot wird, gilt nicht als fertig.

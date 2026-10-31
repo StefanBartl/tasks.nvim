@@ -59,10 +59,13 @@ return {
     default = "full",
     profiles = {
       fast = { "stylua", "luacheck" },
-      full = { "fast", "suite", "conformance" },
+      full = { "fast", "suite", "conformance", "contract" },
     },
     steps = {
       luacheck = { preset = "luacheck", args = { "lua", "TESTS", "scripts" } },
+      -- tasks-export/1 from outside (schema, golden files, refused documents, TypeScript types); installs the dev
+      -- dependencies of contract/ on first use.
+      contract = { run = { "scripts/contract.sh" }, needs = { "node", "npm" } },
     },
   },
 }
