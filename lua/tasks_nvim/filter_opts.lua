@@ -47,7 +47,7 @@ end
 ---words the same way. Unknown words are an error, never silently ignored.
 ---`stale` may be a number, a digit string or `refs` (same as `stale_refs`: a
 ---file named in `refs` changed since `updated`); `today` is passed through.
----@param opt { plan?: string, phase?: string, status?: string, prio?: string|integer, effort?: string, kind?: string, tag?: string, category?: string, severity?: string, value?: string|integer, actor?: string, stale?: string|integer, stale_refs?: boolean, blocked?: boolean, reminders?: boolean, unestimated?: boolean, quick_win?: boolean, today?: string }
+---@param opt { plan?: string, phase?: string, status?: string, prio?: string|integer, effort?: string, kind?: string, tag?: string, category?: string, severity?: string, value?: string|integer, actor?: string, stale?: string|integer, stale_refs?: boolean, blocked?: boolean, reminders?: boolean, unestimated?: boolean, quick_win?: boolean, sheet?: string, today?: string }
 ---@return Tasks.Filter|nil filter
 ---@return string|nil err
 function M.parse(opt)
@@ -227,6 +227,23 @@ function M.parse(opt)
       end
       f[name] = list
     end
+  end
+  if opt.sheet ~= nil then
+    local list, lerr = listed(opt.sheet, "sheet")
+    if not list then
+      return nil, lerr
+    end
+    local sheets = require("tasks_nvim.sheets")
+    for _, s in ipairs(list) do
+      if not (sheets.is_state(s) or s == "unknown" or s == "any") then
+        return nil,
+          ("unknown state in --sheet: %s (expected %s, unknown or any)"):format(
+            s,
+            table.concat(sheets.STATES, ", ")
+          )
+      end
+    end
+    f.sheet = list
   end
   if opt.blocked then
     f.blocked = true

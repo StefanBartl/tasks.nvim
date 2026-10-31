@@ -46,7 +46,7 @@
     "listed": 14,
     "unlisted": 2
   },
-  "digest": "sha256:a3094eac6786940d",
+  "digest": "sha256:75c9bb2a323bc060",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -160,7 +160,7 @@
       "title": "Old and done"
     }
   ],
-  "rev": "rev:8d1bfb",
+  "rev": "rev:4510e2",
   "schema": 1,
   "tasks": [
     {
@@ -207,7 +207,7 @@
       "created": "2026-01-01",
       "effort": "S",
       "effort_days": 0.5,
-      "etag": "sha256:43e1231c7f816b39",
+      "etag": "sha256:790d4972b307e63b",
       "file": "lib.nvim/ROADMAP/tasks/alpha.md",
       "folder": false,
       "group": "open|1",
@@ -234,6 +234,18 @@
         "repo@abc1234"
       ],
       "roi": 10,
+      "sheets": {
+        "counts": {
+          "green": 1,
+          "inbox": 1,
+          "manual": 0,
+          "never": 0,
+          "red": 0,
+          "stale": 0
+        },
+        "state": "inbox",
+        "total": 2
+      },
       "slug": "alpha",
       "status": "open",
       "steps": {

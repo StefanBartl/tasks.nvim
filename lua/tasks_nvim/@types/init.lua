@@ -40,6 +40,7 @@
 ---@field refs string[]
 ---@field links string[]               # Web addresses (`http://` or `https://`), apart from `refs`.
 ---@field plan_steps? Tasks.StepsSummary  # The optional `## Plan` section: steps, how many are ticked (nil without the section).
+---@field sheets? Tasks.SheetsSummary  # The test-sheet block of testing.nvim (`tasks_nvim.sheets`); nil without the block.
 ---@field done_in? string
 ---@field commits string[]            # Every commit made for the task, `repo@sha` each (empty without the key).
 ---@field summary string             # Frontmatter `summary`, else the first body paragraph; "" when neither.
@@ -72,6 +73,7 @@
 ---@field blocked? boolean            # status `blocked` or a non-empty `blocked_by`.
 ---@field reminders? boolean         # A reminder (`remind:`) that is due: its date is today or earlier.
 ---@field unestimated? boolean        # Missing the effort or the value (the tasks `estimate` walks).
+---@field sheet? string|string[]     # The state of the test-sheet block (`tasks_nvim.sheets`: red, stale, never, inbox, manual, green, unknown) or `any`; a task without the block never matches.
 ---@field stale? integer              # Not updated for at least this many days (undated counts as stale).
 ---@field stale_refs? boolean         # A file named in `refs` changed after `updated` (`tasks.staleness`; reads files and git).
 ---@field ref_stale? table<string, Tasks.RefChange[]>  # Ready answer for `stale_refs` (task id -> changes); computed when absent.

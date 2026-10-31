@@ -1,5 +1,5 @@
 {
-  "digest": "sha256:c3d4f835510a297f",
+  "digest": "sha256:32a3337d117ee1fd",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -52,7 +52,7 @@
       "created": "2026-01-01",
       "effort": "S",
       "effort_days": 0.5,
-      "etag": "sha256:43e1231c7f816b39",
+      "etag": "sha256:790d4972b307e63b",
       "file": "lib.nvim/ROADMAP/tasks/alpha.md",
       "folder": false,
       "group": "open|1",
@@ -79,6 +79,18 @@
         "repo@abc1234"
       ],
       "roi": 10,
+      "sheets": {
+        "counts": {
+          "green": 1,
+          "inbox": 1,
+          "manual": 0,
+          "never": 0,
+          "red": 0,
+          "stale": 0
+        },
+        "state": "inbox",
+        "total": 2
+      },
       "slug": "alpha",
       "status": "open",
       "steps": {
@@ -210,7 +222,7 @@
   "next_offset": 5,
   "offset": 0,
   "plugin": "tasks.nvim",
-  "rev": "rev:c5d42f",
+  "rev": "rev:24833a",
   "schema": 1,
   "total": 14,
   "vault": {

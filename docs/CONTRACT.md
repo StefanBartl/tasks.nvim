@@ -105,7 +105,9 @@ A **task entry** (`tasks[]`, `items[]`, `task`) has: `id`, `area`, `slug`, `titl
 `done_in`, `commits` (every commit made for the task, `repo@sha` each; only when the task lists any), `remind` (a date: look at the task again then; whether it is due is for the reader to say, the entry does not change with the day), `tags`, `category`, `blocked_by`, `after`, `refs`, `links` (web addresses, `http://` or `https://` only, apart from `refs`; only when the task lists any), `summary`, `folder`, `file` (`<area>/ROADMAP/tasks/<slug>.md`,
 relative to the vault), `valid`, `problems` (`[{ code, msg }]`), `steps` (`total`, `ticked`, `dropped`, only when the
 task has a `## Plan` section), `open_questions` (how many questions of its `## Offene Fragen` section are not answered; only when
-there is one), `etag` and, for an open task, `readiness`:
+there is one), `sheets` (the test-sheet block testing.nvim writes into a live-check task, read from its states line:
+`state` = the worst sheet, one of `red`, `stale`, `never`, `inbox`, `manual`, `green`, or `unknown` for a block without a
+states line; `total`; `counts` per state; only when the task has the block), `etag` and, for an open task, `readiness`:
 
 ```json
 "readiness": { "state": "ready", "stage": 0, "rank": 3, "eff_prio": 1, "leverage": 4, "open_blockers": [] }

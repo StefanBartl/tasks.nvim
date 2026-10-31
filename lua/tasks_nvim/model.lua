@@ -20,6 +20,7 @@
 local fm = require("lib.nvim.markdown.frontmatter")
 local fsio = require("tasks_nvim.fsio")
 local questions = require("tasks_nvim.questions")
+local sheets = require("tasks_nvim.sheets")
 local steps = require("tasks_nvim.steps")
 local vault = require("tasks_nvim.vault")
 local wikilinks = require("tasks_nvim.wikilinks")
@@ -834,6 +835,8 @@ function M.parse_text(text, ctx)
 
     -- The optional `## Offene Fragen` section: what a person still has to decide. Said once per problem, as a hint.
     task.questions = questions.parse(parsed.body)
+    -- The optional test-sheet block of testing.nvim: what the last report said about the sheets of the task.
+    task.sheets = sheets.parse(parsed.body)
     if task.questions then
       for _, msg in ipairs(task.questions.problems) do
         hints[#hints + 1] = { code = "question-problem", msg = msg }
@@ -1185,6 +1188,7 @@ function M.filter(tasks, f)
   local effort, severity = to_set(f.effort), to_set(f.severity)
   local value, actor = to_set(f.value), to_set(f.actor)
   local plan_set, phase_set = to_set(f.plan), to_set(f.phase)
+  local sheet_set = to_set(f.sheet)
   local effort_max = f.effort_max and M.effort_days(f.effort_max) or nil
   local today = f.today or M.today()
   -- `--stale=refs`: the caller may hand in a ready map (`f.ref_stale`); else the
@@ -1248,6 +1252,10 @@ function M.filter(tasks, f)
       keep = false
     end
     if keep and phase_set and not (t.phase and phase_set[t.phase]) then
+      keep = false
+    end
+    -- the test-sheet block: its state, or `any` for a task that has one
+    if keep and sheet_set and not (t.sheets and (sheet_set.any or sheet_set[t.sheets.state])) then
       keep = false
     end
     if keep and f.unestimated and t.value ~= nil and M.effort_days(t.effort) ~= nil then

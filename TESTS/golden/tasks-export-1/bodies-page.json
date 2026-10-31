@@ -1,5 +1,5 @@
 {
-  "digest": "sha256:9764bac30574bb82",
+  "digest": "sha256:7ad0a0376df656f4",
   "engine": {
     "git": "0000000",
     "nvim": "0.0.0",
@@ -9,9 +9,9 @@
   "incomplete": [],
   "items": [
     {
-      "body": "\nThe body of alpha.\n\n## Plan\n\n- [x] 1. first\n- [ ] 2. second\n- [ ] 3. third (dropped)\n\n\n## Offene Fragen\n\n### Which format? [q1]\nA line of text.\n- [ ] Section (empfohlen)\n- [ ] Frontmatter\n\n### Settled already [q2]\n- [x] Yes\n- [ ] No\n",
+      "body": "\nThe body of alpha.\n\n## Plan\n\n- [x] 1. first\n- [ ] 2. second\n- [ ] 3. third (dropped)\n\n\n## Offene Fragen\n\n### Which format? [q1]\nA line of text.\n- [ ] Section (empfohlen)\n- [ ] Frontmatter\n\n### Settled already [q2]\n- [x] Yes\n- [ ] No\n\n\u003c!-- testing:sheets:begin -->\n## Test sheets\n\n- **One** (`one`): automated part green, waiting for your judgement\n\u003c!-- testing:sheets:states one=inbox two=green -->\n\u003c!-- testing:sheets:end -->\n",
       "body_truncated": false,
-      "etag": "sha256:43e1231c7f816b39",
+      "etag": "sha256:790d4972b307e63b",
       "id": "lib.nvim/alpha"
     },
     {
@@ -32,7 +32,7 @@
   "next_offset": 4,
   "offset": 1,
   "plugin": "tasks.nvim",
-  "rev": "rev:8d1bfb",
+  "rev": "rev:4510e2",
   "schema": 1,
   "total": 14,
   "vault": {

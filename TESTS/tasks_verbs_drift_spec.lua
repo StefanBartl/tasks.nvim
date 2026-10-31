@@ -39,7 +39,8 @@ return function(H)
     ["folderize"] = { composer = {}, cli = { "no-index" } },
     ["list"] = {
       composer = { "force", "list", "to" },
-      cli = { "all", "done", "limit", "offset", "stale-refs" },
+      -- `sheet`: headless for now; in Neovim the dashboard line and `show` carry the sheet state
+      cli = { "all", "done", "limit", "offset", "sheet", "stale-refs" },
     },
     ["lists"] = {
       composer = {},

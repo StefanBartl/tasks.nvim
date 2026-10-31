@@ -727,6 +727,7 @@ export interface TaskEntry {
   valid: boolean;
   problems: Problem[];
   steps?: Steps;
+  sheets?: Sheets;
   /**
    * How many questions of the `## Offene Fragen` section of the task are not answered; absent when none is open.
    */
@@ -749,6 +750,21 @@ export interface Steps {
   total: number;
   ticked: number;
   dropped: number;
+}
+/**
+ * The test-sheet block testing.nvim writes into the task (`testing sheets report --tasks`), from its states line; absent without the block. `state` is the worst sheet (red, stale, never, inbox = green and waiting for a person's judgement, manual, green), `unknown` for a block without a states line. Nothing is run: it is what the last report wrote.
+ */
+export interface Sheets {
+  state: "red" | "stale" | "never" | "inbox" | "manual" | "green" | "unknown";
+  total: number;
+  counts: {
+    red: number;
+    stale: number;
+    never: number;
+    inbox: number;
+    manual: number;
+    green: number;
+  };
 }
 /**
  * Where a task stands in the plan, from `blocked_by` alone.

@@ -277,6 +277,18 @@ local function task_entry(root, task, node, rank)
       dropped = task.plan_steps.dropped,
     })
   end
+  -- Only a task with the test-sheet block of testing.nvim says so: a document without it reads as before.
+  if task.sheets then
+    local counts = {}
+    for _, s in ipairs(require("tasks_nvim.sheets").STATES) do
+      counts[s] = task.sheets.counts[s]
+    end
+    entry.sheets = json.object({
+      state = task.sheets.state,
+      total = task.sheets.total,
+      counts = json.object(counts),
+    })
+  end
   -- Only a task that waits for an answer says so: a document without open questions reads as before.
   if task.questions and task.questions.open > 0 then
     entry.open_questions = task.questions.open

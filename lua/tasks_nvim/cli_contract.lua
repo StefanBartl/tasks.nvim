@@ -223,6 +223,9 @@ local function run_show(ctx)
   field("links", t.links)
   field("commits", t.commits)
   field("open_questions", t.open_questions)
+  if t.sheets then
+    field("sheets", require("tasks_nvim.sheets").describe(t.sheets))
+  end
   field("file", t.file)
   if t.readiness then
     field(

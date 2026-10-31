@@ -63,6 +63,7 @@ commands:
   list [<area>] [--status=a,b] [--prio=1,2|<=2] [--effort=S,M|<=M] [--kind=k] [--tag=t]
        [--category=c,d] [--severity=high,critical] [--value=4,5|>=4] [--actor=cdx,me,pair,none]
        [--stale=<days>|refs] [--stale-refs] [--blocked] [--reminders] [--ready|--waiting] [--unestimated] [--quick-win]
+       [--sheet=red,stale,never,inbox,manual,green,unknown|any]
        [--sort=default|prio-effort|severity|frecency|roi] [--format=tsv|ids|json] [--done]   open tasks, sorted; one line each
        (--format=json: the tasks.list document in plan order or that of --sort, with [--limit=1..100] [--offset=N]; --done: the finished tasks)
        (categories: @CATEGORIES@; --category=bug also finds kind=bug;
@@ -72,7 +73,9 @@ commands:
         --sort=frecency: what the dashboard opened or changed most, from the frecency file)
        (--ready: nothing open blocks it; --waiting: an open blocker; --unestimated: no effort or no value;
         --quick-win: value and effort at the quick-win thresholds, see `quickwins`;
-        --reminders: a reminder (`remind:`) that is due, its date is today or earlier)
+        --reminders: a reminder (`remind:`) that is due, its date is today or earlier;
+        --sheet: the state of the test-sheet block testing.nvim wrote into the task, its worst sheet (inbox:
+        green and waiting for your judgement), any: a task with the block; nothing is run)
   plan-new <area> <title> [--areas=a,b] [--target=<id>] [--phases=a,b,c] [--gate=hard] [--summary=text]
                                           create ROADMAP/plans/<slug>.md; tasks join it with plan=<id> phase=<word>
   plan [<area>] [--for=<id>|--plan=<id>] [filters as for list] [--ready] [--with-steps] [--format=md|tsv|ids]
@@ -174,6 +177,7 @@ local SPECS = {
       "format",
       "limit",
       "offset",
+      "sheet",
     },
     flag = {
       "blocked",
@@ -423,6 +427,7 @@ local function filter_option_map(opt)
     reminders = opt.reminders == true,
     unestimated = opt.unestimated == true,
     quick_win = opt["quick-win"] == true,
+    sheet = opt.sheet --[[@as string|nil]],
     today = opt.today --[[@as string|nil]],
   }
 end

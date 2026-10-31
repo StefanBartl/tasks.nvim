@@ -82,6 +82,15 @@ M.SEVERITY_HL = {
 ---Highlight group per actor.
 ---@type table<string, string>
 M.ACTOR_HL = { cdx = "DiagnosticInfo", me = "DiagnosticWarn", pair = "DiagnosticHint" }
+---The `[sheet: <state>]` mark of a task with a test-sheet block (`tasks_nvim.sheets`); `unknown` stays `Comment`.
+M.SHEET_HL = {
+  red = "DiagnosticError",
+  stale = "DiagnosticWarn",
+  never = "DiagnosticWarn",
+  inbox = "DiagnosticInfo",
+  manual = "DiagnosticHint",
+  green = "DiagnosticOk",
+}
 
 ---What the `effort` entry of the `f` menu offers: the sizes, then "this or smaller".
 ---@type string[]
@@ -319,6 +328,10 @@ function M.parts(t, w, ready)
   if actor then
     parts[#parts + 1] = { "  [" .. actor .. "]", M.ACTOR_HL[actor] or "Comment" }
   end
+  if t.sheets then
+    parts[#parts + 1] =
+      { "  [sheet: " .. t.sheets.state .. "]", M.SHEET_HL[t.sheets.state] or "Comment" }
+  end
   local hint = M.blocked_hint(t, ready and ready.open_blockers[t.id])
   if hint then
     parts[#parts + 1] = { "  " .. hint, "Comment" }
@@ -354,6 +367,7 @@ function M.search_text(t)
     model.actor(t) or "",
     table.concat(model.categories(t), " "),
     table.concat(t.tags, " "),
+    t.sheets and ("sheet:" .. t.sheets.state) or "",
     t.title,
   }, " ")
 end

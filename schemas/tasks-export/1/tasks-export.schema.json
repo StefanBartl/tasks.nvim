@@ -199,6 +199,34 @@
       },
       "additionalProperties": false
     },
+    "Sheets": {
+      "description": "The test-sheet block testing.nvim writes into the task (`testing sheets report --tasks`), from its states line; absent without the block. `state` is the worst sheet (red, stale, never, inbox = green and waiting for a person's judgement, manual, green), `unknown` for a block without a states line. Nothing is run: it is what the last report wrote.",
+      "type": "object",
+      "required": ["state", "total", "counts"],
+      "properties": {
+        "state": {
+          "enum": ["red", "stale", "never", "inbox", "manual", "green", "unknown"]
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "counts": {
+          "type": "object",
+          "required": ["red", "stale", "never", "inbox", "manual", "green"],
+          "properties": {
+            "red": { "type": "integer", "minimum": 0 },
+            "stale": { "type": "integer", "minimum": 0 },
+            "never": { "type": "integer", "minimum": 0 },
+            "inbox": { "type": "integer", "minimum": 0 },
+            "manual": { "type": "integer", "minimum": 0 },
+            "green": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "Readiness": {
       "description": "Where a task stands in the plan, from `blocked_by` alone.",
       "type": "object",
@@ -432,6 +460,9 @@
         },
         "steps": {
           "$ref": "#/$defs/Steps"
+        },
+        "sheets": {
+          "$ref": "#/$defs/Sheets"
         },
         "open_questions": {
           "description": "How many questions of the `## Offene Fragen` section of the task are not answered; absent when none is open.",

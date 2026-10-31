@@ -96,6 +96,8 @@ mutate(
   (d) => (d.tasks[0].readiness.state = "maybe"),
 );
 mutate("a prio of 4", "snapshot", (d) => (d.tasks[0].prio = 4));
+mutate("a sheet state nobody defined", "task-alpha", (d) => (d.task.sheets.state = "purple"));
+mutate("sheet counts without a state", "task-alpha", (d) => delete d.task.sheets.counts.inbox);
 mutate(
   "an effort that is no size or duration",
   "snapshot",
