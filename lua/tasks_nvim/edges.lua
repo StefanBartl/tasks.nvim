@@ -46,10 +46,12 @@ end
 ---Check a proposed change of the relations of task `id`. With `opts.new` the task does not exist yet (`new` of
 ---`tasks-ops/1`): the relations are its first ones and `id` is the id it will get. A circle can still run through
 ---it: an open task may name that id in `blocked_by` already (a dangling blocker), and a hard stage gate then closes
----the circle. Without an `id` the circle is not looked for.
+---the circle. Without an `id` the circle is not looked for. `opts.pending` names ids that do not exist on disk yet but
+---will before the change is written: the tasks earlier `new` operations of the same dry-run request would create (the
+---real run makes them one after the other, so a relation to one of them is not dangling there either).
 ---@param id string|nil
 ---@param proposal Tasks.EdgeProposal
----@param opts { root: string, shared?: Tasks.PlanShared, new?: boolean }
+---@param opts { root: string, shared?: Tasks.PlanShared, new?: boolean, pending?: table<string, boolean> }
 ---@return Tasks.EdgeProblem[]|nil problems  # empty: the change breaks nothing
 ---@return string|nil err
 function M.validate(id, proposal, opts)
@@ -68,6 +70,7 @@ function M.validate(id, proposal, opts)
   end
   ---@type Tasks.EdgeProblem[]
   local problems = {}
+  local pending = opts.pending or {}
 
   ---@param key "blocked_by"|"after"
   ---@param self_code string
@@ -81,7 +84,7 @@ function M.validate(id, proposal, opts)
           target = ref,
           message = key .. " names the task itself",
         }
-      elseif not index.open[ref] and not index.is_done(ref) then
+      elseif not index.open[ref] and not index.is_done(ref) and not pending[ref] then
         problems[#problems + 1] = {
           code = dangling_code,
           key = key,

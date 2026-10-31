@@ -302,6 +302,7 @@ end
 ---@field dry boolean
 ---@field touched table<string, boolean>   # Areas whose index must be written.
 ---@field claimed table<string, string>   # A dry run: the new id an earlier `move_area` of the request takes -> its old id.
+---@field created table<string, boolean>   # A dry run: the ids earlier `new` operations of the request would create.
 ---@field attach? Tasks.AttachSourceOpts   # Specs: a fake clipboard; the folders of `attach_dirs` (`api`), never of an operation.
 
 ---A failure from `mutate` whose reason has no code: its validation messages are all about the request.
@@ -407,7 +408,8 @@ local function do_set(op, ctx)
   end
   local proposal = proposal_of(pairs_)
   if next(proposal) ~= nil then
-    local problems, eerr = edges.validate(task.id, proposal, { root = ctx.root })
+    local problems, eerr =
+      edges.validate(task.id, proposal, { root = ctx.root, pending = ctx.created })
     if not problems then
       return fail(ctx, eerr)
     end
@@ -795,8 +797,11 @@ local function do_new(op, ctx)
     if not would then
       return mutate_failure(ctx, werr, winfo)
     end
-    local problems, eerr =
-      edges.validate(would.id, proposal_of(pairs_), { root = ctx.root, new = true })
+    local problems, eerr = edges.validate(
+      would.id,
+      proposal_of(pairs_),
+      { root = ctx.root, new = true, pending = ctx.created }
+    )
     if not problems then
       return fail(ctx, eerr)
     end
@@ -815,7 +820,10 @@ local function do_new(op, ctx)
     file = rel(ctx, r.path),
     changed_ids = ctx.dry and {} or { r.id },
   }
-  if not ctx.dry then
+  if ctx.dry then
+    -- the real run creates it before the next operation runs: a later relation to it is not dangling
+    ctx.created[r.id] = true
+  else
     ctx.touched[r.area] = true
     entry.etag_after = etag_of_file(r.path)
   end
@@ -1348,6 +1356,7 @@ door = contract_ops.make({
       dry = params.dry_run == true,
       touched = {},
       claimed = {},
+      created = {},
       attach = opts.attach,
     }
   end,

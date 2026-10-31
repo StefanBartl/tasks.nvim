@@ -526,6 +526,50 @@ return function(H)
     }, { dry_run = true }).error.details.problems[1].code,
     "plan-unknown"
   )
+  -- `after` on a task an earlier `new` of the same request makes: a dry run judges it as the real run does
+  do
+    local pair = {
+      { op = "new", area = "lib.nvim", title = "Chain head" },
+      {
+        op = "new",
+        area = "lib.nvim",
+        title = "Chain tail",
+        fields = { after = "lib.nvim/chain-head" },
+      },
+    }
+    local files_before = everything()
+    local probe = ops(pair, { dry_run = true })
+    eq(everything(), files_before, "a dry run writes nothing")
+    eq(probe.ok, true, vim.inspect(probe))
+    eq(probe.results[2].outcome, "would_create", vim.inspect(probe.results[2]))
+    eq(probe.results[2].id, "lib.nvim/chain-tail")
+    -- a `set` after them sees them too
+    local with_set = vim.list_extend(vim.deepcopy(pair), {
+      { op = "set", id = "lib.nvim/gamma", patch = { after = { "lib.nvim/chain-tail" } } },
+    })
+    local probe_set = ops(with_set, { dry_run = true })
+    eq(probe_set.ok, true, vim.inspect(probe_set))
+    eq(everything(), files_before, "a dry run writes nothing")
+    -- an id no earlier op makes is still dangling
+    eq(
+      ops({
+        { op = "new", area = "lib.nvim", title = "Chain head" },
+        {
+          op = "new",
+          area = "lib.nvim",
+          title = "Lone",
+          fields = { after = "lib.nvim/chain-nope" },
+        },
+      }, { dry_run = true }).results[2].error.details.problems[1].code,
+      "after-dangling"
+    )
+    local real = ops(pair)
+    eq(real.ok, probe.ok, vim.inspect(real))
+    eq(real.results[2].id, probe.results[2].id)
+    eq(find("lib.nvim/chain-tail").after, { "lib.nvim/chain-head" })
+    os.remove(find("lib.nvim/chain-tail").path)
+    os.remove(find("lib.nvim/chain-head").path)
+  end
   -- a circle through the task that is about to be made: an open task waits on the id it will get, and a hard gate
   -- makes the new task wait on that one
   do

@@ -19,6 +19,7 @@ the version is not tagged yet (the repository is not published).
 
 ### Fixed
 
+- `tasks-ops/1` dry run: an `after` (or `blocked_by` of a `set`) on a task an earlier `new` of the same request would create was refused as `after-dangling`, though the real run accepts it; the dry run now counts those tasks as existing, so both judge the request alike.
 - The `## Plan` section is found when its heading has more than one space or a tab after `##` (`##  Plan`): progress, `tick_all` and `add_steps` missed its steps before.
 - The `:Tasks estimate --walk` value buttons "1".."5" are picked by their own digit key (the kit binds digits by position, `5` used to pick the fifth button, "3"); this needs a lib.nvim with the digit-label fix.
 - The "all steps ticked" question raised by the file watcher waits behind an open dialog and ignores keys typed ahead (`dialog.ask`); a dialog that raises falls back to `vim.ui.select`; N and Y are keys of the Yes/No dialog; `confirm.shorten` cuts by display width and survives a NUL byte.
