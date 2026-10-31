@@ -812,6 +812,9 @@ function M.next(ctx)
   require("tasks_nvim.ui.next_popup").show(pick, nil)
 end
 
+---`:Tasks list --stale=refs` deliveries waiting for their background check.
+local ref_checks = 0
+
 ---`:Tasks list [<area>|all] [filters] [--to=] [--format=]`
 ---@param ctx table  composer context
 function M.list(ctx)
@@ -873,12 +876,20 @@ function M.list(ctx)
   if #errors > 0 then
     notify.warn("cannot read directory " .. table.concat(errors or {}, ", "))
   end
-  local filtered, stale_report = model.filter(open, filter)
+  if flags.ready and flags.waiting then
+    notify.error("--ready and --waiting exclude each other")
+    return
+  end
+  -- `--stale=refs` never makes the editor wait for git: every other criterion here, the refs in the background
+  -- (`staleness.compute_async`), by the dashboard itself or before the delivery below.
+  local refs = filter.stale_refs
+  local rest = filter
+  if refs then
+    rest = vim.tbl_extend("force", {}, filter)
+    rest.stale_refs, rest.ref_stale, rest.ref_opts = nil, nil, nil
+  end
+  local filtered = model.filter(open, rest)
   if flags.ready or flags.waiting then
-    if flags.ready and flags.waiting then
-      notify.error("--ready and --waiting exclude each other")
-      return
-    end
     -- carried in the filter: the dashboard rescans (live refresh, `r`, a re-sort) and applies the same cut
     filter.readiness = flags.ready and "ready" or "waiting"
     local kept, kerr =
@@ -889,11 +900,40 @@ function M.list(ctx)
     end
     filtered = kept
   end
-  local shown = model.sort(filtered, order)
-  local ref_note = nil
-  if filter.stale_refs then
-    -- The second result of `model.filter` is the report: name the files that changed.
+  if skipped > 0 then
+    notify.warn(
+      ("%d task file(s) not listed (missing or unknown status, or done); run :Tasks index --check"):format(
+        skipped
+      )
+    )
+  end
+
+  if flags.to == nil and flags.format == nil then
+    local dash = M.dashboard
+    if dash == nil then
+      dash = function(v)
+        return require("tasks_nvim.ui.dash").open(v)
+      end
+    end
+    if dash then
+      -- the dashboard filters by refs on its own, in the background
+      dash({
+        tasks = model.sort(filtered, order),
+        area = area,
+        filter = filter,
+        sort = flags.sort ~= nil and order or nil,
+        root = root,
+      })
+      return
+    end
+  end
+
+  ---@param shown Tasks.Task[]
+  ---@param stale_report Tasks.StalenessReport|nil
+  local function deliver(shown, stale_report)
+    local ref_note = nil
     if stale_report then
+      -- name the files that changed
       local lines = {}
       for _, t in ipairs(shown) do
         lines[#lines + 1] = ("%s: %s"):format(
@@ -914,59 +954,53 @@ function M.list(ctx)
         )
       )
     end
-  end
-  if skipped > 0 then
-    notify.warn(
-      ("%d task file(s) not listed (missing or unknown status, or done); run :Tasks index --check"):format(
-        skipped
-      )
-    )
-  end
-
-  if flags.to == nil and flags.format == nil then
-    local dash = M.dashboard
-    if dash == nil then
-      dash = function(v)
-        return require("tasks_nvim.ui.dash").open(v)
-      end
-    end
-    if dash then
-      dash({
-        tasks = shown,
-        area = area,
-        filter = filter,
-        sort = flags.sort ~= nil and order or nil,
-        root = root,
-      })
+    if #shown == 0 then
+      notify.info("no open task matches")
       return
     end
+
+    local label = area or "alle Bereiche"
+    unless_overwrite_refused(target, flags.force, function(force)
+      local ok, err = view.deliver(shown, target, {
+        force = force,
+        format = flags.format,
+        heading = ("Offene Tasks — %s (%d)"):format(label, #shown),
+        note = (function()
+          local base = filter_note(flags)
+          if ref_note then
+            return base and (base .. "\n\n" .. ref_note) or ref_note
+          end
+          return base
+        end)(),
+        title = "tasks://tasks/" .. (area or "all"),
+      })
+      if not ok then
+        notify.error(("cannot deliver the task list: %s"):format(tostring(err)))
+        return
+      end
+      notify.info(("%d open task(s) -> %s"):format(#shown, flags.to or "buffer"))
+    end)
   end
-  if #shown == 0 then
-    notify.info("no open task matches")
+
+  if not refs then
+    deliver(model.sort(filtered, order), nil)
     return
   end
-
-  local label = area or "alle Bereiche"
-  unless_overwrite_refused(target, flags.force, function(force)
-    local ok, err = view.deliver(shown, target, {
-      force = force,
-      format = flags.format,
-      heading = ("Offene Tasks — %s (%d)"):format(label, #shown),
-      note = (function()
-        local base = filter_note(flags)
-        if ref_note then
-          return base and (base .. "\n\n" .. ref_note) or ref_note
-        end
-        return base
-      end)(),
-      title = "tasks://tasks/" .. (area or "all"),
-    })
-    if not ok then
-      notify.error(("cannot deliver the task list: %s"):format(tostring(err)))
-      return
-    end
-    notify.info(("%d open task(s) -> %s"):format(#shown, flags.to or "buffer"))
+  notify.info(
+    ("--stale=refs: checking the refs of %d task(s) in the background ..."):format(#filtered)
+  )
+  ref_checks = ref_checks + 1
+  staleness.compute_async(filtered, filter.ref_opts, function(rep)
+    ref_checks = ref_checks - 1
+    local kept = model.filter(filtered, { stale_refs = true, ref_stale = rep.stale })
+    deliver(model.sort(kept, order), rep)
   end)
+end
+
+---How many `:Tasks list --stale=refs` deliveries still wait for their background check (specs wait for 0).
+---@return integer
+function M.pending_ref_checks()
+  return ref_checks
 end
 
 ---`:Tasks index [<area>] [--all] [--check]`

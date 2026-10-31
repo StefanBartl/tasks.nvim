@@ -116,6 +116,7 @@ end
 ---@field skipped? integer     # Task files not listed (done, missing or unknown status).
 ---@field errors string[]      # Directories that could not be read.
 ---@field stale_report? Tasks.StalenessReport  # With `--stale=refs`: what the check found and what it could not.
+---@field ref_candidates? Tasks.Task[]          # With `defer_refs`: the tasks the refs check is to look at.
 ---@field readiness? Tasks.DashReadiness       # Where each task stands: judged from the SAME scan as the list.
 ---@field plan? Tasks.Plan                     # The plan of the shown tasks (stages, waits); only with `want_plan`.
 
@@ -131,8 +132,10 @@ function M.with_root(f, root)
   return f
 end
 
----Scan, keep the open tasks, filter and sort -- what `:Tasks list` shows.
----@param opts { root: string, area?: string|nil, filter?: Tasks.Filter, sort?: string, scores?: table<string, number>, want_plan?: boolean }
+---Scan, keep the open tasks, filter and sort -- what `:Tasks list` shows. With `defer_refs` a `stale_refs` filter
+---runs no check: the list is cut by `ref_stale` when given (else not by refs at all), and `ref_candidates` holds the
+---tasks every other criterion kept -- what the caller hands to `staleness.compute_async`.
+---@param opts { root: string, area?: string|nil, filter?: Tasks.Filter, sort?: string, scores?: table<string, number>, want_plan?: boolean, defer_refs?: boolean, ref_stale?: table<string, Tasks.RefChange[]> }
 ---@return Tasks.DashLoad|nil result
 ---@return string|nil err
 function M.load(opts)
@@ -162,10 +165,27 @@ function M.load(opts)
   if not ran then
     shared = nil
   end
-  local filtered, stale_report = model.filter(open, M.with_root(opts.filter, opts.root))
-  if opts.filter and opts.filter.readiness and shared then
-    filtered = plan_scope.filter_readiness(filtered, opts.filter.readiness, opts.root, shared)
-      or filtered
+  local f = opts.filter
+  local defer = opts.defer_refs and f and f.stale_refs
+  local filtered, stale_report
+  if defer then
+    -- `--stale=refs` without waiting for git: every other criterion here, the refs through the answer the caller
+    -- already has (`ref_stale`), or not at all while it has none.
+    local rest = vim.tbl_extend("force", {}, f)
+    rest.stale_refs, rest.ref_stale, rest.ref_opts = nil, nil, nil
+    filtered = model.filter(open, rest)
+  else
+    filtered, stale_report = model.filter(open, M.with_root(f, opts.root))
+  end
+  if f and f.readiness and shared then
+    filtered = plan_scope.filter_readiness(filtered, f.readiness, opts.root, shared) or filtered
+  end
+  local candidates
+  if defer then
+    candidates = filtered
+    if opts.ref_stale then
+      filtered = model.filter(filtered, { stale_refs = true, ref_stale = opts.ref_stale })
+    end
   end
   local tasks = model.sort(filtered, opts.sort, { scores = opts.scores })
   -- The plan is only for the stage view: building it costs a graph walk per soft edge (seconds for a few hundred
@@ -181,6 +201,7 @@ function M.load(opts)
     skipped = skipped,
     errors = errors,
     stale_report = stale_report,
+    ref_candidates = candidates,
     readiness = shared and M.readiness(tasks, opts.root, shared) or nil,
     plan = built,
   },

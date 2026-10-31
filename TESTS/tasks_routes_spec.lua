@@ -324,6 +324,13 @@ return function(H)
         local path = out_dir .. "/f.csv"
         vim.fn.delete(path)
         run("tasks " .. flags .. " --to=file:" .. path)
+        -- `--stale=refs` delivers after its background check
+        ok(
+          vim.wait(10000, function()
+            return cmd.pending_ref_checks() == 0
+          end, 10),
+          "the refs check of " .. flags .. " finishes"
+        )
         local content = H.read(path)
         local ids = {}
         for _, l in ipairs(content and lines_of(content) or {}) do

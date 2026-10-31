@@ -22,6 +22,9 @@
 --- (no git, not a repo, a missing repo, one path git refuses) degrades to mtime
 --- or to a skipped ref -- it never raises, and one bad ref costs only its own date.
 ---
+--- Two ways to run it: `compute` blocks (the headless CLI, the contract, `model.filter`), `compute_async` hands the
+--- report to a callback and never makes the editor wait for git (`:Tasks list`, the dashboard).
+---
 --- Not its job: parsing or filtering tasks (`model.filter` calls `compute`
 --- when `Tasks.Filter.stale_refs` is set), printing, git history beyond "last
 --- touched". Uncommitted edits are not seen (commit first, as the workflow does).
@@ -255,26 +258,26 @@ local GIT_ENV = { LC_ALL = "C" }
 ---of a message, which is localised). When this fails, every path lookup would fail too: bisecting a failing chunk
 ---down to single paths would cost 2n-1 spawns for nothing.
 ---@param base string
+---@return string[]
+local function repo_cmd(base)
+  return { "git", "-C", base, "log", "-1", "--format=%ct" }
+end
+
+---@param base string
 ---@param timeout_ms integer
 ---@return boolean
 local function repo_answers(base, timeout_ms)
   local ok, res = pcall(function()
-    return vim
-      .system({ "git", "-C", base, "log", "-1", "--format=%ct" }, { text = true, env = GIT_ENV })
-      :wait(timeout_ms)
+    return vim.system(repo_cmd(base), { text = true, env = GIT_ENV }):wait(timeout_ms)
   end)
   return ok and res.code == 0
 end
 
----One `git log` over `paths` (relative to `base`). `kind` is set when asking
----again cannot help: `"no_repo"`, `"stop"` (git does not run, or timed out).
+---The `git log` that dates `paths` (relative to `base`).
 ---@param base string
 ---@param paths string[]
----@param timeout_ms integer
----@return table<string, { date: string, file: string }>|nil found
----@return string|nil err
----@return "no_repo"|"stop"|nil kind
-local function log_paths(base, paths, timeout_ms)
+---@return string[]
+local function log_cmd(base, paths)
   local cmd = {
     "git",
     "-C",
@@ -290,9 +293,20 @@ local function log_paths(base, paths, timeout_ms)
     "--",
   }
   vim.list_extend(cmd, paths)
-  local ok, res = pcall(function()
-    return vim.system(cmd, { text = true, env = GIT_ENV }):wait(timeout_ms)
-  end)
+  return cmd
+end
+
+---Read the answer of one `git log` over `paths` (`log_cmd`). `ok` is false when the process could not be started
+---(`res` is the error then). `kind` is set when asking again cannot help: `"no_repo"`, `"stop"` (git does not run,
+---or timed out).
+---@param ok boolean
+---@param res any  # `vim.SystemCompleted`, or the error when `ok` is false
+---@param paths string[]
+---@param timeout_ms integer
+---@return table<string, { date: string, file: string }>|nil found
+---@return string|nil err
+---@return "no_repo"|"stop"|nil kind
+local function parse_log(ok, res, paths, timeout_ms)
   if not ok then
     return nil, "git could not run: " .. tostring(res), "stop"
   end
@@ -329,6 +343,51 @@ local function log_paths(base, paths, timeout_ms)
     end
   end
   return found, nil
+end
+
+---One blocking `git log` over `paths` (relative to `base`); see `parse_log`.
+---@param base string
+---@param paths string[]
+---@param timeout_ms integer
+---@return table<string, { date: string, file: string }>|nil found
+---@return string|nil err
+---@return "no_repo"|"stop"|nil kind
+local function log_paths(base, paths, timeout_ms)
+  local ok, res = pcall(function()
+    return vim.system(log_cmd(base, paths), { text = true, env = GIT_ENV }):wait(timeout_ms)
+  end)
+  return parse_log(ok, res, paths, timeout_ms)
+end
+
+---Starts a process without waiting for it: the seam of the asynchronous path (`vim.system` with a callback; specs
+---replace it to slow git down). `on_exit` may run in a fast event context.
+---@param cmd string[]
+---@param sopts vim.SystemOpts
+---@param on_exit fun(res: vim.SystemCompleted)
+---@return any
+function M.spawn(cmd, sopts, on_exit)
+  return vim.system(cmd, sopts, on_exit)
+end
+
+---Run `cmd` without blocking; `done(ok, res)` runs on the main loop (never before this returns). `timeout_ms`
+---kills the process (exit code 124, as `:wait()` reports a timeout).
+---@param cmd string[]
+---@param timeout_ms integer
+---@param done fun(ok: boolean, res: any)
+local function run_async(cmd, timeout_ms, done)
+  local started, err = pcall(
+    M.spawn,
+    cmd,
+    { text = true, env = GIT_ENV, timeout = timeout_ms },
+    vim.schedule_wrap(function(res)
+      done(true, res)
+    end)
+  )
+  if not started then
+    vim.schedule(function()
+      done(false, err)
+    end)
+  end
 end
 
 ---@class Tasks.GitDatesOpts
@@ -406,6 +465,125 @@ function M.git_dates(base, rels, gopts)
     return result, ("%d path(s) not dated by git (%s)"):format(failed, tostring(first_err))
   end
   return result, nil
+end
+
+---@alias Tasks.GitDaterAsync fun(base: string, rels: string[], gopts: Tasks.GitDatesOpts|nil, cb: fun(dates: table<string, { date: string, file: string }>|nil, err: string|nil))
+
+---`git_dates` without blocking: the same chunks, the same halving of a chunk git refuses, the same deadline, but
+---every git call is a `vim.system` callback. `cb(dates, err)` runs on the main loop, never before this returns.
+---@param base string
+---@param rels string[]
+---@param gopts Tasks.GitDatesOpts|nil
+---@param cb fun(dates: table<string, { date: string, file: string }>|nil, err: string|nil)
+function M.git_dates_async(base, rels, gopts, cb)
+  if is_no_repo(base) then
+    vim.schedule(function()
+      cb(nil, "not a git repository")
+    end)
+    return
+  end
+  local deadline = gopts and gopts.deadline
+  local result = {}
+  local failed, first_err, stopped, finished = 0, nil, false, false
+  -- the chunks still to ask for, the next one last (a halved chunk pushes its halves, first half on top)
+  ---@type string[][]
+  local todo = {}
+  for i = #rels - ((#rels - 1) % M.GIT_CHUNK), 1, -M.GIT_CHUNK do
+    todo[#todo + 1] = vim.list_slice(rels, i, math.min(i + M.GIT_CHUNK - 1, #rels))
+  end
+
+  local function finish()
+    if finished then
+      return
+    end
+    finished = true
+    if is_no_repo(base) then
+      cb(nil, "not a git repository")
+    elseif failed > 0 then
+      cb(result, ("%d path(s) not dated by git (%s)"):format(failed, tostring(first_err)))
+    else
+      cb(result, nil)
+    end
+  end
+
+  local step
+
+  ---A continuation that cannot raise past the event loop: an error ends the lookup with what was found so far.
+  ---@param pending integer  paths the continuation is about
+  ---@param fn fun(ok: boolean, res: any)
+  ---@return fun(ok: boolean, res: any)
+  local function guarded(pending, fn)
+    return function(ok, res)
+      local ran, err = pcall(fn, ok, res)
+      if not ran and not finished then
+        stopped, failed = true, failed + pending
+        first_err = first_err or tostring(err)
+        step()
+      end
+    end
+  end
+
+  step = function()
+    while true do
+      local paths = table.remove(todo)
+      if not paths then
+        return finish()
+      end
+      local timeout = settings().git_timeout_ms
+      local left = deadline and math.floor((deadline - uv.hrtime()) / 1e6)
+      if stopped then
+        failed = failed + #paths
+      elseif left and left <= 0 then
+        stopped, failed = true, failed + #paths
+        first_err = first_err or "time budget used up"
+      else
+        timeout = left and math.min(timeout, left) or timeout
+        run_async(
+          log_cmd(base, paths),
+          timeout,
+          guarded(#paths, function(ok, res)
+            local found, err, kind = parse_log(ok, res, paths, timeout)
+            if found then
+              for rel, hit in pairs(found) do
+                result[rel] = hit
+              end
+              return step()
+            end
+            first_err = first_err or err
+            if kind then
+              stopped, failed = true, failed + #paths
+              if kind == "no_repo" then
+                no_repo[base] = os.time()
+              end
+              return step()
+            end
+            if #paths == 1 then
+              failed = failed + 1
+              return step()
+            end
+            run_async(
+              repo_cmd(base),
+              timeout,
+              guarded(#paths, function(ok2, res2)
+                if not (ok2 and res2.code == 0) then
+                  -- git cannot be used on this repo at all: halving would cost 2n-1 spawns for nothing
+                  stopped, failed = true, failed + #paths
+                else
+                  local mid = math.ceil(#paths / 2)
+                  todo[#todo + 1] = vim.list_slice(paths, mid + 1, #paths)
+                  todo[#todo + 1] = vim.list_slice(paths, 1, mid)
+                end
+                step()
+              end)
+            )
+          end)
+        )
+        return
+      end
+    end
+  end
+
+  vim.schedule(step)
 end
 
 ---@param full string
@@ -593,6 +771,25 @@ end
 
 ---@alias Tasks.FileDate { date: string, file: string, source: "git"|"mtime" }
 
+---The dates of the files of one base: git's answer where it has one, else the file time.
+---@param base string
+---@param rels string[]
+---@param git table<string, { date: string, file: string }>|nil
+---@return table<string, Tasks.FileDate|false>
+local function date_group(base, rels, git)
+  local map = {}
+  for _, rel in ipairs(rels) do
+    local g = git and git[rel]
+    if g then
+      map[rel] = { date = g.date, file = base .. "/" .. g.file, source = "git" }
+    else
+      local d = mtime_day(base .. "/" .. rel)
+      map[rel] = d and { date = d, file = base .. "/" .. rel, source = "mtime" } or false
+    end
+  end
+  return map
+end
+
 ---Pass 2: date the files, one git lookup per base. Every git call blocks the editor, so the whole run has a time
 ---budget: a slow disk or a hung repo costs file times for the rest, not minutes of freeze.
 ---@param found Tasks.RefHits
@@ -619,19 +816,49 @@ local function date_files(found, dater, budget_ms, note)
         note(("%s: %s%s"):format(base, err, git and "" or " (file times used)"))
       end
     end
-    local map = {}
-    for _, rel in ipairs(group.rels) do
-      local g = git and git[rel]
-      if g then
-        map[rel] = { date = g.date, file = base .. "/" .. g.file, source = "git" }
-      else
-        local d = mtime_day(base .. "/" .. rel)
-        map[rel] = d and { date = d, file = base .. "/" .. rel, source = "mtime" } or false
-      end
-    end
-    dated[base] = map
+    dated[base] = date_group(base, group.rels, git)
   end
   return dated
+end
+
+---Pass 2 without blocking: the bases one after another, each git lookup a callback chain (`git_dates_async`). The
+---budget stays the point after which the rest is dated by file times; it no longer is a time the editor waits.
+---@param found Tasks.RefHits
+---@param dater Tasks.GitDaterAsync
+---@param budget_ms integer
+---@param note fun(text: string)
+---@param alive fun(): boolean  false once the run was cancelled: no further git call is started
+---@param done fun(dated: table<string, table<string, Tasks.FileDate|false>>)
+local function date_files_async(found, dater, budget_ms, note, alive, done)
+  ---@type table<string, table<string, Tasks.FileDate|false>>
+  local dated = {}
+  local deadline = uv.hrtime() + budget_ms * 1e6
+  local out_of_time = false
+  local i = 0
+  local function next_base()
+    i = i + 1
+    local base = found.base_order[i]
+    if not base or not alive() then
+      return done(dated)
+    end
+    local group = found.by_base[base]
+    if uv.hrtime() > deadline then
+      if not out_of_time then
+        out_of_time = true
+        note(("git time budget of %d ms used up; file times used for the rest"):format(budget_ms))
+      end
+      dated[base] = date_group(base, group.rels, nil)
+      return next_base()
+    end
+    dater(base, group.rels, { deadline = deadline }, function(git, err)
+      if err then
+        note(("%s: %s%s"):format(base, err, git and "" or " (file times used)"))
+      end
+      dated[base] = date_group(base, group.rels, git)
+      next_base()
+    end)
+  end
+  next_base()
 end
 
 ---Pass 3: compare each ref's file date with its task's own date; the changes go to `report.stale`.
@@ -709,15 +936,29 @@ function M.file_key(opts)
   end
 end
 
+---@return Tasks.StalenessReport
+local function new_report()
+  return { stale = {}, tasks = 0, files = 0, unresolved = 0, skipped = 0, capped = 0, notes = {} }
+end
+
+---@param report Tasks.StalenessReport
+---@param cap integer
+local function cap_note(report, cap)
+  if report.capped > 0 then
+    report.notes[#report.notes + 1] = ("%d distinct file(s) beyond the limit of %d were not checked"):format(
+      report.capped,
+      cap
+    )
+  end
+end
+
 ---Check the refs of `tasks` against the file system and git: resolve (pass 1), date (pass 2), compare (pass 3).
 ---@param tasks Tasks.Task[]
 ---@param opts? Tasks.StalenessOpts
 ---@return Tasks.StalenessReport report
 function M.compute(tasks, opts)
   opts = opts or {}
-  ---@type Tasks.StalenessReport
-  local report =
-    { stale = {}, tasks = 0, files = 0, unresolved = 0, skipped = 0, capped = 0, notes = {} }
+  local report = new_report()
 
   local root = opts.root
   if not root then
@@ -743,13 +984,113 @@ function M.compute(tasks, opts)
     date_files(found, opts.git_dates or M.git_dates, opts.budget_ms or settings().budget_ms, note)
   compare(found.hits, dated, report)
 
-  if report.capped > 0 then
-    report.notes[#report.notes + 1] = ("%d distinct file(s) beyond the limit of %d were not checked"):format(
-      report.capped,
-      cap
-    )
+  cap_note(report, cap)
+  return report
+end
+
+---The report of a check that could not run at all: every task with refs is kept, marked unverified -- an optional
+---signal that cannot be read must not look like "nothing is stale" (fail open).
+---@param tasks Tasks.Task[]
+---@param err any
+---@return Tasks.StalenessReport
+function M.unverified_report(tasks, err)
+  local report = new_report()
+  report.notes[1] = "refs could not be checked: "
+    .. tostring(err)
+    .. " -- showing every task that has refs (unverified)"
+  for _, t in ipairs(tasks) do
+    if #(t.refs or {}) > 0 then
+      report.stale[t.id] = {
+        { ref = "(refs could not be checked)", file = "", date = "?", source = "unverified" },
+      }
+    end
   end
   return report
+end
+
+---@class Tasks.StalenessJob
+---@field cancel fun()  # The callback is not called any more and no further git call is started.
+
+---`compute` without blocking the editor: pass 1 and 3 run as before, pass 2 is a chain of `vim.system` callbacks
+---(`git_dates_async`; `opts.git_dates_async` replaces it, a synchronous `opts.git_dates` stub is called from the
+---event loop). `cb(report)` runs on the main loop, never before this returns, exactly once unless cancelled; a check
+---that raises hands `unverified_report` to it.
+---@param tasks Tasks.Task[]
+---@param opts? Tasks.StalenessOpts|{ git_dates_async?: Tasks.GitDaterAsync }
+---@param cb fun(report: Tasks.StalenessReport)
+---@return Tasks.StalenessJob job
+function M.compute_async(tasks, opts, cb)
+  opts = opts or {}
+  local cancelled, delivered = false, false
+  local job = {
+    cancel = function()
+      cancelled = true
+    end,
+  }
+  ---@param report Tasks.StalenessReport
+  local function deliver(report)
+    vim.schedule(function()
+      if cancelled or delivered then
+        return
+      end
+      delivered = true
+      cb(report)
+    end)
+  end
+  ---@param err any
+  local function fail(err)
+    deliver(M.unverified_report(tasks, err))
+  end
+
+  local ok, err = pcall(function()
+    local report = new_report()
+    local root = opts.root and fsio.norm(opts.root) or vault.root()
+    if not root then
+      report.notes[#report.notes + 1] = "vault not found; refs not checked"
+      return deliver(report)
+    end
+    local ctx = make_ctx(opts, root)
+    local cap = opts.max_refs or M.MAX_REFS
+    local found = resolve_refs(tasks, ctx, cap, report)
+    report.tasks = found.tasks
+    report.files = found.files
+    ---@type Tasks.GitDaterAsync
+    local dater = opts.git_dates_async
+    if not dater and opts.git_dates then
+      local sync = opts.git_dates
+      dater = function(base, rels, gopts, k)
+        vim.schedule(function()
+          k(sync(base, rels, gopts))
+        end)
+      end
+    end
+    date_files_async(
+      found,
+      dater or M.git_dates_async,
+      opts.budget_ms or settings().budget_ms,
+      function(text)
+        report.notes[#report.notes + 1] = text
+      end,
+      function()
+        return not cancelled
+      end,
+      function(dated)
+        local done_ok, done_err = pcall(function()
+          compare(found.hits, dated, report)
+          cap_note(report, cap)
+        end)
+        if done_ok then
+          deliver(report)
+        else
+          fail(done_err)
+        end
+      end
+    )
+  end)
+  if not ok then
+    fail(err)
+  end
+  return job
 end
 
 ---One line naming what changed: `lua/ai/config/init.lua (2026-10-02, git)`.

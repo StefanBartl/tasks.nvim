@@ -27,6 +27,10 @@
 --- false`) turns it off; when no folder can be watched it says so once and `r`
 --- stays the way to rescan. The plain `vim.ui.select` fallback has no live list.
 ---
+--- `--stale=refs` never makes the editor wait for git: the list first shows what the last answer of the check kept
+--- (or, before the first answer, every task the other filters keep, "checking refs" in the title), the check runs
+--- in the background (`staleness.compute_async`) and its answer redraws the open list.
+---
 --- Frecency: opening (`<CR>`) or changing (`s` / `p`) a task counts as a visit
 --- (`tasks.frecency`); `o` also cycles to `frecency`, which lists the most-visited
 --- tasks first (opt-in: it does mix statuses and prios).
@@ -36,6 +40,7 @@
 
 local confirm = require("tasks_nvim.ui.confirm")
 local soft = require("tasks_nvim.soft")
+local staleness = require("tasks_nvim.staleness")
 local core = require("tasks_nvim.ui.dash_core")
 local notify = require("lib.nvim.notify").create("[tasks.dash]")
 local view = require("tasks_nvim.ui.view")
@@ -79,6 +84,11 @@ local MAX_CONFIRM_LINES = 8
 ---@field watch? boolean                             # Live refresh for this dashboard.
 ---@field view? "list"|"stages"                      # The stage view groups the tasks by stage (`v` switches).
 ---@field plan? Tasks.Plan                           # The plan of the shown tasks, from the last load.
+---@field ref_stale? table<string, Tasks.RefChange[]> # The last answer of the background `--stale=refs` check.
+---@field ref_report? Tasks.StalenessReport          # Its report (the notes).
+---@field ref_fresh? boolean                         # An answer arrived: the next load uses it without checking again.
+---@field ref_job? Tasks.StalenessJob                # The check still running.
+---@field rerender? fun()                            # Redraws the open list (set by the picker backends).
 
 ---@class Tasks.DashOpts
 ---@field persist? boolean   # Remember the filter between sessions (default true).
@@ -175,17 +185,75 @@ local function new_state(v, opts)
   }
 end
 
+---Start the `--stale=refs` check of `tasks` in the background (a running one is dropped: its tasks are outdated).
+---Its answer goes into the state and redraws the open list.
+---@param state Tasks.DashState
+---@param tasks Tasks.Task[]
+local function check_refs(state, tasks)
+  if state.ref_job then
+    state.ref_job.cancel()
+  end
+  local first = state.ref_stale == nil
+  local opts = vim.tbl_extend("keep", state.filter.ref_opts or {}, { root = state.root })
+  local job
+  job = staleness.compute_async(tasks, opts, function(report)
+    if state.ref_job ~= job then
+      return
+    end
+    state.ref_job = nil
+    state.ref_stale, state.ref_report, state.ref_fresh = report.stale, report, true
+    if state.rerender then
+      state.rerender()
+    else
+      notify.info(
+        ("--stale=refs: %d task(s) changed since updated; list again to see them"):format(
+          vim.tbl_count(report.stale)
+        )
+      )
+    end
+  end)
+  state.ref_job = job
+  if first then
+    notify.info("--stale=refs: checking the refs in the background ...")
+  end
+end
+
+---Stop the background check of a dashboard that closes.
+---@param state Tasks.DashState
+local function drop_refs_check(state)
+  state.rerender = nil
+  if state.ref_job then
+    state.ref_job.cancel()
+    state.ref_job = nil
+  end
+end
+
+---Scan and filter. A `--stale=refs` filter never waits for git: the list is cut by the last answer of the check
+---(not at all before the first), and a new check of the current candidates starts -- except for the load an answer
+---just asked for.
 ---@param state Tasks.DashState
 ---@return Tasks.DashLoad|nil res
 ---@return string|nil err
 local function load_state(state)
-  return core.load({
+  local refs = state.filter and state.filter.stale_refs
+  local res, err = core.load({
     root = state.root,
     area = state.area,
     filter = state.filter,
     sort = state.sort,
     want_plan = state.view == "stages",
+    defer_refs = true,
+    ref_stale = refs and state.ref_stale or nil,
   })
+  if res and refs then
+    if state.ref_fresh then
+      state.ref_fresh = false
+    else
+      check_refs(state, res.ref_candidates or {})
+    end
+    res.stale_report = state.ref_report
+  end
+  return res, err
 end
 
 ---Rescan and refilter; the result is `state.shown`. A `state.preload` (what the
@@ -257,7 +325,11 @@ end
 ---@param state Tasks.DashState
 ---@return string
 local function title_of(state)
-  return core.header(state.shown, state.filter, state.area, state.sort, state.readiness)
+  local title = core.header(state.shown, state.filter, state.area, state.sort, state.readiness)
+  if state.ref_job and state.filter and state.filter.stale_refs then
+    title = title .. " (checking refs ...)"
+  end
+  return title
 end
 
 ---@param tasks Tasks.Task[]
@@ -1067,6 +1139,20 @@ function M.refresh_if_changed(state, picker)
   return true
 end
 
+---Rescan and redraw the open list whatever the signature says (the `--stale=refs` answer also changes the title).
+---@param state Tasks.DashState
+---@param picker table
+function M.redraw(state, picker)
+  if picker.closed then
+    return
+  end
+  local res = load_state(state)
+  if res then
+    state.preload = res
+  end
+  refresh_keep(picker, true)
+end
+
 ---Start the live refresh of a picker. Returns the watcher, or nil when it is
 ---off or could not start (said once; `r` still works).
 ---@param state Tasks.DashState
@@ -1427,6 +1513,7 @@ local function open_picker(engine, Snacks, state)
       on_close = function()
         adapter.closed = true
         state.preload = nil
+        drop_refs_check(state)
         if watcher then
           watcher:stop()
           watcher = nil
@@ -1435,6 +1522,11 @@ local function open_picker(engine, Snacks, state)
     })
     if not handle then
       error("the kit picker could not be opened")
+    end
+    if not adapter.closed then
+      state.rerender = function()
+        M.redraw(state, adapter)
+      end
     end
     watcher = start_watch(state, adapter)
     if watcher and adapter.closed then
@@ -1483,12 +1575,18 @@ local function open_picker(engine, Snacks, state)
       -- A scan the watcher left for the next finder run belongs to this picker: dropped with it, so a reopened
       -- picker (after a detour) never shows the list of the version before.
       state.preload = nil
+      drop_refs_check(state)
       if watcher then
         watcher:stop()
         watcher = nil
       end
     end,
   })
+  if not picker.closed then
+    state.rerender = function()
+      M.redraw(state, picker)
+    end
+  end
   watcher = start_watch(state, picker)
   if watcher and picker.closed then
     -- Closed before we got here (`on_close` found no watcher to stop): nobody else will release it.

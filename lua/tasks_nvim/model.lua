@@ -1285,28 +1285,9 @@ function M.filter(tasks, f)
     local staleness = require("tasks_nvim.staleness")
     local ok, report = pcall(staleness.compute, out, f.ref_opts)
     if not ok then
-      report = {
-        stale = {},
-        tasks = 0,
-        files = 0,
-        unresolved = 0,
-        skipped = 0,
-        capped = 0,
-        notes = {
-          "refs could not be checked: "
-            .. tostring(report)
-            .. " -- showing every task that has refs (unverified)",
-        },
-      }
       -- Fail open: an optional signal that cannot be read must not look like "nothing is stale". Every task
       -- with refs stays in the list, marked as unverified.
-      for _, t in ipairs(out) do
-        if #(t.refs or {}) > 0 then
-          report.stale[t.id] = {
-            { ref = "(refs could not be checked)", file = "", date = "?", source = "unverified" },
-          }
-        end
-      end
+      report = staleness.unverified_report(out, report)
     end
     ---@cast report Tasks.StalenessReport
     stale_report = report

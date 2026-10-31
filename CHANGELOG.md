@@ -27,6 +27,7 @@ the version is not tagged yet (the repository is not published).
 
 ### Changed
 
+- `--stale=refs` in the editor no longer blocks Neovim for up to `staleness.budget_ms` (30 s): `staleness.compute_async` dates the files through `vim.system` callbacks (the same chunks, halving and deadline as `git_dates`, now also `git_dates_async`). The dashboard shows the list first (`(checking refs ...)` in the title) and redraws it when the answer comes; `:Tasks list --stale=refs --to=...` delivers once it is there. The headless CLI and the contract stay synchronous.
 - Confirmations and choices (`ui/confirm.lua`) ask through `lib.nvim.ui.dialog`, the dialog every plugin shares: ui.nvim's
   kit, else lib.nvim's copy of it, else `vim.ui.select`. The question wraps instead of being cut, "No" starts focused, and a
   lib.nvim without the module keeps the `vim.ui.select` path.
