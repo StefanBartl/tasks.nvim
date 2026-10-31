@@ -5,11 +5,14 @@
 #   scripts/test.sh                  every spec under TESTS/
 #   scripts/test.sh --file config    only spec files whose name contains "config"
 #   scripts/test.sh --json ir.json   also write the machine-readable result (the IR)
+#   scripts/test.sh ci               the whole pipeline (`testing ci`: stylua, luacheck, the suite, ...)
+#   scripts/test.sh ci --profile=fast   the quick check before a push; `ci verify`, `ci list` as well
 #
-# Everything after the script name is handed to `testing run .` unchanged.
+# Everything else after the script name is handed to `testing run .` unchanged.
 #
 # Exit code 0: all specs passed. 1: a spec failed, OR nvim / the runner / a dependency was not
-# found (the harness not running must never look like a green run). Never waits silently.
+# found (the harness not running must never look like a green run; with `ci` that is exit 3, as
+# `testing ci` reports it). Never waits silently.
 # A dependency <name> is looked up in, in this order:
 #   1. $<NAME>_DIR                  (testing.nvim -> $TESTING_NVIM_DIR, lib.nvim -> $LIB_NVIM_DIR)
 #   2. <repo>/.deps/<name>          (what CI checks out)
@@ -17,10 +20,6 @@
 #   4. stdpath('data')/lazy/<name>  (what a plugin manager installed)
 # snacks.nvim (override $SNACKS_DIR) is optional: the dashboard specs drive its picker. It is looked up the
 # same way and handed to the specs; when it is not found the run goes on and says so first.
-#
-#   scripts/test.sh conformance      the conformance suite K1..K15 of testing.nvim (docs/CONFORMANCE.md);
-#                                    extra options go to `testing conformance .`; exit 1 when the repo is
-#                                    gated (`conformance.gate = true` in .testing.lua) and a check failed
 
 set -euo pipefail
 
@@ -59,8 +58,8 @@ DATA="$(data_dir)"
 marker_of() {
   case "$1" in
     lib.nvim) printf 'lua/lib/nvim' ;;
-    snacks.nvim) printf 'lua/snacks/picker' ;;
     testing.nvim) printf 'lua/testing' ;;
+    snacks.nvim) printf 'lua/snacks/picker' ;;
     *) printf 'lua' ;;
   esac
 }
@@ -147,17 +146,20 @@ for name in "${OPTIONAL_DEPS[@]}"; do
   fi
 done
 
-# `ci`: the pipeline's document (ci.json) and the suite's stamp must outlive the scratch directory below. The
-# developer's real state directory is asked for BEFORE the isolation and handed to `testing ci --state-dir` (an
-# argument, not the environment: the specs must not inherit it).
+# Throwaway app name: the run gets its own stdpath("config"/"data"/"state"), never the developer's.
+# `ci`: the pipeline's document (ci.json) and the suite's stamp must land in the developer's real state directory,
+# where `testing ci verify`, the pre-push hook and `:Testing ci status` read them. It is asked for BEFORE the throwaway
+# app name and the scratch directory below and handed to `testing ci --state-dir` (an argument, not the environment:
+# the specs must not inherit it).
 real_state=""
 if [[ "${1:-}" == "ci" ]]; then
   real_state="$(nvim -n -i NONE --headless -u NONE --cmd 'lua io.stdout:write(vim.fn.stdpath("state"))' --cmd 'qa!' 2>/dev/null)" || real_state=""
   [[ -n "$real_state" ]] || fail 'error: cannot ask nvim for stdpath("state"); the ci document would be lost.'
 fi
 
-# Throwaway app name: the run gets its own stdpath("config"/"data"/"state"), never the developer's.
-export NVIM_APPNAME="${NVIM_APPNAME:-tasks_nvim-tests}"
+# Always this name: an NVIM_APPNAME the developer exported (a second config) would make the run read and write that
+# app's real stdpath("data"). The exported one only decides where a plugin manager's checkouts are (DATA, above).
+export NVIM_APPNAME="tasks_nvim-tests"
 # A run with `isolated = "none"` writes the plugin's state where Neovim keeps it: point state and
 # cache at a scratch directory, removed afterwards (a child editor has a sandbox of its own).
 scratch="$(mktemp -d)"
@@ -169,15 +171,23 @@ export XDG_STATE_HOME="$scratch/state"
 export XDG_CACHE_HOME="$scratch/cache"
 
 # No `exec`: the trap must remove the scratch directory afterwards (`set -e` keeps the exit code).
-if [[ "${1:-}" == "conformance" ]]; then
+# `scripts/test.sh surface --from ir.json --baseline surface.baseline.json`: the surface regression gate (docs/SURFACE.md)
+if [ "${1:-}" = "surface" ]; then
+  shift
+  nvim -n -i NONE --headless -u NONE -l "$DRIVER" surface . "$@"
+  exit $?
+fi
+# `scripts/test.sh conformance`: the conformance suite K1..K15 in the same environment (docs/CONFORMANCE.md of testing.nvim)
+if [ "${1:-}" = "conformance" ]; then
   shift
   nvim -n -i NONE --headless -u NONE -l "$DRIVER" conformance . "$@"
   exit $?
 fi
-if [[ "${1:-}" == "ci" ]]; then
+# `scripts/test.sh ci [--profile=fast] [...]`: the pipeline of the `ci` section, or the one derived from the repository
+# (stylua, luacheck, the suite; docs/CI.md of testing.nvim), in the same environment. `ci verify`, `ci list` and
+# `ci hook` are its subcommands: --state-dir goes after `verify` (it reads the proof there), the others take none.
+if [ "${1:-}" = "ci" ]; then
   shift
-  # `verify`, `list` and `hook` are subcommands of `testing ci`: --state-dir goes after `verify` (it reads the proof
-  # there); `list` and `hook` take none
   ci_args=()
   case "${1:-}" in
     verify)
