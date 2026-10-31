@@ -10,6 +10,17 @@ return function(H)
   local real_system = vim.system
   local real_loaded = package.loaded["tasks_nvim.contract"]
 
+  -- The checkout of this plugin (TESTS/..): the lookup asks git for `--show-toplevel` too and only takes a commit
+  -- whose top level is this folder, so a scripted answer names it on its first line.
+  local root = vim.fs.dirname(vim.fs.dirname(vim.fs.normalize(debug.getinfo(1, "S").source:sub(2))))
+
+  ---What git prints for `rev-parse --show-toplevel --short HEAD` in this checkout.
+  ---@param sha string
+  ---@return string
+  local function answer(sha)
+    return root .. "\n" .. sha .. "\n"
+  end
+
   ---Run `fn(git)` with a freshly loaded contract module (its cache is file-local) and a scripted `vim.system`.
   ---@param script (table|string)[]  # per call: `{ code, signal, stdout }`, or a string = the start fails with it
   ---@param fn fun(git: fun(): string, calls: integer[])  # `calls` collects the wait of each call
@@ -38,7 +49,7 @@ return function(H)
   end
 
   -- a timeout (code 124, the signal of the kill) is not kept: the next call asks again and keeps the answer
-  with_script({ { 124, 9 }, { 0, 0, "abc1234\n" } }, function(git, calls)
+  with_script({ { 124, 9 }, { 0, 0, answer("abc1234") } }, function(git, calls)
     eq(git(), "unknown", "no answer in time")
     eq(git(), "abc1234", "the next call asks again; the newline is cut")
     eq(git(), "abc1234", "an answer is kept")
@@ -61,29 +72,42 @@ return function(H)
   end)
 
   -- an error of the start is a no-answer, not a kept one
-  with_script({ "spawn failed", { 0, 0, "def5678\n" } }, function(git, calls)
+  with_script({ "spawn failed", { 0, 0, answer("def5678") } }, function(git, calls)
     eq(git(), "unknown", "the start failed")
     eq(git(), "def5678", "recovers on a later call")
     eq(#calls, 2)
   end)
 
   -- three misses in a row: "unknown" is kept and git is left alone
-  with_script({ { 124, 9 }, { 124, 9 }, { 124, 9 }, { 0, 0, "aaa1111\n" } }, function(git, calls)
-    for _ = 1, 5 do
-      eq(git(), "unknown")
+  with_script(
+    { { 124, 9 }, { 124, 9 }, { 124, 9 }, { 0, 0, answer("aaa1111") } },
+    function(git, calls)
+      for _ = 1, 5 do
+        eq(git(), "unknown")
+      end
+      eq(#calls, 3, "the limit of three looks")
     end
-    eq(#calls, 3, "the limit of three looks")
-  end)
+  )
 
   -- the code of `:wait` alone says "timed out", whatever the platform reports as signal
-  with_script({ { 124, 0 }, { 0, 0, "bbb2222\n" } }, function(git, calls)
+  with_script({ { 124, 0 }, { 0, 0, answer("bbb2222") } }, function(git, calls)
     eq(git(), "unknown")
     eq(git(), "bbb2222", "code 124 without a signal is not pinned either")
     eq(#calls, 2)
   end)
 
+  -- git answers for another checkout (the folder lies inside another repo): "unknown", kept
+  with_script(
+    { { 0, 0, "C:/somewhere/else\nabc1234\n" }, { 0, 0, answer("ddd4444") } },
+    function(git, calls)
+      eq(git(), "unknown", "the top level is not this checkout")
+      eq(git(), "unknown")
+      eq(#calls, 1)
+    end
+  )
+
   -- an answer of git that is not a commit is an answer: "unknown", kept
-  with_script({ { 0, 0, "fatal: not a hash\n" }, { 0, 0, "ccc3333\n" } }, function(git, calls)
+  with_script({ { 0, 0, "fatal: not a hash\n" }, { 0, 0, answer("ccc3333") } }, function(git, calls)
     eq(git(), "unknown")
     eq(git(), "unknown")
     eq(#calls, 1)
