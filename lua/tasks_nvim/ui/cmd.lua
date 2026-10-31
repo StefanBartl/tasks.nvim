@@ -1546,16 +1546,23 @@ local function write_answer(id, question, option)
   )
 end
 
----The id of the task the current buffer shows, or nil.
+---The id of the task the current buffer shows (its file, or any file of a folder task's folder), or nil. Paths
+---compare as the file system does (`fsio.same_path`: case-insensitive on Windows).
 ---@return string|nil
 local function buffer_task_id()
   local name = vim.api.nvim_buf_get_name(0)
   if name == "" or vim.bo.buftype ~= "" then
     return nil
   end
-  local want = fsio.norm(vim.fn.fnamemodify(name, ":p"))
+  local want = vim.fn.fnamemodify(name, ":p")
+  local dir = vim.fs.dirname(fsio.norm(want))
   for _, t in ipairs(scan.all() or {}) do
-    if t.path and fsio.norm(t.path) == want then
+    if
+      t.path
+      and (
+        fsio.same_path(t.path, want) or (t.folder and fsio.same_path(vim.fs.dirname(t.path), dir))
+      )
+    then
       return t.id
     end
   end
@@ -1574,6 +1581,10 @@ function M.task_sheet_run(ctx, system)
   local id = ctx.args.id or buffer_task_id()
   if not id then
     notify.error("sheet-run: name a task (area/slug), or run it from a task's buffer")
+    return
+  end
+  if not id:match("^[^/]+/[^/]+$") then
+    notify.error("sheet-run: " .. id .. " is no task id (area/slug)")
     return
   end
   local root, rerr = require("tasks_nvim.vault").root()

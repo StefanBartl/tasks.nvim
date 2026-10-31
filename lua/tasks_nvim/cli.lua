@@ -1498,7 +1498,7 @@ end
 commands["sheet-run"] = function(ctx)
   local args, eo = ctx.args, ctx.eo
   local id = args.pos[1]
-  if not id or #args.pos > 1 or not vault.parse_id(id) then
+  if not id or #args.pos > 1 or not id:match("^[^/]+/[^/]+$") or not vault.parse_id(id) then
     ctx.warn("error: usage: sheet-run <area>/<slug> [--testing-cli=<path>] [--dry-run]")
     return 2
   end

@@ -317,9 +317,11 @@ marked `(recommended)`. The status and the actor of the task stay as they are. C
 Runs the test sheets of a live-check task now, without starting a suite: testing.nvim's
 `testing sheets run --task <id> --tasks <vault>` finds the sheets that name the task (in the area's repository), runs
 them headless and writes their state into the task's block, the one `show`, the dashboard and `list --sheet=` read
-(a red sheet: its first failure line). Without an id: the task of the current buffer. The result comes back as one
-notification (green, red with why, refused); an open buffer of the task is reloaded. `--dry-run` runs the sheets but
-only says how the block would change.
+(a red sheet: its first failure line). Without an id: the task of the current buffer (its file, or any file in a folder
+task's folder). The result comes back as one notification with its reason (green; red; the task was not written;
+refused; testing.nvim failed or was stopped); an open buffer of the task is reloaded. `--dry-run` runs the sheets but
+only says how the block would change. A run is stopped after 30 minutes. testing.nvim writes the block through this
+plugin's own engine (`--tasks-cli` is handed on), never through another checkout it might find.
 
 Whether a sheet may run is testing.nvim's decision: the workspace trust of the repository, and on the workstation
 (`NVIM_MACHINE_ROLE=workstation`) only with `TESTING_ALLOW_WORKSTATION=1`. testing.nvim is found by

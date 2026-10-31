@@ -24,6 +24,8 @@ M.EXIT = { green = 0, red = 1, refused = 2, engine = 3 }
 ---@field dry_run? boolean
 ---@field getenv? fun(name: string): string|nil
 ---@field data_dir? string             # `stdpath('data')` (specs).
+---@field tasks_cli? string            # The engine testing.nvim writes with (default: this plugin's `scripts/tasks.lua`).
+---@field timeout_ms? integer          # Default `TIMEOUT_MS`.
 
 ---Where testing.nvim's command line is: the path of `scripts/testing.lua`, or nil and the places looked at.
 ---@param opts Tasks.SheetRunOpts
@@ -60,6 +62,16 @@ function M.locate(opts)
       .. "); set TESTING_NVIM_DIR or sheet_run.testing_cli"
 end
 
+---This plugin's own `scripts/tasks.lua`: handed on as `--tasks-cli`, so the engine that writes the block is the one
+---that asked (not another checkout testing.nvim might find first).
+---@return string|nil
+function M.own_cli()
+  local src = debug.getinfo(1, "S").source:sub(2)
+  local root = vim.fs.dirname(vim.fs.dirname(vim.fs.dirname(vim.fn.fnamemodify(src, ":p"))))
+  local cli = vim.fs.normalize(root .. "/scripts/tasks.lua")
+  return vim.fn.filereadable(cli) == 1 and cli or nil
+end
+
 ---The command that runs the sheets of `id`.
 ---@param id string
 ---@param cli string
@@ -80,52 +92,80 @@ function M.argv(id, cli, opts)
     "--tasks",
     opts.vault,
   }
+  local own = opts.tasks_cli or M.own_cli()
+  if own then
+    vim.list_extend(argv, { "--tasks-cli", own })
+  end
   if opts.dry_run then
     argv[#argv + 1] = "--dry-run"
   end
   return argv
 end
 
+---How long a run may take before it is stopped: 30 minutes (a sheet bounds each of its waits, many of them add up).
+M.TIMEOUT_MS = 30 * 60 * 1000
+
 ---@class Tasks.SheetRunResult
----@field code integer                 # The exit code of `testing sheets run` (`EXIT`), or 3 when it did not start.
+---@field code integer                 # The exit code of `testing sheets run` (`EXIT`), 3 when it did not start or was stopped.
 ---@field lines string[]               # What it printed (stdout, then stderr), one entry per line.
----@field summary string               # One line for a notification: what ran and how it ended.
+---@field summary string               # One line for a notification: what ran and how it ended, and why.
+
+---The outcomes of a written task that are no failure.
+local WRITTEN = { changed = true, unchanged = true, would_change = true }
 
 ---Turn the output of a run into its result.
 ---@param code integer
 ---@param stdout string
 ---@param stderr string
+---@param signal? integer  # A process stopped by a signal (a timeout, a kill) gives no verdict of its own.
 ---@return Tasks.SheetRunResult
-function M.result(code, stdout, stderr)
+function M.result(code, stdout, stderr, signal)
   local lines = {}
   for _, text in ipairs({ stdout or "", stderr or "" }) do
     for line in text:gmatch("[^\r\n]+") do
       lines[#lines + 1] = line
     end
   end
-  local verdict = ({
-    [0] = "green",
-    [1] = "red (or the task was not written)",
-    [2] = "refused",
-    [3] = "testing.nvim could not reach the engine",
-  })[code] or ("ended with exit " .. tostring(code))
-  -- the first line that says why: a red sheet, a refusal
-  local why
+  if signal and signal ~= 0 then
+    return {
+      code = M.EXIT.engine,
+      lines = lines,
+      summary = ("testing.nvim was stopped (signal %d, after %d min at most)"):format(
+        signal,
+        M.TIMEOUT_MS / 60000
+      ),
+    }
+  end
+  -- why, in this order: a red sheet, a task that was not written, a refusal or usage line, an error of the entry
+  local red, task, said, other
   for _, line in ipairs(lines) do
-    if
-      line:match(": fail")
-      or line:match("does not load")
-      or (line:match("^testing sheets: ") and not line:match("^testing sheets: task "))
-    then
-      why = line
-      break
+    if not red and (line:match("^sheet .-: fail") or line:match("^sheet .-: does not load")) then
+      red = line
+    end
+    local outcome = line:match("^testing sheets: task %S+ (%S+)")
+    if outcome then
+      if not task and not WRITTEN[(outcome:gsub(":$", ""))] then
+        task = line
+      end
+    elseif not said and line:match("^testing sheets: ") then
+      said = line
+    elseif not other and line:match("^testing: ") then
+      other = line
     end
   end
-  return {
-    code = code,
-    lines = lines,
-    summary = verdict .. (code ~= 0 and why and (": " .. why) or ""),
-  }
+  local verdict, why
+  if code == 0 then
+    verdict = "green"
+  elseif code == 1 then
+    verdict = red and "red" or "the task was not written"
+    why = red or task or said or other
+  elseif code == 2 then
+    verdict, why = "refused", said or other
+  else
+    verdict = ("testing.nvim failed (exit %d)"):format(code)
+    why = said or other or lines[#lines]
+  end
+  return { code = code, lines = lines, summary = verdict .. (why and (": " .. why) or "") }
 end
 
 ---Run the sheets of a task. With `on_done` the run is asynchronous (the editor); without, it waits (the CLI).
@@ -147,9 +187,9 @@ function M.run(id, opts, on_done, system)
   end
   system = system or vim.system
   local argv = M.argv(id, cli, opts)
-  local o = { text = true, cwd = opts.vault }
+  local o = { text = true, cwd = opts.vault, timeout = opts.timeout_ms or M.TIMEOUT_MS }
   local function finish(r)
-    return M.result(r.code or M.EXIT.engine, r.stdout or "", r.stderr or "")
+    return M.result(r.code or M.EXIT.engine, r.stdout or "", r.stderr or "", r.signal)
   end
   local ok, handle = pcall(system, argv, o, on_done and function(r)
     vim.schedule(function()

@@ -48,7 +48,11 @@ return function(H)
   has(cerr, "is not readable", "an explicit path that is not there")
 
   -- ── the command line and the result ────────────────────────────────────────
-  local argv = sr.argv("ui.nvim/x", "/t/scripts/testing.lua", { vault = vault, dry_run = true })
+  local argv = sr.argv(
+    "ui.nvim/x",
+    "/t/scripts/testing.lua",
+    { vault = vault, dry_run = true, tasks_cli = "/own/tasks.lua" }
+  )
   eq(vim.list_slice(argv, 2), {
     "--headless",
     "-u",
@@ -61,8 +65,10 @@ return function(H)
     "ui.nvim/x",
     "--tasks",
     vault,
+    "--tasks-cli",
+    "/own/tasks.lua",
     "--dry-run",
-  }, "testing sheets run --task <id> --tasks <vault>")
+  }, "testing sheets run --task <id> --tasks <vault> --tasks-cli <this engine>")
   eq(argv[1], vim.v.progpath, "with this editor's binary")
   local green = sr.result(0, "sheet a: pass\ntesting sheets: task x/y changed\n", "")
   eq({ green.code, green.summary }, { 0, "green" })
@@ -72,14 +78,43 @@ return function(H)
     "sheet a: fail: 80x24 step 1, keys x: E492\ntesting sheets: task x/y changed\n",
     ""
   )
-  eq(
-    red.summary,
-    "red (or the task was not written): sheet a: fail: 80x24 step 1, keys x: E492",
-    "red names why"
-  )
+  eq(red.summary, "red: sheet a: fail: 80x24 step 1, keys x: E492", "red names why")
   local refused =
     sr.result(2, "", "testing sheets: refused on the workstation (NVIM_MACHINE_ROLE=workstation)\n")
   has(refused.summary, "refused: testing sheets: refused on the workstation", "a refusal names why")
+  -- review of d335128: every way of ending says its reason
+  local unwritten = sr.result(
+    1,
+    "sheet a: pass\ntesting sheets: task x/y missing: not an open task of the vault\n",
+    ""
+  )
+  eq(
+    unwritten.summary,
+    "the task was not written: testing sheets: task x/y missing: not an open task of the vault",
+    "green sheets, but the task was not written: not called red"
+  )
+  local conflict =
+    sr.result(1, "sheet a: pass\ntesting sheets: task x/y conflict: edited meanwhile\n", "")
+  has(conflict.summary, "task x/y conflict", "a conflict names the task")
+  local crashed = sr.result(3, "", "testing: lib.nvim not found\nstack traceback:\n  [C]: in ?\n")
+  eq(
+    crashed.summary,
+    "testing.nvim failed (exit 3): testing: lib.nvim not found",
+    "an error of the entry"
+  )
+  local stopped = sr.result(1, "sheet a: pass\n", "", 9)
+  eq(stopped.code, 3, "a stopped process gives no verdict")
+  has(stopped.summary, "was stopped (signal 9", "it says so")
+  eq(
+    sr.own_cli(),
+    vim.fs.normalize(vim.fn.getcwd() .. "/scripts/tasks.lua"),
+    "this plugin's own engine"
+  )
+  has(
+    table.concat(sr.argv("a/b", "/t/testing.lua", { vault = vault }), " "),
+    "--tasks-cli " .. sr.own_cli(),
+    "handed on by default"
+  )
 
   -- ── run, with a stand-in for vim.system ────────────────────────────────────
   local seen
@@ -102,6 +137,7 @@ return function(H)
   eq(res.code, 0, "a synchronous run")
   eq(seen.argv[6], beside, "with the testing.nvim found")
   eq(seen.opts.cwd, vault, "from the vault")
+  eq(seen.opts.timeout, sr.TIMEOUT_MS, "with a time limit")
   local got
   sr.run("ui.nvim/x", { vault = vault, cli = beside }, function(r)
     got = r
@@ -154,6 +190,9 @@ return function(H)
   eq(run({ "sheet-run" }).code, 2, "usage: an id")
   eq(run({ "sheet-run", "noslash" }).code, 2, "usage: area/slug")
   eq(run({ "sheet-run", "a/b", "c/d" }).code, 2, "usage: one id")
+  local area_only = run({ "sheet-run", "lib.nvim", "--testing-cli=" .. stand_in })
+  eq(area_only.code, 2, "an area without a slug is bad usage")
+  has(area_only.err, "usage: sheet-run", "said as usage, not as testing.nvim's refusal")
 
   -- ── :Tasks sheet-run ───────────────────────────────────────────────────────
   local cmd = require("tasks_nvim.ui.cmd")
@@ -188,5 +227,47 @@ return function(H)
   cmd.task_sheet_run({ args = {}, flags = {}, rest = {} }, fake(0, ""))
   vim.notify = orig_notify
   has(told[1] and told[1].msg, "name a task", "no task in an empty buffer")
+
+  -- review of d335128: an id that is none, the path compared as the file system does, a folder task's other files
+  local function quiet(fn)
+    told = {}
+    vim.notify = function(msg, level)
+      told[#told + 1] = { msg = msg, level = level }
+    end
+    local okq, e = pcall(fn)
+    -- the result of a run that started comes back scheduled
+    vim.wait(300, function()
+      return #told >= 2
+    end)
+    vim.notify = orig_notify
+    assert(okq, e)
+  end
+  seen = nil
+  quiet(function()
+    cmd.task_sheet_run({ args = { id = "lib.nvim" }, flags = {}, rest = {} }, fake(0, ""))
+  end)
+  has(told[1] and told[1].msg, "is no task id", "an area alone is refused")
+  ok(seen == nil, "and nothing started")
+  if require("lib.nvim.cross.platform.is_windows")() then
+    seen = nil
+    quiet(function()
+      -- the vault named in another case than the file system spells it (the buffer gets its real case)
+      vault_mod.set_root(root:upper())
+      vim.cmd.edit(vim.fn.fnameescape(root .. "/lib.nvim/ROADMAP/tasks/live.md"))
+      cmd.task_sheet_run({ args = {}, flags = {}, rest = {} }, fake(0, ""))
+    end)
+    vault_mod.set_root(root)
+    eq(seen and seen.argv[10], "lib.nvim/live", "another case of the same path (Windows)")
+    vim.cmd("enew!")
+  end
+  assert(require("tasks_nvim.mutate").folderize("lib.nvim/live", { root = root, index = false }))
+  H.write(root .. "/lib.nvim/ROADMAP/tasks/live/notes.md", "notes")
+  seen = nil
+  quiet(function()
+    vim.cmd.edit(vim.fn.fnameescape(root .. "/lib.nvim/ROADMAP/tasks/live/notes.md"))
+    cmd.task_sheet_run({ args = {}, flags = {}, rest = {} }, fake(0, ""))
+  end)
+  eq(seen and seen.argv[10], "lib.nvim/live", "a file in a folder task's folder")
+  vim.cmd("enew!")
   require("tasks_nvim.config").merge({})
 end
