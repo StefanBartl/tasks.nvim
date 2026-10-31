@@ -101,18 +101,22 @@ jobs:
           TASKS_REQUIRE_SNACKS: "1"
           CI_STEPS: ${{ matrix.steps }}
           CI_REPORT: ${{ runner.temp }}/ci-report.json
+          CI_IR: ${{ runner.temp }}/suite-ir.json
         run: |
           nvim --version | Select-Object -First 1
           # Git Bash on Windows (never the WSL launcher), bash elsewhere; scripts/ci.sh is a bash script.
           $bash = if ($IsWindows) { Join-Path $env:ProgramFiles 'Git\bin\bash.exe' } else { 'bash' }
           $steps = @($env:CI_STEPS -split ' ' | Where-Object { $_ })
-          & $bash scripts/ci.sh @steps --keep-going --no-agent "--json=$env:CI_REPORT"
+          & $bash scripts/ci.sh @steps --keep-going --no-agent "--json=$env:CI_REPORT" -- "--json=$env:CI_IR"
           exit $LASTEXITCODE
-      # The report names every step and, for a red one, its findings or last output lines.
+      # The report names every step and, for a red one, its findings or last output lines; the suite IR (everything
+      # after `--` goes to the suite step) names the failing case and its assertions.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: failure()
         with:
           name: ci-${{ matrix.name }}
-          path: ${{ runner.temp }}/ci-report.json
+          path: |
+            ${{ runner.temp }}/ci-report.json
+            ${{ runner.temp }}/suite-ir.json
           if-no-files-found: ignore
           retention-days: 14
