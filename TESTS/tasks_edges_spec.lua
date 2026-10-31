@@ -165,6 +165,43 @@ return function(H)
     "the gate makes `late` wait on `early`, so `early` cannot wait on `late`"
   )
 
+  -- a task that is not made yet can close a circle too: an open task waits on its coming id already
+  F.task(
+    H,
+    root,
+    "lib.nvim",
+    "waiter",
+    F.meta("Waiter", "open", {
+      { "plan", gated.id },
+      { "phase", "first" },
+      { "blocked_by", "lib.nvim/coming" },
+    })
+  )
+  local born = assert(
+    edges.validate(
+      "lib.nvim/coming",
+      { plan = gated.id, phase = "second" },
+      { root = root, new = true }
+    )
+  )
+  eq(
+    codes(born),
+    { "blocked-by-cycle" },
+    "the gate makes `coming` wait on `waiter`, which waits on it"
+  )
+  eq(born[1].members, { "lib.nvim/coming", "lib.nvim/waiter" })
+  eq(
+    assert(
+      edges.validate(
+        "lib.nvim/coming",
+        { plan = gated.id, phase = "first" },
+        { root = root, new = true }
+      )
+    ),
+    {},
+    "in the same stage nothing closes the circle"
+  )
+
   -- ── an unknown task is an error, not a clean bill ────────────────────────────
   local none, err = edges.validate("lib.nvim/ghost", {}, { root = root })
   eq(none, nil)

@@ -44,8 +44,9 @@ local function has(list, value)
 end
 
 ---Check a proposed change of the relations of task `id`. With `opts.new` the task does not exist yet (`new` of
----`tasks-ops/1`): `id` is nil, the relations are its first ones, and no circle can run through it (it blocks nobody
----that it waits on: a stage gate only adds edges that the plan already had between the other tasks).
+---`tasks-ops/1`): the relations are its first ones and `id` is the id it will get. A circle can still run through
+---it: an open task may name that id in `blocked_by` already (a dangling blocker), and a hard stage gate then closes
+---the circle. Without an `id` the circle is not looked for.
 ---@param id string|nil
 ---@param proposal Tasks.EdgeProposal
 ---@param opts { root: string, shared?: Tasks.PlanShared, new?: boolean }
@@ -141,14 +142,21 @@ function M.validate(id, proposal, opts)
 
   -- a circle through the task: judged on the whole graph with the change applied
   local changes_graph = proposal.blocked_by ~= nil or proposal.plan ~= nil or proposal.phase ~= nil
-  if changes_graph and #problems == 0 and not opts.new then
+  if changes_graph and #problems == 0 and id ~= nil then
     local changed = vim.tbl_extend("force", {}, task)
+    changed.id = id
     changed.blocked_by = proposal.blocked_by or task.blocked_by
     changed.plan = plan_id
     changed.phase = phase
     local open = {}
     for _, t in ipairs(shared.open) do
       open[#open + 1] = t.id == id and changed or t
+    end
+    if opts.new then
+      -- the task that is about to be made: a node of the graph like the others
+      changed.blocked_by = proposal.blocked_by or {}
+      changed.after = proposal.after
+      open[#open + 1] = changed
     end
     local after_index = plan.index(open, index.is_done, shared.files)
     local built = plan.build(open, after_index)

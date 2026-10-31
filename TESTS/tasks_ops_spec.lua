@@ -526,6 +526,43 @@ return function(H)
     }, { dry_run = true }).error.details.problems[1].code,
     "plan-unknown"
   )
+  -- a circle through the task that is about to be made: an open task waits on the id it will get, and a hard gate
+  -- makes the new task wait on that one
+  do
+    local gated = assert(plans.new("lib.nvim", {
+      root = root,
+      today = F.TODAY,
+      title = "Gated birth",
+      phases = "build,ship",
+      gate = "hard",
+    }))
+    local waiter = F.task(
+      H,
+      root,
+      "lib.nvim",
+      "waiter",
+      F.meta("Waiter", "open", {
+        { "plan", gated.id },
+        { "phase", "build" },
+        { "blocked_by", "lib.nvim/later" },
+      })
+    )
+    local files_before = everything()
+    local e = one({
+      {
+        op = "new",
+        area = "lib.nvim",
+        title = "Later",
+        fields = { plan = gated.id, phase = "ship" },
+      },
+    })
+    eq(e.error and e.error.code, "invalid_argument", vim.inspect(e))
+    eq(e.error.details.problems[1].code, "blocked-by-cycle")
+    eq(e.error.details.problems[1].members, { "lib.nvim/later", "lib.nvim/waiter" })
+    eq(everything(), files_before, "a refused new writes nothing")
+    os.remove(waiter)
+    os.remove(gated.path)
+  end
   eq(
     one({ { op = "new", area = "lib.nvim", title = "x", fields = { kind = "mystery" } } }).error.code,
     "invalid_argument"

@@ -717,24 +717,6 @@ local function do_new(op, ctx)
       end
     end
   end
-  -- the relations, as `set` judges them: on the ids the values name (wikilinks resolved), before anything is written
-  local relation = {}
-  for _, key in ipairs(NEW_RELATIONS) do
-    relation[key] = fields[key]
-  end
-  if next(relation) ~= nil then
-    local pairs_, perr = mutate.check_patch(relation, { root = ctx.root })
-    if not pairs_ then
-      return refuse("invalid_argument", tostring(perr))
-    end
-    local problems, eerr = edges.validate(nil, proposal_of(pairs_), { root = ctx.root, new = true })
-    if not problems then
-      return fail(ctx, eerr)
-    end
-    if #problems > 0 then
-      return refuse("invalid_argument", problems[1].message, { problems = problems })
-    end
-  end
   -- `links` of the request is the frontmatter field; in `mutate.new` that name is the wikilink mode
   local new_opts = vim.tbl_extend("force", fields, {
     root = ctx.root,
@@ -745,6 +727,31 @@ local function do_new(op, ctx)
     dry_run = ctx.dry,
   })
   new_opts.web_links, new_opts.links = fields.links, nil
+  -- the relations, as `set` judges them: on the ids the values name (wikilinks resolved), before anything is written
+  local relation = {}
+  for _, key in ipairs(NEW_RELATIONS) do
+    relation[key] = fields[key]
+  end
+  if next(relation) ~= nil then
+    local pairs_, perr = mutate.check_patch(relation, { root = ctx.root })
+    if not pairs_ then
+      return refuse("invalid_argument", tostring(perr))
+    end
+    -- the id the task will get: an open task may wait on it already, and a stage gate can close a circle through it
+    local would, werr, winfo =
+      mutate.new(op.area, vim.tbl_extend("force", new_opts, { dry_run = true }))
+    if not would then
+      return mutate_failure(ctx, werr, winfo)
+    end
+    local problems, eerr =
+      edges.validate(would.id, proposal_of(pairs_), { root = ctx.root, new = true })
+    if not problems then
+      return fail(ctx, eerr)
+    end
+    if #problems > 0 then
+      return refuse("invalid_argument", problems[1].message, { problems = problems })
+    end
+  end
   local r, err, info = mutate.new(op.area, new_opts)
   if not r then
     return mutate_failure(ctx, err, info)
