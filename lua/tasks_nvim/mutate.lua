@@ -1088,6 +1088,8 @@ function M.new(area, opts)
     local in_use = fsio.is_dir(vault.task_dir(root, area, slug))
       or fsio.is_file(vault.task_path(root, area, slug))
       or fsio.is_file(vault.plan_path(root, area, slug))
+    -- `reserved`: ids a dry run counts as made already (earlier `new` ops of the request)
+    in_use = in_use or (opts.reserved ~= nil and opts.reserved[area .. "/" .. slug] ~= nil)
     if not taken[slug] and not in_use then
       local path = opts.folder and vault.folder_task_path(root, area, slug)
         or vault.task_path(root, area, slug)

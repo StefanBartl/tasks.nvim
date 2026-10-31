@@ -570,6 +570,95 @@ return function(H)
     os.remove(find("lib.nvim/chain-tail").path)
     os.remove(find("lib.nvim/chain-head").path)
   end
+  -- a repeated title: the dry run picks the slug the real run picks (`-2`), and `after` on it is not dangling
+  do
+    local trio = {
+      { op = "new", area = "lib.nvim", title = "Twin" },
+      { op = "new", area = "lib.nvim", title = "Twin" },
+      {
+        op = "new",
+        area = "lib.nvim",
+        title = "Twin tail",
+        fields = { after = "lib.nvim/twin-2" },
+      },
+    }
+    local files_before = everything()
+    local probe = ops(trio, { dry_run = true })
+    eq(everything(), files_before, "a dry run writes nothing")
+    eq(probe.ok, true, vim.inspect(probe))
+    eq(probe.results[1].id, "lib.nvim/twin")
+    eq(probe.results[2].id, "lib.nvim/twin-2")
+    local real = ops(trio)
+    eq(real.ok, true, vim.inspect(real))
+    for i = 1, 3 do
+      eq(real.results[i].id, probe.results[i].id)
+    end
+    for _, slug in ipairs({ "twin-tail", "twin-2", "twin" }) do
+      os.remove(find("lib.nvim/" .. slug).path)
+    end
+  end
+  -- a bare wikilink to a task an earlier `new` makes resolves in the dry run as in the real run
+  do
+    local pair = {
+      { op = "new", area = "lib.nvim", title = "Wiki head" },
+      { op = "new", area = "lib.nvim", title = "Wiki tail", fields = { after = "[[wiki-head]]" } },
+    }
+    local files_before = everything()
+    local probe = ops(pair, { dry_run = true })
+    eq(everything(), files_before, "a dry run writes nothing")
+    eq(probe.ok, true, vim.inspect(probe))
+    local probe_set = ops(
+      vim.list_extend(vim.deepcopy(pair), {
+        { op = "set", id = "lib.nvim/gamma", patch = { after = { "[[wiki-tail]]" } } },
+      }),
+      { dry_run = true }
+    )
+    eq(probe_set.ok, true, vim.inspect(probe_set))
+    local real = ops(pair)
+    eq(real.ok, true, vim.inspect(real))
+    eq(find("lib.nvim/wiki-tail").after, { "lib.nvim/wiki-head" })
+    os.remove(find("lib.nvim/wiki-tail").path)
+    os.remove(find("lib.nvim/wiki-head").path)
+  end
+  -- the relations of a task an earlier `new` makes are edges of the circle check: a hard gate puts the new task
+  -- behind an open one, and a `set` that makes that one wait on the new task closes the circle in both runs
+  do
+    local gated = assert(plans.new("lib.nvim", {
+      root = root,
+      today = F.TODAY,
+      title = "Gated pending",
+      phases = "build,ship",
+      gate = "hard",
+    }))
+    local early = F.task(
+      H,
+      root,
+      "lib.nvim",
+      "early",
+      F.meta("Early", "open", { { "plan", gated.id }, { "phase", "build" } })
+    )
+    local request = {
+      {
+        op = "new",
+        area = "lib.nvim",
+        title = "Late",
+        fields = { plan = gated.id, phase = "ship" },
+      },
+      { op = "set", id = "lib.nvim/early", patch = { blocked_by = { "lib.nvim/late" } } },
+    }
+    local files_before = everything()
+    local probe = ops(request, { dry_run = true })
+    eq(everything(), files_before, "a dry run writes nothing")
+    eq(probe.ok, false, vim.inspect(probe))
+    eq(probe.results[2].error.details.problems[1].code, "blocked-by-cycle", vim.inspect(probe))
+    eq(probe.results[2].error.details.problems[1].members, { "lib.nvim/early", "lib.nvim/late" })
+    local real = ops(request)
+    eq(real.ok, probe.ok, vim.inspect(real))
+    eq(real.results[2].error.details.problems[1].code, "blocked-by-cycle")
+    os.remove(find("lib.nvim/late").path)
+    os.remove(early)
+    os.remove(gated.path)
+  end
   -- a circle through the task that is about to be made: an open task waits on the id it will get, and a hard gate
   -- makes the new task wait on that one
   do

@@ -148,13 +148,16 @@ echo '{"client_op_id":"c-1","ops":[{"op":"set","id":"my-project/fix-the-thing","
 
 A request is `{ "schema": 1, "client_op_id": "c-81f2", "dry_run": false, "ops": [ ... ] }`. `client_op_id` (1 to 64
 characters of letters, digits and `. _ : -`) is echoed in the answer, for a client that must not repeat itself;
-`dry_run` checks everything and writes nothing; a task an earlier `new` of the same request would create counts as
-existing for the relations of later operations (`after` on it is not `after-dangling`), as in the real run. At most 100 operations. `attach_dirs` (optional, at most 8 absolute
-paths) names the folders `attach` with `from: latest` takes the newest image from, instead of `attach.screenshot_dirs` and
-the folders of the system; given and empty, `latest` is refused (`invalid_argument`) and only the clipboard is read. It
-is the field of a caller that runs the engine for a page (the hub, from its own settings): a page never names a folder.
-`null` counts as not given. With `attach_dirs` a failed `latest` names no folder and no file (`no new image in the
-screenshot folders of the hub`).
+`dry_run` checks everything and writes nothing. A task an earlier `new` of the same request would create counts, as
+in the real run, for the `after` and `blocked_by` relations of later operations (as an id or a bare
+`[[slug]]`; not `after-dangling`, its relations are edges of the `blocked-by-cycle` check) and its slug is taken (a
+repeated title gets `-2`); any other operation on such a task (`set` of it, `done`, ...) is still answered `not_found`
+by a dry run. At most 100 operations. `attach_dirs` (optional, at most 8 absolute paths) names the folders `attach`
+with `from: latest` takes the newest image from, instead of `attach.screenshot_dirs` and the folders of the system;
+given and empty, `latest` is refused (`invalid_argument`) and only the clipboard is read. It is the field of a caller
+that runs the engine for a page (the hub, from its own settings): a page never names a folder. `null` counts as not
+given. With `attach_dirs` a failed `latest` names no folder and no file (`no new image in the screenshot folders of
+the hub`).
 
 | `op` | Fields | |
 |---|---|---|

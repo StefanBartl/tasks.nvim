@@ -123,6 +123,7 @@
 ---@field rules? string[]|string      # Rule ids the task fulfils (`ERR-03`); a string is split at commas.
 ---@field body? string                # The body in place of the template's sections.
 ---@field dry_run? boolean            # Only the id it would get; nothing is created.
+---@field reserved? table<string, any>   # Ids taken though no file has them yet (a dry run: earlier `new` ops).
 ---@field lang? "de"|"en"             # Language of the body headings (default "de").
 ---@field status? string
 ---@field summary? string

@@ -80,6 +80,7 @@ local scan = require("tasks_nvim.scan")
 local questions = require("tasks_nvim.questions")
 local steps = require("tasks_nvim.steps")
 local vault = require("tasks_nvim.vault")
+local wikilinks = require("tasks_nvim.wikilinks")
 
 local M = {}
 
@@ -302,7 +303,7 @@ end
 ---@field dry boolean
 ---@field touched table<string, boolean>   # Areas whose index must be written.
 ---@field claimed table<string, string>   # A dry run: the new id an earlier `move_area` of the request takes -> its old id.
----@field created table<string, boolean>   # A dry run: the ids earlier `new` operations of the request would create.
+---@field created table<string, Tasks.PendingTask>   # A dry run: the tasks earlier `new` operations would create.
 ---@field attach? Tasks.AttachSourceOpts   # Specs: a fake clipboard; the folders of `attach_dirs` (`api`), never of an operation.
 
 ---A failure from `mutate` whose reason has no code: its validation messages are all about the request.
@@ -330,6 +331,34 @@ end
 local function etag_of_file(path)
   local text = fsio.read(path)
   return text and fsio.etag(text) or nil
+end
+
+---The resolver of bare `[[slug]]` wikilinks for an operation: in a dry run it also knows the tasks earlier `new`
+---operations of the request would create (the real run has made them by then); nil otherwise (the vault's own).
+---@param ctx Tasks.OpsCtx
+---@return Tasks.LinkResolver|nil
+local function link_resolver(ctx)
+  if not ctx.dry or next(ctx.created) == nil then
+    return nil
+  end
+  local disk = wikilinks.resolver(ctx.root)
+  return {
+    root = disk.root,
+    candidates = function(slug)
+      local ids = vim.list_extend({}, disk.candidates(slug))
+      for id, node in pairs(ctx.created) do
+        if node.slug == slug and not vim.tbl_contains(ids, id) then
+          ids[#ids + 1] = id
+        end
+      end
+      table.sort(ids)
+      return ids
+    end,
+    path = function(id)
+      local node = ctx.created[id]
+      return node and node.path or disk.path(id)
+    end,
+  }
 end
 
 ---The relations a patch sets, in the shape `edges.validate` takes.
@@ -362,7 +391,8 @@ local function do_set(op, ctx)
   if id == nil or op.patch == nil then
     return refuse("invalid_argument", "set needs id and patch")
   end
-  local pairs_, perr = mutate.check_patch(op.patch, { root = ctx.root })
+  local resolver = link_resolver(ctx)
+  local pairs_, perr = mutate.check_patch(op.patch, { root = ctx.root, link_resolver = resolver })
   if not pairs_ then
     return refuse("invalid_argument", tostring(perr))
   end
@@ -424,6 +454,7 @@ local function do_set(op, ctx)
     if_match = op.if_match,
     expect = expect,
     dry_run = ctx.dry,
+    link_resolver = resolver,
   })
   if not r then
     return mutate_failure(ctx, err, info)
@@ -779,6 +810,9 @@ local function do_new(op, ctx)
     title = op.title,
     body = op.body,
     dry_run = ctx.dry,
+    -- a dry run: the ids and slugs earlier `new` ops of the request take, as the real run has them on disk by then
+    reserved = ctx.dry and ctx.created or nil,
+    link_resolver = link_resolver(ctx),
   })
   new_opts.web_links, new_opts.links = fields.links, nil
   -- the relations, as `set` judges them: on the ids the values name (wikilinks resolved), before anything is written
@@ -786,22 +820,22 @@ local function do_new(op, ctx)
   for _, key in ipairs(NEW_RELATIONS) do
     relation[key] = fields[key]
   end
+  local proposal = {}
   if next(relation) ~= nil then
-    local pairs_, perr = mutate.check_patch(relation, { root = ctx.root })
+    local pairs_, perr =
+      mutate.check_patch(relation, { root = ctx.root, link_resolver = new_opts.link_resolver })
     if not pairs_ then
       return refuse("invalid_argument", tostring(perr))
     end
+    proposal = proposal_of(pairs_)
     -- the id the task will get: an open task may wait on it already, and a stage gate can close a circle through it
     local would, werr, winfo =
       mutate.new(op.area, vim.tbl_extend("force", new_opts, { dry_run = true }))
     if not would then
       return mutate_failure(ctx, werr, winfo)
     end
-    local problems, eerr = edges.validate(
-      would.id,
-      proposal_of(pairs_),
-      { root = ctx.root, new = true, pending = ctx.created }
-    )
+    local problems, eerr =
+      edges.validate(would.id, proposal, { root = ctx.root, new = true, pending = ctx.created })
     if not problems then
       return fail(ctx, eerr)
     end
@@ -821,8 +855,18 @@ local function do_new(op, ctx)
     changed_ids = ctx.dry and {} or { r.id },
   }
   if ctx.dry then
-    -- the real run creates it before the next operation runs: a later relation to it is not dangling
-    ctx.created[r.id] = true
+    -- the real run creates it before the next operation runs: a later relation to it is not dangling, its slug is
+    -- taken, and its own relations are edges of the graph a later circle check walks
+    ctx.created[r.id] = {
+      id = r.id,
+      slug = r.slug,
+      path = r.area .. "/ROADMAP/tasks/" .. (r.folder and (r.slug .. "/") or "") .. r.slug,
+      status = type(fields.status) == "string" and fields.status or "open",
+      blocked_by = {},
+      after = proposal.after,
+      plan = proposal.plan or nil,
+      phase = proposal.phase or nil,
+    }
   else
     ctx.touched[r.area] = true
     entry.etag_after = etag_of_file(r.path)

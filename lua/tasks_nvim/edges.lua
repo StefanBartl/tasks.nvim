@@ -29,6 +29,17 @@ local M = {}
 ---@field plan? string|false
 ---@field phase? string|false
 
+---A task an earlier `new` of the same dry-run request would create: not on disk yet, but a node of the graph.
+---@class Tasks.PendingTask
+---@field id string
+---@field slug string
+---@field status string
+---@field path string        # Vault path of its file, without `.md` (as a wikilink resolver names it).
+---@field blocked_by string[]
+---@field after? string[]
+---@field plan? string
+---@field phase? string
+
 ---@class Tasks.EdgeProblem
 ---@field code string        # The `check` code of the same fault.
 ---@field key string         # `blocked_by`, `after`, `plan` or `phase`.
@@ -48,10 +59,11 @@ end
 ---it: an open task may name that id in `blocked_by` already (a dangling blocker), and a hard stage gate then closes
 ---the circle. Without an `id` the circle is not looked for. `opts.pending` names ids that do not exist on disk yet but
 ---will before the change is written: the tasks earlier `new` operations of the same dry-run request would create (the
----real run makes them one after the other, so a relation to one of them is not dangling there either).
+---real run makes them one after the other, so a relation to one of them is not dangling there either, and their own
+---relations are edges a circle can run along).
 ---@param id string|nil
 ---@param proposal Tasks.EdgeProposal
----@param opts { root: string, shared?: Tasks.PlanShared, new?: boolean, pending?: table<string, boolean> }
+---@param opts { root: string, shared?: Tasks.PlanShared, new?: boolean, pending?: table<string, Tasks.PendingTask> }
 ---@return Tasks.EdgeProblem[]|nil problems  # empty: the change breaks nothing
 ---@return string|nil err
 function M.validate(id, proposal, opts)
@@ -160,6 +172,13 @@ function M.validate(id, proposal, opts)
       changed.blocked_by = proposal.blocked_by or {}
       changed.after = proposal.after
       open[#open + 1] = changed
+    end
+    local pending_ids = vim.tbl_keys(pending)
+    table.sort(pending_ids)
+    for _, pid in ipairs(pending_ids) do
+      if pid ~= id then
+        open[#open + 1] = pending[pid]
+      end
     end
     local after_index = plan.index(open, index.is_done, shared.files)
     local built = plan.build(open, after_index)
