@@ -1319,7 +1319,8 @@ local function do_attach(op, ctx)
       "attach: no screenshot folders were given, only the clipboard is read"
     )
   end
-  local task, ferr = mutate.find_open(op.id, ctx.root, drafts_of(ctx))
+  local drafts = drafts_of(ctx)
+  local task, ferr = mutate.find_open(op.id, ctx.root, drafts)
   if not task then
     return mutate_failure(ctx, ferr)
   end
@@ -1327,7 +1328,8 @@ local function do_attach(op, ctx)
     ok = true,
     id = task.id,
     outcome = ctx.dry and "would_change" or "changed",
-    etag_before = etag_of_file(task.path),
+    -- A task an earlier `new` of a dry run would create has no file yet: its version is the one of the draft text.
+    etag_before = (drafts and drafts[task.id]) and task.etag or etag_of_file(task.path),
     changed_ids = {},
   }
   if ctx.dry then

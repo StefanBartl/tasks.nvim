@@ -708,19 +708,40 @@ return function(H)
           op = "new",
           area = "lib.nvim",
           title = "Head",
-          body = "## Plan\n\n- [ ] First step\n\n## Notizen\n",
+          body = table.concat({
+            "## Plan",
+            "",
+            "- [ ] First step",
+            "",
+            "## Offene Fragen",
+            "",
+            "### Which way? [q1]",
+            "- [ ] This one",
+            "- [ ] That one",
+            "",
+            "## Notizen",
+            "",
+          }, "\n"),
         },
       }, rest)
     end
     local edits = {
       { op = "set", id = id, patch = { prio = 1 } },
       { op = "tick_step", id = id, n = 1 },
+      { op = "answer", id = id, question = "q1", option = 1 },
       { op = "append_note", id = id, text = "a note" },
       { op = "add_steps", id = id, steps = { "Second step" } },
       { op = "set_body", id = id, body = "Other text" },
       { op = "reopen", id = id },
     }
-    local want = { "would_change", "would_change", "would_change", "would_change", "would_change" }
+    local want = {
+      "would_change",
+      "would_change",
+      "would_change",
+      "would_change",
+      "would_change",
+      "would_change",
+    }
     local files_before = everything()
     local probe = ops(request(edits), { dry_run = true })
     eq(everything(), files_before, "a dry run writes nothing")
@@ -735,6 +756,11 @@ return function(H)
       ops(request({ { op = "attach", id = id, from = "clipboard" } }), { dry_run = true })
     eq(attach.ok, true, vim.inspect(attach))
     eq(attach.results[2].outcome, "would_change")
+    eq(
+      attach.results[2].etag_before,
+      probe.results[2].etag_before,
+      "attach names the version of the draft"
+    )
     local real = ops(request(edits))
     eq(real.ok, true, vim.inspect(real))
     eq(real.results[1].etag_after, probe.results[2].etag_before, "the version the real run creates")
@@ -755,6 +781,24 @@ return function(H)
     eq(real_done.results[2].outcome, "done")
     eq(real_done.results[2].to, dry_done.results[2].to)
     eq(one({ { op = "reopen", id = id } }).outcome, "changed")
+    os.remove(find(id).path)
+    -- the dry run does not see an earlier change of the request: a `done` after a `set` of the new task names the
+    -- version `new` writes, so the token of that preview meets the changed file in the real run
+    local changed_first = request({
+      { op = "set", id = id, patch = { prio = 1 } },
+      { op = "done", id = id },
+    })
+    local dry_late = ops(changed_first, { dry_run = true })
+    eq(dry_late.results[3].outcome, "would_done", vim.inspect(dry_late))
+    eq(dry_late.results[3].etag_before, dry_done.results[2].etag_before, "the version `new` writes")
+    changed_first[3].confirm = mutate.confirm_token(id, dry_late.results[3].etag_before)
+    local real_late = ops(changed_first)
+    eq(real_late.results[2].outcome, "changed", vim.inspect(real_late))
+    eq(
+      real_late.results[3].error and real_late.results[3].error.code,
+      "conflict",
+      vim.inspect(real_late)
+    )
     os.remove(find(id).path)
   end
   eq(

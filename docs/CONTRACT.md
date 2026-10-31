@@ -153,8 +153,10 @@ in the real run, for the `after` and `blocked_by` relations of later operations 
 `[[slug]]`; not `after-dangling`, its relations are edges of the `blocked-by-cycle` check) and its slug is taken (a
 repeated title gets `-2`). An operation on such a task (`set`, `done`, `tick_step`, `answer`, `append_note`,
 `add_steps`, `set_body`, `reopen`, `attach`) works on the file that `new` would write, as every operation of a dry run
-sees the vault as it is and not the earlier changes of the request; its `etag_before` is the version the real run
-creates. `reorder` and `move_area` of such a task are answered `not_found` by a dry run. At most 100 operations.
+sees the vault as it is and not the earlier changes of the request; its `etag_before` is the version `new` writes.
+An earlier change of that task in the same request (`set`, `tick_step`, ...) is not in it: the confirm token of a
+`done` after such a change meets the changed file in the real run (`conflict`), so it needs a fresh preview.
+`reorder` and `move_area` of such a task are answered `not_found` by a dry run. At most 100 operations.
 `attach_dirs` (optional, at most 8 absolute paths) names the folders `attach` with `from: latest` takes the newest
 image from, instead of `attach.screenshot_dirs` and the folders of the system;
 given and empty, `latest` is refused (`invalid_argument`) and only the clipboard is read. It is the field of a caller
