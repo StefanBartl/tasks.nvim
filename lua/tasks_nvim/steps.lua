@@ -93,7 +93,7 @@ end
 ---@param text string
 ---@return Tasks.StepsSummary|nil
 function M.parse(text)
-  if not text:find("## Plan", 1, true) then
+  if not text:find("##%s+Plan") then
     return nil
   end
   local lines = vim.split(text, "\n", { plain = true })
@@ -137,7 +137,7 @@ end
 ---@return string new_text   # Identical to `text` when there is nothing to tick.
 ---@return integer ticked    # How many steps were ticked.
 function M.tick_all(text)
-  if not text:find("## Plan", 1, true) then
+  if not text:find("##%s+Plan") then
     return text, 0
   end
   local lines = vim.split(text, "\n", { plain = true })
@@ -274,8 +274,77 @@ end
 ---Longest step `add_steps` takes, in characters.
 M.MAX_STEP = 1000
 
+---Unicode spaces (UTF-8) that make no visible character: NBSP, U+1680, U+2000..U+200B, U+202F, U+205F, U+3000, BOM.
+local UNICODE_SPACES = {
+  "\194\160",
+  "\225\154\128",
+  "\226\128[\128-\139]",
+  "\226\128\175",
+  "\226\129\159",
+  "\227\128\128",
+  "\239\187\191",
+}
+
+---True when `step` has no visible character: only ASCII whitespace and Unicode spaces.
+---@param step string
+---@return boolean
+local function is_blank(step)
+  for _, space in ipairs(UNICODE_SPACES) do
+    step = step:gsub(space, "")
+  end
+  return not step:find("%S")
+end
+
+---Width of the leading whitespace of a line (a tab counts as four columns).
+---@param bare string
+---@return integer
+local function indent_of(bare)
+  local lead = bare:match("^%s*")
+  local _, tabs = lead:gsub("\t", "")
+  return #lead + tabs * 3
+end
+
+---The last line that belongs to the step on line `at`: its wrapped text, sub-bullets and nested steps (lines indented
+---deeper than the step), blank lines between them included, a fenced block indented deeper too. Stops at a heading,
+---at a fence or a line not indented deeper, and at the end of the section (`last`).
+---@param lines string[]
+---@param at integer
+---@param last integer
+---@return integer
+local function block_end(lines, at, last)
+  local depth = indent_of(bare_of(lines[at]))
+  local fenced = false
+  local i = at + 1
+  while i <= last do
+    local bare = bare_of(lines[i])
+    local is_fence = bare:match("^%s*```") or bare:match("^%s*~~~")
+    local blank = bare:match("^%s*$") ~= nil
+    if fenced then
+      -- inside the block every line belongs; a blank one only once a later line does (an unclosed fence)
+      if not blank then
+        at = i
+      end
+      if is_fence then
+        fenced = false
+      end
+    elseif blank then -- luacheck: ignore 542
+      -- a blank line belongs only when a deeper line follows it; decided by that line
+    elseif indent_of(bare) > depth then
+      at = i
+      if is_fence then
+        fenced = true
+      end
+    else
+      break
+    end
+    i = i + 1
+  end
+  return at
+end
+
 ---Append open steps to the `## Plan` section: below its last step, numbered on from it when the plan numbers its steps
----(`- [ ] 3. ...`) or has none yet, with the bullet and indentation of the last step. A task without the section gets
+---(`- [ ] 3. ...`) or has none yet, with the bullet and indentation of the last step. The steps are the checkboxes of
+---the least indentation (a deeper one is a sub-item); the new ones go after the last step's wrapped text and sub-items. A task without the section gets
 ---one before its notes (`## Notizen` / `## Notes`), or at the end. Existing steps and every other byte stay as they
 ---were (line endings included). A step is the text of one line: no checkbox, no list marker, and no number of its own
 ---when the engine numbers it.
@@ -288,13 +357,28 @@ function M.add_steps(text, items)
     return nil, "there are no steps to add"
   end
   local summary = M.parse(text)
-  local last_item = summary and summary.items[#summary.items]
+  local cr = text:find("\r\n", 1, true) and "\r" or ""
+  local lines = vim.split(text, "\n", { plain = true })
+  -- the steps are the checkboxes of the least indentation; a deeper checkbox is a sub-item of a step
+  local last_item
+  if summary then
+    local depth
+    for _, item in ipairs(summary.items) do
+      local d = indent_of(bare_of(lines[item.line]))
+      if depth == nil or d < depth then
+        depth = d
+      end
+    end
+    for _, item in ipairs(summary.items) do
+      if indent_of(bare_of(lines[item.line])) == depth then
+        last_item = item
+      end
+    end
+  end
   -- the plan is numbered when it has no step yet or its last step carries a number
   local last_number = last_item and tonumber(last_item.text:match("^(%d+)%.%s"))
   local numbered = last_item == nil or last_number ~= nil
   local next_number = last_number or 0
-  local cr = text:find("\r\n", 1, true) and "\r" or ""
-  local lines = vim.split(text, "\n", { plain = true })
   local prefix = "- "
   if last_item then
     prefix = bare_of(lines[last_item.line]):match("^(%s*[-*]%s+)") or prefix
@@ -302,7 +386,7 @@ function M.add_steps(text, items)
   local new_lines = {}
   for i, item in ipairs(items) do
     local step = fsio.trim(item)
-    if step == "" then
+    if is_blank(step) then
       return nil, ("step %d is empty"):format(i)
     end
     if step:find("[%c\127]") then
@@ -311,7 +395,7 @@ function M.add_steps(text, items)
     if vim.fn.strchars(step) > M.MAX_STEP then
       return nil, ("step %d is longer than %d characters"):format(i, M.MAX_STEP)
     end
-    if step:match("^[-*+]%s") or step:match("^%[[ xX]%]") then
+    if step:match("^[-*+]%s") or step:match("^[-*+]$") or step:match("^%[[ xX]%]") then
       return nil,
         ("step %d is a list line: give the text of the step, the checkbox is written here"):format(
           i
@@ -342,7 +426,8 @@ function M.add_steps(text, items)
   end
 
   if last_item then
-    insert(last_item.line, new_lines)
+    local _, last = section(lines)
+    insert(block_end(lines, last_item.line, last or #lines), new_lines)
     return table.concat(lines, "\n"), nil
   end
 

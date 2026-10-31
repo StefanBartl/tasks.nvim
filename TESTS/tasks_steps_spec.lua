@@ -55,6 +55,60 @@ return function(H)
   eq(steps.parse("## Plan\n\n- [ ] a\r\n- [X] b\r\n").ticked, 1, "CRLF and an upper-case X")
   eq(steps.parse("## Plans\n\n- [ ] a\n"), nil, "only the heading `## Plan` itself")
   eq(steps.parse("# Plan\n\n- [ ] a\n"), nil, "and only at level two")
+  eq(steps.parse("##  Plan\n\n- [ ] a\n").total, 1, "two spaces after `##` are the same heading")
+  eq(steps.parse("##\tPlan\n\n- [x] a\n").ticked, 1, "and so is a tab")
+  eq(select(2, steps.tick_all("##  Plan\n\n- [ ] a\n")), 1, "tick_all finds it too")
+
+  -- ── add_steps: where the new steps go and how they are numbered ──
+  local function added(text, list)
+    return (assert(steps.add_steps(text, list)))
+  end
+  eq(
+    added("## Plan\n\n- [ ] 1. A\n- [ ] 2. B\n  - detail b\n", { "C" }),
+    "## Plan\n\n- [ ] 1. A\n- [ ] 2. B\n  - detail b\n- [ ] 3. C\n",
+    "after the last step's sub-bullet, not between the step and its details"
+  )
+  eq(
+    added(
+      "## Plan\n\n- [x] 5. **Runde 5**\n  wrapped text\n\n  - 23: x\n  - docs\n\n## Notizen\n",
+      { "next" }
+    ),
+    "## Plan\n\n- [x] 5. **Runde 5**\n  wrapped text\n\n  - 23: x\n  - docs\n- [ ] 6. next\n\n## Notizen\n",
+    "wrapped text and sub-bullets after a blank line belong to the step, the blank line before the notes stays"
+  )
+  eq(
+    added("## Plan\n\n- [ ] 1. A\n  ```lua\n  x = 1\n\n  ```\n\n```\n- [ ] no\n```\n", { "B" }),
+    "## Plan\n\n- [ ] 1. A\n  ```lua\n  x = 1\n\n  ```\n- [ ] 2. B\n\n```\n- [ ] no\n```\n",
+    "an indented fence belongs to the step, a fence at column 0 does not"
+  )
+  eq(
+    added("## Plan\n\n- [ ] 1. A\n  ```\n  open\n\n", { "B" }),
+    "## Plan\n\n- [ ] 1. A\n  ```\n  open\n- [ ] 2. B\n\n",
+    "an unclosed fence keeps the blank lines after its last line"
+  )
+  eq(
+    added("## Plan\n\n- [ ] 1. A\n  - [x] sub\n", { "B" }),
+    "## Plan\n\n- [ ] 1. A\n  - [x] sub\n- [ ] 2. B\n",
+    "a nested checkbox is a sub-item: the new step is numbered on from step 1 at its level"
+  )
+  eq(
+    added("##  Plan\n\n- [ ] 1. A\n", { "B" }),
+    "##  Plan\n\n- [ ] 1. A\n- [ ] 2. B\n",
+    "a heading with two spaces: numbered on, no second list"
+  )
+  for _, blank in ipairs({ "\194\160", "\227\128\128", " \226\128\139 ", "\239\187\191" }) do
+    local new, err = steps.add_steps("## Plan\n\n- [ ] 1. A\n", { blank })
+    eq({ new, err }, { nil, "step 1 is empty" }, vim.inspect(blank))
+  end
+  for _, marker in ipairs({ "-", "*", "+" }) do
+    local new, err = steps.add_steps("## Plan\n\n- [ ] 1. A\n", { marker })
+    eq(new, nil, marker)
+    has(err, "list line")
+  end
+  eq(
+    added("## Plan\n\n- [ ] 1. A\n", { "caf\195\169 \194\160x" }),
+    "## Plan\n\n- [ ] 1. A\n- [ ] 2. caf\195\169 \194\160x\n"
+  )
 
   -- ── tick_all: every other byte stays, dropped steps stay open ──
   local ticked_text, n = steps.tick_all(BODY)
