@@ -696,6 +696,67 @@ return function(H)
     os.remove(waiter)
     os.remove(gated.path)
   end
+  -- operations on a task an earlier `new` of the request makes: the dry run sees the file `new` would write, so it
+  -- answers as the real run does, and the version it names is the one the real run creates
+  do
+    local id = "lib.nvim/head"
+    ---@param rest table[]
+    ---@return table[]
+    local function request(rest)
+      return vim.list_extend({
+        {
+          op = "new",
+          area = "lib.nvim",
+          title = "Head",
+          body = "## Plan\n\n- [ ] First step\n\n## Notizen\n",
+        },
+      }, rest)
+    end
+    local edits = {
+      { op = "set", id = id, patch = { prio = 1 } },
+      { op = "tick_step", id = id, n = 1 },
+      { op = "append_note", id = id, text = "a note" },
+      { op = "add_steps", id = id, steps = { "Second step" } },
+      { op = "set_body", id = id, body = "Other text" },
+      { op = "reopen", id = id },
+    }
+    local want = { "would_change", "would_change", "would_change", "would_change", "would_change" }
+    local files_before = everything()
+    local probe = ops(request(edits), { dry_run = true })
+    eq(everything(), files_before, "a dry run writes nothing")
+    eq(probe.ok, true, vim.inspect(probe))
+    eq(probe.results[1].outcome, "would_create")
+    for i, outcome in ipairs(want) do
+      eq(probe.results[i + 1].outcome, outcome, vim.inspect(probe.results[i + 1]))
+      eq(probe.results[i + 1].id, id)
+    end
+    eq(probe.results[#edits + 1].outcome, "unchanged", "reopen of an open task")
+    local attach =
+      ops(request({ { op = "attach", id = id, from = "clipboard" } }), { dry_run = true })
+    eq(attach.ok, true, vim.inspect(attach))
+    eq(attach.results[2].outcome, "would_change")
+    local real = ops(request(edits))
+    eq(real.ok, true, vim.inspect(real))
+    eq(real.results[1].etag_after, probe.results[2].etag_before, "the version the real run creates")
+    for i = 1, #want do
+      eq(real.results[i + 1].outcome, "changed", vim.inspect(real.results[i + 1]))
+    end
+    eq(real.results[#edits + 1].outcome, "unchanged")
+    os.remove(find(id).path)
+    -- `done`: the dry run previews the file `new` would write; the real run takes the token of that version
+    files_before = everything()
+    local dry_done = ops(request({ { op = "done", id = id } }), { dry_run = true })
+    eq(everything(), files_before, "a dry run writes nothing")
+    eq(dry_done.ok, true, vim.inspect(dry_done))
+    eq(dry_done.results[2].outcome, "would_done")
+    local token = mutate.confirm_token(id, dry_done.results[2].etag_before)
+    local real_done = ops(request({ { op = "done", id = id, confirm = token } }))
+    eq(real_done.ok, true, vim.inspect(real_done))
+    eq(real_done.results[2].outcome, "done")
+    eq(real_done.results[2].to, dry_done.results[2].to)
+    eq(one({ { op = "reopen", id = id } }).outcome, "changed")
+    os.remove(find(id).path)
+  end
   eq(
     one({ { op = "new", area = "lib.nvim", title = "x", fields = { kind = "mystery" } } }).error.code,
     "invalid_argument"

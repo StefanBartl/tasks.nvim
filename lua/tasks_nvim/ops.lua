@@ -304,6 +304,7 @@ end
 ---@field touched table<string, boolean>   # Areas whose index must be written.
 ---@field claimed table<string, string>   # A dry run: the new id an earlier `move_area` of the request takes -> its old id.
 ---@field created table<string, Tasks.PendingTask>   # A dry run: the tasks earlier `new` operations would create.
+---@field drafts table<string, Tasks.DraftTask>   # A dry run: the files of those tasks, for later operations on them.
 ---@field attach? Tasks.AttachSourceOpts   # Specs: a fake clipboard; the folders of `attach_dirs` (`api`), never of an operation.
 
 ---A failure from `mutate` whose reason has no code: its validation messages are all about the request.
@@ -361,6 +362,14 @@ local function link_resolver(ctx)
   }
 end
 
+---The tasks earlier `new` operations of a dry run would create, as files later operations work on; nil in a real run
+---(the files are on disk by then).
+---@param ctx Tasks.OpsCtx
+---@return table<string, Tasks.DraftTask>|nil
+local function drafts_of(ctx)
+  return ctx.dry and ctx.drafts or nil
+end
+
 ---The relations a patch sets, in the shape `edges.validate` takes.
 ---@param pairs_ table[]
 ---@return Tasks.EdgeProposal
@@ -396,7 +405,7 @@ local function do_set(op, ctx)
   if not pairs_ then
     return refuse("invalid_argument", tostring(perr))
   end
-  local task, ferr = scan.find(id, { root = ctx.root })
+  local task, ferr = mutate.find_open(id, ctx.root, drafts_of(ctx))
   if not task then
     -- A reminder may be set and taken away on a finished task (it is bookkeeping); nothing else of it may change.
     local only_remind = next(op.patch) == "remind" and next(op.patch, "remind") == nil
@@ -455,6 +464,7 @@ local function do_set(op, ctx)
     expect = expect,
     dry_run = ctx.dry,
     link_resolver = resolver,
+    drafts = drafts_of(ctx),
   })
   if not r then
     return mutate_failure(ctx, err, info)
@@ -521,6 +531,7 @@ local function do_tick_step(op, ctx)
     index = false,
     if_match = op.if_match,
     dry_run = ctx.dry,
+    drafts = drafts_of(ctx),
   })
   if not r then
     return mutate_failure(ctx, err, info)
@@ -561,6 +572,7 @@ local function do_answer(op, ctx)
     index = false,
     if_match = op.if_match,
     dry_run = ctx.dry,
+    drafts = drafts_of(ctx),
   })
   if not r then
     return mutate_failure(ctx, err, info)
@@ -596,6 +608,7 @@ local function do_reopen(op, ctx)
     status = op.status,
     if_match = op.if_match,
     dry_run = ctx.dry,
+    drafts = drafts_of(ctx),
   })
   if not r then
     return mutate_failure(ctx, err, info)
@@ -640,6 +653,7 @@ local function do_append_note(op, ctx)
     index = false,
     if_match = op.if_match,
     dry_run = ctx.dry,
+    drafts = drafts_of(ctx),
   })
   if not r then
     return mutate_failure(ctx, err, info)
@@ -704,6 +718,7 @@ local function do_set_body(op, ctx)
     index = false,
     if_match = op.if_match,
     dry_run = ctx.dry,
+    drafts = drafts_of(ctx),
   })
   if not r then
     return mutate_failure(ctx, err, info)
@@ -743,6 +758,7 @@ local function do_add_steps(op, ctx)
     index = false,
     if_match = op.if_match,
     dry_run = ctx.dry,
+    drafts = drafts_of(ctx),
   })
   if not r then
     return mutate_failure(ctx, err, info)
@@ -857,6 +873,7 @@ local function do_new(op, ctx)
   if ctx.dry then
     -- the real run creates it before the next operation runs: a later relation to it is not dangling, its slug is
     -- taken, and its own relations are edges of the graph a later circle check walks
+    ctx.drafts[r.id] = { path = r.path, text = r.text, folder = r.folder }
     ctx.created[r.id] = {
       id = r.id,
       slug = r.slug,
@@ -939,7 +956,8 @@ local function do_done(op, ctx)
     return refuse("invalid_argument", "done needs id")
   end
   if ctx.dry then
-    local pv, err, info = done_flow.preview(op.id, { root = ctx.root, today = ctx.today })
+    local pv, err, info =
+      done_flow.preview(op.id, { root = ctx.root, today = ctx.today, drafts = ctx.drafts })
     if not pv then
       return fail(ctx, err, info)
     end
@@ -1301,7 +1319,7 @@ local function do_attach(op, ctx)
       "attach: no screenshot folders were given, only the clipboard is read"
     )
   end
-  local task, ferr = scan.find(op.id, { root = ctx.root })
+  local task, ferr = mutate.find_open(op.id, ctx.root, drafts_of(ctx))
   if not task then
     return mutate_failure(ctx, ferr)
   end
@@ -1401,6 +1419,7 @@ door = contract_ops.make({
       touched = {},
       claimed = {},
       created = {},
+      drafts = {},
       attach = opts.attach,
     }
   end,

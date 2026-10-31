@@ -49,6 +49,49 @@ local function trim(s)
   return vim.trim(s)
 end
 
+---The file an earlier `new` of a dry-run request would write: not on disk, but the task later operations of the
+---request work on (the real run has made it by then).
+---@class Tasks.DraftTask
+---@field path string     # The absolute path it would get.
+---@field text string     # What `new` would write.
+---@field folder boolean
+
+---The open task `id`: a draft of `drafts` (only a dry run passes them) or the file on disk.
+---@param id string
+---@param root string
+---@param drafts? table<string, Tasks.DraftTask>
+---@return Tasks.Task|nil task
+---@return string|nil err
+function M.find_open(id, root, drafts)
+  local draft = drafts and drafts[id]
+  if draft then
+    local area, slug = vault.parse_id(id)
+    local task = model.parse_text(draft.text, {
+      path = draft.path,
+      area = area,
+      location = "roadmap",
+      slug = slug,
+      folder = draft.folder,
+    })
+    task.etag = fsio.etag(draft.text)
+    return task, nil
+  end
+  return scan.find(id, { root = root })
+end
+
+---The text of an open task found by `M.find_open`: the draft's, or the file's.
+---@param task Tasks.Task
+---@param drafts? table<string, Tasks.DraftTask>
+---@return string|nil text
+---@return string|nil err
+local function read_open(task, drafts)
+  local draft = drafts and drafts[task.id]
+  if draft then
+    return draft.text, nil
+  end
+  return fsio.read(task.path)
+end
+
 -- ── Slugs ────────────────────────────────────────────────────────────────────
 
 ---Lower-case letters with a diacritic -> ASCII. Anything else non-ASCII is dropped.
@@ -1101,6 +1144,7 @@ function M.new(area, opts)
           slug = slug,
           path = path,
           folder = opts.folder == true,
+          text = text,
         },
           nil
       end
@@ -1256,7 +1300,7 @@ end
 ---`blocked_by`, `after` and `plan` take ids and wikilinks (`tasks_nvim.wikilinks`). What is written: an id the file
 ---already names keeps its form, a value given as a wikilink is written as given, any other id in the form
 ---`opts.links` / `setup({ links })` / `$TASKS_LINKS` asks for (`plain` ids by default).
----@param opts? { root?: string, today?: string, index?: boolean, allow_unknown?: boolean, if_match?: string, expect?: { key: string, value: any }, dry_run?: boolean, links?: "plain"|"wikilink", link_resolver?: Tasks.LinkResolver }
+---@param opts? { root?: string, today?: string, index?: boolean, allow_unknown?: boolean, if_match?: string, expect?: { key: string, value: any }, dry_run?: boolean, links?: "plain"|"wikilink", link_resolver?: Tasks.LinkResolver, drafts?: table<string, Tasks.DraftTask> }
 ---@return { id: string, path: string, changed: boolean, etag_before?: string, etag_after?: string, before?: table<string, any>, index?: Tasks.IndexResult, index_err?: string }|nil result
 ---@return string|nil err
 ---@return table|nil info  # `{ code = "conflict"|"locked"|"lock_stuck"|"forbidden"|"io", ... }` when there is a reason to name
@@ -1269,7 +1313,7 @@ function M.set(id, patch, opts)
   if not root then
     return nil, rerr
   end
-  local task, ferr = scan.find(id, { root = root })
+  local task, ferr = M.find_open(id, root, opts.drafts)
   if not task then
     -- A reminder is bookkeeping, not a change of what was finished: it may be set and taken away on a finished task,
     -- and nothing else may.
@@ -1316,7 +1360,7 @@ function M.set(id, patch, opts)
       ),
       { code = "forbidden" }
   end
-  local text, rd_err = fsio.read(task.path)
+  local text, rd_err = read_open(task, opts.drafts)
   if not text then
     return nil, "cannot read " .. task.path .. ": " .. tostring(rd_err)
   end
@@ -1428,7 +1472,7 @@ end
 ---@generic E
 ---@param id string
 ---@param transform fun(text: string): string|nil, string|nil, E|nil
----@param opts? { root?: string, today?: string, index?: boolean, if_match?: string, dry_run?: boolean }
+---@param opts? { root?: string, today?: string, index?: boolean, if_match?: string, dry_run?: boolean, drafts?: table<string, Tasks.DraftTask> }
 ---@return { id: string, area: string, path: string, changed: boolean, etag_before: string, etag_after: string, extra?: any }|nil result
 ---@return string|nil err
 ---@return table|nil info  # `{ code = "conflict"|"locked"|"lock_stuck"|"forbidden"|"io", ... }` when there is a reason to name
@@ -1438,7 +1482,7 @@ function M.edit_text(id, transform, opts)
   if not root then
     return nil, rerr
   end
-  local task, ferr = scan.find(id, { root = root })
+  local task, ferr = M.find_open(id, root, opts.drafts)
   if not task then
     return nil, ferr
   end
@@ -1454,7 +1498,7 @@ function M.edit_text(id, transform, opts)
       ),
       { code = "forbidden" }
   end
-  local text, rd_err = fsio.read(task.path)
+  local text, rd_err = read_open(task, opts.drafts)
   if not text then
     return nil, "cannot read " .. task.path .. ": " .. tostring(rd_err)
   end
@@ -1792,6 +1836,7 @@ end
 ---@field index? boolean         # Regenerate the area index (default true).
 ---@field if_match? string       # The `etag` of the finished file the caller saw.
 ---@field dry_run? boolean
+---@field drafts? table<string, Tasks.DraftTask>   # A dry run: the tasks earlier `new` ops would create.
 
 ---Bring a finished task back: its file goes from `Backlog/<bucket>/` to `ROADMAP/tasks/`, `status` is `open` again,
 ---`done_in` and `remind` are dropped, and its row leaves the README of the Backlog. A task that is open already is
@@ -1815,7 +1860,7 @@ function M.reopen(id, opts)
   if not area or not slug then
     return nil, id_err or ("expected <area>/<slug>, got " .. tostring(id))
   end
-  local open = scan.find(id, { root = root })
+  local open = M.find_open(id, root, opts.drafts)
   if open then
     return { id = id, area = area, path = open.path, changed = false, notes = {} }, nil
   end
@@ -1979,6 +2024,7 @@ end
 ---@field checkpoint_dir? string     # Where the safety snapshot goes.
 ---@field tick_steps? boolean        # Tick the open steps of the task's `## Plan` section in the finished copy (default false).
 ---@field if_match? string           # The `etag` of the task file the caller saw: a different file is `nil, message, { code = "conflict" }`.
+---@field drafts? table<string, Tasks.DraftTask>  # `done_preview` of a dry run: the tasks earlier `new` ops would create (`done` ignores it).
 
 ---Everything `done` decides before it touches a file (so the part that writes has nothing left to validate).
 ---@class Tasks.DonePlan
@@ -2027,7 +2073,7 @@ local function plan_done(id, opts)
     return nil, id_err or ("expected <area>/<slug>, got " .. tostring(id))
   end
 
-  local task, find_err = scan.find(id, { root = root })
+  local task, find_err = M.find_open(id, root, opts.drafts)
   if not task then
     local finished = scan.find_done(id, { root = root })
     if finished then
@@ -2085,7 +2131,7 @@ local function plan_done(id, opts)
   end
   patch[#patch + 1] = { "updated", today }
 
-  local old_text, rd_err = fsio.read(task.path)
+  local old_text, rd_err = read_open(task, opts.drafts)
   if not old_text then
     return nil, "cannot read " .. task.path .. ": " .. tostring(rd_err)
   end
@@ -2394,7 +2440,9 @@ end
 ---@return string|nil err
 ---@return table|nil info  # `{ code = "conflict", ... }` when `opts.if_match` is not the file's version
 function M.done(id, opts)
-  opts = opts or {}
+  -- a draft is not a file: only a preview may look at one
+  opts = vim.tbl_extend("force", {}, opts or {})
+  opts.drafts = nil
   local plan, perr, pinfo = plan_done(id, opts)
   if not plan then
     return nil, perr, pinfo
