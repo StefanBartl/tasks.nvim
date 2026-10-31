@@ -236,4 +236,25 @@ return function(H)
   end
   eq(hl, "DiagnosticOk", "green is drawn green")
   has(core.search_text(by["lib.nvim/checked"]), "sheet:never", "and the picker finds it")
+
+  -- ── `:Tasks list --sheet=` in the editor ───────────────────────────────────
+  local cmd = require("tasks_nvim.ui.cmd")
+  local dash = require("tasks_nvim.ui.dash")
+  local orig_open, orig_dashboard = dash.open, cmd.dashboard
+  local opened
+  dash.open = function(v)
+    opened = v
+  end
+  cmd.dashboard = nil
+  require("tasks_nvim.vault").set_root(root)
+  local ok_list, lerr = pcall(cmd.list, { flags = { sheet = "never" }, args = {} })
+  dash.open, cmd.dashboard = orig_open, orig_dashboard
+  ok(ok_list, tostring(lerr))
+  ok(opened ~= nil, ":Tasks list --sheet=never opens the dashboard")
+  local opened_ids = {}
+  for _, t in ipairs(opened and opened.tasks or {}) do
+    opened_ids[#opened_ids + 1] = t.id
+  end
+  eq(opened_ids, { "lib.nvim/checked" }, ":Tasks list --sheet=never shows only that task")
+  has(cmd.filter_note({ sheet = "never" }), "sheet=never", "and the heading names the filter")
 end

@@ -516,6 +516,15 @@ local LIST_FLAGS = {
     desc = "Only quick wins (value and effort at the quick_wins thresholds)",
   },
   {
+    name = "sheet",
+    type = "STRING",
+    values = vim.list_extend(
+      vim.deepcopy(require("tasks_nvim.sheets").STATES),
+      { "unknown", "any" }
+    ),
+    desc = "Only tasks whose test sheets are in one of these states (any = has sheets)",
+  },
+  {
     name = "sort",
     type = "STRING",
     enum = model.SORTS,
@@ -558,6 +567,8 @@ local function filter_flags(extra)
     ready = true,
     waiting = true,
     reminders = true,
+    -- the state of a task's test sheets is about the list of tasks, not a plan or an estimate
+    sheet = true,
     -- (the commands that take these filters name their own `--plan`, with their own words)
     plan = true,
   }

@@ -313,6 +313,7 @@ local function filter_note(flags)
     "value",
     "actor",
     "tag",
+    "sheet",
   }) do
     if flags[name] ~= nil then
       parts[#parts + 1] = ("%s=%s"):format(name, flags[name])
@@ -843,6 +844,7 @@ function M.list(ctx)
     quick_win = flags["quick-win"],
     plan = flags.plan,
     phase = flags.phase,
+    sheet = flags.sheet,
   })
   if not filter then
     notify.error(tostring(ferr))
