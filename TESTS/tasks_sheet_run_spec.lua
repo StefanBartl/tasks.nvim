@@ -269,5 +269,193 @@ return function(H)
   end)
   eq(seen and seen.argv[10], "lib.nvim/live", "a file in a folder task's folder")
   vim.cmd("enew!")
+
+  -- ── sheet-ai: stage 0 of the AI link (hand-over, accept, bug) ──────────────
+  eq(
+    vim.list_slice(
+      sr.ai_argv("draft", "a/b", "/t/testing.lua", { vault = vault, tasks_cli = "/own" }),
+      7
+    ),
+    { "sheets", "prompt", "draft", "--from-task", "a/b", "--vault", vault, "--tasks-cli", "/own" },
+    "draft: testing sheets prompt draft"
+  )
+  eq(
+    vim.list_slice(
+      sr.ai_argv("explain", "a/b", "/t/testing.lua", { vault = vault, tasks_cli = "/own" }),
+      7
+    ),
+    { "sheets", "prompt", "explain", "--task", "a/b", "--tasks", vault, "--tasks-cli", "/own" },
+    "explain: testing sheets prompt explain"
+  )
+  eq(
+    vim.list_slice(
+      sr.ai_argv("accept", "a/b", "/t/testing.lua", { vault = vault, from = "/x.md" }),
+      7
+    ),
+    { "sheets", "accept", "--task", "a/b", "--from", "/x.md" },
+    "accept: testing sheets accept"
+  )
+  eq(
+    sr.task_block(
+      "Cause: ...\n\n```task\ntitle: Float loses focus\nsummary: After :UI the float\nloses focus.\n```\n"
+    ),
+    { title = "Float loses focus", summary = "After :UI the float loses focus." },
+    "the proposed bug task"
+  )
+  ok(sr.task_block("no block") == nil, "no block")
+  ok(sr.task_block("```task\nsummary: s\n```") == nil, "a block without a title")
+
+  -- the CLI verb, with a stand-in testing.lua that prints a document
+  local doc_stand_in = H.tmpdir() .. "/scripts/testing.lua"
+  H.write(
+    doc_stand_in,
+    "io.stdout:write('# Hand-over for ' .. table.concat(arg, ' ') .. '\\n')\nos.exit(0)"
+  )
+  local d = run({ "sheet-ai", "draft", "lib.nvim/live", "--testing-cli=" .. doc_stand_in })
+  eq(d.code, 0, d.err)
+  has(
+    d.out,
+    "# Hand-over for sheets prompt draft --from-task lib.nvim/live",
+    "draft prints the document"
+  )
+  local answer_file = H.tmpdir() .. "/answer.md"
+  H.write(
+    answer_file,
+    "It is a bug.\n\n```task\ntitle: Slots bar flickers\nsummary: The bar redraws twice.\n```\n\n```lua\nreturn {}\n```\n"
+  )
+  local dry_bug = run({ "sheet-ai", "bug", "lib.nvim/live", "--from=" .. answer_file })
+  eq(dry_bug.code, 0, dry_bug.err)
+  has(dry_bug.out, "would create\tlib.nvim\tbug\tSlots bar flickers", "without --yes: shown only")
+  ok(
+    vim.fn.filereadable(root .. "/lib.nvim/ROADMAP/tasks/slots-bar-flickers.md") == 0,
+    "and nothing created"
+  )
+  local made = run({ "sheet-ai", "bug", "lib.nvim/live", "--from=" .. answer_file, "--yes" })
+  eq(made.code, 0, made.err)
+  has(made.out, "created\tlib.nvim/slots-bar-flickers", "with --yes: created")
+  local bug_text = H.read(root .. "/lib.nvim/ROADMAP/tasks/slots-bar-flickers.md")
+  has(bug_text, "kind: bug", "as a bug")
+  has(bug_text, "Live-Check-Task `lib.nvim/live`", "naming the live check it came from")
+  local dry_accept = run({
+    "sheet-ai",
+    "accept",
+    "lib.nvim/live",
+    "--from=" .. answer_file,
+    "--testing-cli=" .. doc_stand_in,
+  })
+  has(dry_accept.out, "would write the sheet:\nreturn {}", "accept without --yes: the sheet shown")
+  ok(not dry_accept.out:find("# Hand-over", 1, true), "testing.nvim not started")
+  local yes_accept = run({
+    "sheet-ai",
+    "accept",
+    "lib.nvim/live",
+    "--from=" .. answer_file,
+    "--testing-cli=" .. doc_stand_in,
+    "--yes",
+  })
+  has(
+    yes_accept.out,
+    "sheets accept --task lib.nvim/live --from " .. answer_file,
+    "with --yes: testing sheets accept"
+  )
+  eq(run({ "sheet-ai", "bug", "lib.nvim/live" }).code, 2, "bug needs --from")
+  eq(run({ "sheet-ai", "colour", "lib.nvim/live" }).code, 2, "an unknown step")
+  eq(run({ "sheet-ai", "draft", "lib.nvim" }).code, 2, "an id without a slug")
+
+  -- the editor: the hand-over buffer, then accept and bug from it, each after the dialog
+  local asked = {}
+  local function answer_dialog(yes)
+    return function(msg, _, cb)
+      asked[#asked + 1] = msg
+      cb(yes)
+    end
+  end
+  quiet(function()
+    cmd.task_sheet_ai(
+      { args = { step = "draft", id = "lib.nvim/live" }, flags = {}, rest = {} },
+      fake(0, "# Draft a test sheet\n\n```lua\nreturn { id = 'skeleton' }\n```\n")
+    )
+  end)
+  eq(
+    vim.api.nvim_buf_get_name(0),
+    "tasks://sheet-ai/draft/lib.nvim/live",
+    "a hand-over buffer of its own"
+  )
+  local hand = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\n")
+  has(hand, "# Draft a test sheet", "with the document")
+  has(
+    hand,
+    "Paste the AI's answer below this line, then :Tasks sheet-ai accept",
+    "and what to do next"
+  )
+  has(vim.fn.getreg('"'), "# Draft a test sheet", "and the document in a register")
+  vim.api.nvim_buf_set_lines(0, -1, -1, false, { "```lua", "return { id = 'x' }", "```" })
+  seen = nil
+  quiet(function()
+    cmd.task_sheet_ai(
+      { args = { step = "accept" }, flags = {}, rest = {} },
+      fake(0, "testing sheets: wrote x\n"),
+      answer_dialog(false)
+    )
+  end)
+  has(
+    asked[1],
+    "Write this sheet for lib.nvim/live?",
+    "asked first, with the task of the hand-over"
+  )
+  has(asked[1], "return { id = 'x' }", "showing the sheet")
+  ok(
+    not asked[1]:find("skeleton", 1, true),
+    "the answer below the marker, not the hand-over's own block"
+  )
+  ok(seen == nil, "no: testing.nvim not started")
+  quiet(function()
+    cmd.task_sheet_ai(
+      { args = { step = "accept" }, flags = {}, rest = {} },
+      fake(0, "testing sheets: wrote x\n"),
+      answer_dialog(true)
+    )
+  end)
+  eq(
+    seen and vim.list_slice(seen.argv, 7, 10),
+    { "sheets", "accept", "--task", "lib.nvim/live" },
+    "yes: accept"
+  )
+  has(told[#told] and told[#told].msg, "testing sheets: wrote x", "and its result")
+  vim.api.nvim_buf_set_lines(
+    0,
+    -1,
+    -1,
+    false,
+    { "```task", "title: Float keys swallowed", "summary: s", "```" }
+  )
+  asked = {}
+  quiet(function()
+    cmd.task_sheet_ai({ args = { step = "bug" }, flags = {}, rest = {} }, nil, answer_dialog(false))
+  end)
+  ok(
+    vim.fn.filereadable(root .. "/lib.nvim/ROADMAP/tasks/float-keys-swallowed.md") == 0,
+    "no: no bug task"
+  )
+  asked = {}
+  quiet(function()
+    cmd.task_sheet_ai({ args = { step = "bug" }, flags = {}, rest = {} }, nil, answer_dialog(true))
+  end)
+  has(asked[1], 'Create the bug task "Float keys swallowed" in lib.nvim?', "the bug asked first")
+  ok(
+    vim.fn.filereadable(root .. "/lib.nvim/ROADMAP/tasks/float-keys-swallowed.md") == 1,
+    "then created"
+  )
+  vim.cmd("enew!")
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { "no answer here" })
+  quiet(function()
+    cmd.task_sheet_ai(
+      { args = { step = "bug", id = "lib.nvim/live" }, flags = {}, rest = {} },
+      nil,
+      answer_dialog(true)
+    )
+  end)
+  has(told[1] and told[1].msg, "no ```task block", "a buffer without a proposal")
+  vim.cmd("enew!")
   require("tasks_nvim.config").merge({})
 end

@@ -828,6 +828,28 @@ local function nested_routes()
     },
 
     {
+      path = { "task", "sheet-ai" },
+      args = {
+        {
+          name = "step",
+          type = "STRING",
+          values = { "draft", "explain", "accept", "bug" },
+          desc = "draft, explain (hand-over to an AI), accept (its sheet), bug (its bug task)",
+        },
+        {
+          name = "id",
+          type = "TASK_ID",
+          optional = true,
+          desc = "Id of the live-check task (default: the hand-over's or the buffer's)",
+        },
+      },
+      desc = "Stage 0 of the AI link for a live-check task: draft / explain put a hand-over document (testing sheets prompt) into a buffer and onto the clipboard for the AI of your choice; accept writes the sheet of the answer pasted below it (only when it loads), bug creates the bug task it proposes; both ask first",
+      run = function(ctx)
+        cmd().task_sheet_ai(ctx)
+      end,
+    },
+
+    {
       path = { "task", "done" },
       args = {
         {

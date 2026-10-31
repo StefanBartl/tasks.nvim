@@ -109,6 +109,7 @@ M.TIMEOUT_MS = 30 * 60 * 1000
 ---@field code integer                 # The exit code of `testing sheets run` (`EXIT`), 3 when it did not start or was stopped.
 ---@field lines string[]               # What it printed (stdout, then stderr), one entry per line.
 ---@field summary string               # One line for a notification: what ran and how it ended, and why.
+---@field stdout? string               # What it printed on stdout, whole (the document of `prompt`).
 
 ---The outcomes of a written task that are no failure.
 local WRITTEN = { changed = true, unchanged = true, would_change = true }
@@ -175,6 +176,19 @@ end
 ---@param system? fun(argv: string[], o: table, cb?: fun(r: table)): table A stand-in for `vim.system` (specs).
 ---@return Tasks.SheetRunResult|nil result  # nil when `on_done` is given.
 function M.run(id, opts, on_done, system)
+  return M.exec(function(cli)
+    return M.argv(id, cli, opts)
+  end, opts, on_done, system)
+end
+
+---Start testing.nvim with the command `build(cli)` returns and turn its end into a result (`result`); `stdout` is
+---kept whole on the result for the commands whose output is a document.
+---@param build fun(cli: string): string[]
+---@param opts Tasks.SheetRunOpts
+---@param on_done? fun(res: Tasks.SheetRunResult)
+---@param system? function
+---@return Tasks.SheetRunResult|nil
+function M.exec(build, opts, on_done, system)
   local cli, err = M.locate(opts)
   if not cli then
     local res = M.result(M.EXIT.engine, "", tostring(err))
@@ -186,10 +200,12 @@ function M.run(id, opts, on_done, system)
     return res
   end
   system = system or vim.system
-  local argv = M.argv(id, cli, opts)
+  local argv = build(cli)
   local o = { text = true, cwd = opts.vault, timeout = opts.timeout_ms or M.TIMEOUT_MS }
   local function finish(r)
-    return M.result(r.code or M.EXIT.engine, r.stdout or "", r.stderr or "", r.signal)
+    local res = M.result(r.code or M.EXIT.engine, r.stdout or "", r.stderr or "", r.signal)
+    res.stdout = r.stdout or ""
+    return res
   end
   local ok, handle = pcall(system, argv, o, on_done and function(r)
     vim.schedule(function()
@@ -209,6 +225,104 @@ function M.run(id, opts, on_done, system)
     return nil
   end
   return finish(handle:wait())
+end
+
+-- ── stage 0 of the AI link: hand-over documents and the way back (testing.nvim docs/SHEETS.md) ──────────────
+
+---The AI commands: `draft` and `explain` print a hand-over document, `accept` writes a sheet from an answer file.
+M.AI = { draft = true, explain = true, accept = true }
+
+---The command of an AI step.
+---@param sub "draft"|"explain"|"accept"
+---@param id string
+---@param cli string
+---@param opts Tasks.SheetRunOpts|{ from?: string }
+---@return string[]
+function M.ai_argv(sub, id, cli, opts)
+  local argv = { vim.v.progpath, "--headless", "-u", "NONE", "-l", cli, "sheets" }
+  local own = opts.tasks_cli or M.own_cli()
+  if sub == "draft" then
+    vim.list_extend(argv, { "prompt", "draft", "--from-task", id, "--vault", opts.vault })
+    if own then
+      vim.list_extend(argv, { "--tasks-cli", own })
+    end
+  elseif sub == "explain" then
+    vim.list_extend(argv, { "prompt", "explain", "--task", id, "--tasks", opts.vault })
+    if own then
+      vim.list_extend(argv, { "--tasks-cli", own })
+    end
+  else
+    -- one value: assert returns its message too, which would become an argument
+    local from = assert(opts.from, "accept needs from")
+    vim.list_extend(argv, { "accept", "--task", id, "--from", from })
+  end
+  return argv
+end
+
+---Run an AI step through testing.nvim.
+---@param sub "draft"|"explain"|"accept"
+---@param id string
+---@param opts Tasks.SheetRunOpts|{ from?: string }
+---@param on_done? fun(res: Tasks.SheetRunResult)
+---@param system? function
+---@return Tasks.SheetRunResult|nil
+function M.ai(sub, id, opts, on_done, system)
+  return M.exec(function(cli)
+    return M.ai_argv(sub, id, cli, opts)
+  end, opts, on_done, system)
+end
+
+---The bug task an AI proposed: the first ```task block of its answer (`title:`, `summary:`), or nil.
+---@param text string
+---@return { title: string, summary: string }|nil
+function M.task_block(text)
+  local body = text:gsub("\r\n?", "\n"):match("```+task[ \t]*\n(.-)\n```")
+  if not body then
+    return nil
+  end
+  local title = body:match("^title:%s*([^\n]-)%s*\n")
+    or body:match("\ntitle:%s*([^\n]-)%s*\n")
+    or body:match("^title:%s*([^\n]-)%s*$")
+    or body:match("\ntitle:%s*([^\n]-)%s*$")
+  local summary = body:match("summary:%s*(.-)%s*$")
+  if not title or title == "" then
+    return nil
+  end
+  return { title = title, summary = summary and summary:gsub("%s*\n%s*", " ") or "" }
+end
+
+---Create the bug task an AI proposed for the red sheet of `id`: in `id`'s area, `kind: bug`, the summary and a body
+---that names the live check it came from. Only called after the person confirmed it.
+---@param proposal { title: string, summary: string }
+---@param id string
+---@param root string
+---@return table|nil result, string|nil err  # As `mutate.new`.
+function M.create_bug(proposal, id, root)
+  local area = id:match("^([^/]+)/")
+  return require("tasks_nvim.mutate").new(area, {
+    root = root,
+    title = proposal.title,
+    kind = "bug",
+    summary = proposal.summary ~= "" and proposal.summary or nil,
+    body = table.concat({
+      proposal.summary,
+      "",
+      "## Kontext",
+      "",
+      ("Vorgeschlagen von einer KI aus dem roten Testblatt der Live-Check-Task `%s` (`:Tasks sheet-ai explain`)."):format(
+        id
+      ),
+      "",
+      "## Akzeptanz",
+      "",
+      "- [ ] Ursache behoben; das Testblatt der Task läuft grün (`:Tasks sheet-run "
+        .. id
+        .. "`)",
+      "",
+      "## Notizen",
+      "",
+    }, "\n"),
+  })
 end
 
 return M

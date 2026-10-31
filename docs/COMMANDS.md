@@ -330,6 +330,25 @@ Whether a sheet may run is testing.nvim's decision: the workspace trust of the r
 [--dry-run]`, with the exit code of `testing sheets run` (0 green, 1 red or not written, 2 refused or no sheet, 3
 testing.nvim or the engine not reached).
 
+### `:Tasks sheet-ai draft|explain|accept|bug [<id>]`
+
+Stage 0 of the AI link for a live-check task (no model is called; ai.nvim's headless entry comes later):
+
+* `draft` puts a hand-over document into a scratch buffer of its own (`tasks://sheet-ai/draft/<id>`) and onto the
+  clipboard: the task, the rules of the sheet format and the skeleton (testing.nvim's `testing sheets prompt draft`).
+  Paste it into the AI of your choice and its answer below the marker line of the buffer.
+* `accept` (in that buffer) shows the answer's ```lua block and, after you confirm, hands it to `testing sheets accept`,
+  which writes `TESTS/sheets/<id>.sheet.lua` only when it loads, names the task and no such sheet exists.
+* `explain` runs the task's sheets (as `sheet-run` does, writing nothing) and puts the red ones into a hand-over:
+  failure lines, snapshot files, the sheet's source (`testing sheets prompt explain`).
+* `bug` (in that buffer) reads the answer's ```task block (`title:`, `summary:`) and, after you confirm, creates a
+  `kind: bug` task in the live check's area that names the live check.
+
+Without an id: the task of the hand-over buffer, else of the current buffer. What the model sees is exactly the
+document (testing.nvim docs/SHEETS.md, "Hand over to an AI"); a vault or repository whose path names `tricentis` is
+refused. Command line: `sheet-ai draft|explain <id>` prints the document; `sheet-ai accept|bug <id> --from=<answer
+file>` shows the sheet or the bug task and writes it only with `--yes`.
+
 ### `:Tasks attach <id> <file> [name=<file name>]` / `attach <id> from=clipboard|latest [dir=<folder>]` / `task folderize <id>`
 
 A task may be a folder `tasks/<slug>/<slug>.md` that holds assets (concept section 12.2).

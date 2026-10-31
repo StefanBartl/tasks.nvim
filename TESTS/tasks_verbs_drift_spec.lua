@@ -103,6 +103,8 @@ return function(H)
     ["set"] = { composer = {}, cli = { "no-index" } },
     -- the editor takes testing.nvim's path from setup({ sheet_run = { testing_cli } })
     ["sheet-run"] = { composer = {}, cli = { "testing-cli" } },
+    -- the editor asks in a dialog and reads the answer from the buffer
+    ["sheet-ai"] = { composer = {}, cli = { "from", "testing-cli", "yes" } },
     ["template"] = {
       composer = { "force", "to" },
       cli = { "effort", "kind", "lang", "prio", "tags", "title" },

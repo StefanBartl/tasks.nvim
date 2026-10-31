@@ -129,6 +129,11 @@ commands:
                                           2 refused: trust, workstation, no sheet; 3 testing.nvim or the engine
                                           not reached). testing.nvim: --testing-cli, $TESTING_NVIM_DIR,
                                           $REPOS_DIR/testing.nvim, <vault>/../testing.nvim, lazy
+  sheet-ai draft|explain <area>/<slug>    the hand-over document for an AI (testing sheets prompt): a sheet to
+                                          draft from the task, or the red run of its sheets to explain
+  sheet-ai accept|bug <area>/<slug> --from=<answer file> [--yes]
+                                          the sheet (testing sheets accept: only when it loads) or the bug task of
+                                          the AI's answer; shown only, written with --yes
   check [<area>]                          rule check; exit 1 on any error
   template [--title=t] [--kind=k] [--prio=n] [--effort=e] [--tags=a,b] [--lang=de|en] [--with-plan]
   ci [--strict] [--no-lint] [--md-lint=<file>] [--trust-vault-lint]   CI gate: check + index --check + md_lint of the
@@ -316,6 +321,7 @@ local SPECS = {
   attach = { value = { "name", "latest" }, flag = { "no-index", "clipboard", "latest" } },
   folderize = { value = {}, flag = { "no-index" } },
   ["sheet-run"] = { value = { "testing-cli" }, flag = { "dry-run" } },
+  ["sheet-ai"] = { value = { "testing-cli", "from" }, flag = { "yes" } },
   check = { value = {}, flag = { "all" } },
   ci = { value = { "md-lint" }, flag = { "strict", "no-lint", "trust-vault-lint" } },
   template = {
@@ -1517,6 +1523,91 @@ commands["sheet-run"] = function(ctx)
   end
   if res.code ~= 0 then
     ctx.warn("sheet-run: " .. res.summary)
+  end
+  return res.code
+end
+
+---`sheet-ai draft|explain <id>` prints the hand-over document for an AI (testing.nvim's `testing sheets prompt`);
+---`sheet-ai accept|bug <id> --from=<answer file>` shows the sheet or bug task of the AI's answer and writes it only with
+---`--yes` (accept: testing.nvim's `testing sheets accept`, which writes only a sheet that loads).
+commands["sheet-ai"] = function(ctx)
+  local args, eo = ctx.args, ctx.eo
+  local step, id = args.pos[1], args.pos[2]
+  local sr = require("tasks_nvim.sheet_run")
+  local usage =
+    "error: usage: sheet-ai draft|explain <area>/<slug> | sheet-ai accept|bug <area>/<slug> --from=<file> [--yes]"
+  if
+    #args.pos ~= 2
+    or not (sr.AI[step] or step == "bug")
+    or not id:match("^[^/]+/[^/]+$")
+    or ((step == "accept" or step == "bug") and not args.opt.from)
+  then
+    ctx.warn(usage)
+    return 2
+  end
+  local root, rerr = vault.root({ root = eo.root })
+  if not root then
+    ctx.warn("error: " .. tostring(rerr))
+    return 1
+  end
+  local opts = {
+    vault = root,
+    cli = args.opt["testing-cli"] --[[@as string|nil]],
+  }
+  if step == "draft" or step == "explain" then
+    local res = sr.ai(step, id, opts)
+    if res.code ~= 0 then
+      ctx.warn("sheet-ai: " .. res.summary)
+      return res.code
+    end
+    if (res.stdout or "") == "" then
+      ctx.warn("sheet-ai: " .. (res.lines[1] or "nothing to hand over"))
+      return 0
+    end
+    ctx.out(res.stdout)
+    return 0
+  end
+  local from = tostring(args.opt.from)
+  local f = io.open(from, "rb")
+  if not f then
+    ctx.warn("error: cannot read " .. from)
+    return 2
+  end
+  local answer = f:read("*a")
+  f:close()
+  if step == "bug" then
+    local proposal = sr.task_block(answer)
+    if not proposal then
+      ctx.warn("error: no ```task block (title:, summary:) in " .. from)
+      return 1
+    end
+    if not args.opt.yes then
+      ctx.say(("would create\t%s\tbug\t%s"):format(id:match("^[^/]+"), proposal.title))
+      ctx.say("(add --yes to create it)")
+      return 0
+    end
+    local made, merr = sr.create_bug(proposal, id, root)
+    if not made then
+      ctx.warn("error: " .. tostring(merr))
+      return 1
+    end
+    ctx.say("created\t" .. made.id .. "\t" .. made.path)
+    return 0
+  end
+  if not args.opt.yes then
+    local lua = answer:match("```+lua[ \t]*\r?\n(.-)\r?\n```") or answer
+    ctx.say("would write the sheet:")
+    ctx.out(lua .. "\n")
+    ctx.say("(add --yes to write it; testing.nvim writes it only when it loads)")
+    return 0
+  end
+  opts.from = from
+  local res = sr.ai("accept", id, opts)
+  for _, line in ipairs(res.lines) do
+    ctx.say(line)
+  end
+  if res.code ~= 0 then
+    ctx.warn("sheet-ai: " .. res.summary)
   end
   return res.code
 end

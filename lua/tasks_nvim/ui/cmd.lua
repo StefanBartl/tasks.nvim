@@ -1609,6 +1609,152 @@ function M.task_sheet_run(ctx, system)
   end, system)
 end
 
+---The task an AI step is about: the id given, the task of a hand-over buffer (`tasks://sheet-ai/<step>/<id>`), else
+---the task of the current buffer.
+---@param ctx table
+---@return string|nil
+local function ai_task_id(ctx)
+  if ctx.args.id then
+    return ctx.args.id
+  end
+  local from_name = vim.api.nvim_buf_get_name(0):match("^tasks://sheet%-ai/%a+/(.+)$")
+  return from_name or buffer_task_id()
+end
+
+---Show a hand-over document in a scratch buffer of its own and put it on the clipboard.
+---@param step string
+---@param id string
+---@param doc string
+local function show_handover(step, id, doc)
+  vim.cmd("botright new")
+  local buf = vim.api.nvim_get_current_buf()
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].filetype = "markdown"
+  pcall(vim.api.nvim_buf_set_name, buf, ("tasks://sheet-ai/%s/%s"):format(step, id))
+  local lines = vim.split(doc:gsub("\n$", ""), "\n", { plain = true })
+  vim.list_extend(lines, {
+    "",
+    "<!-- Paste the AI's answer below this line, then :Tasks sheet-ai "
+      .. (step == "draft" and "accept" or "bug")
+      .. " -->",
+    "",
+  })
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  pcall(vim.fn.setreg, "+", doc)
+  vim.fn.setreg('"', doc)
+end
+
+---The answer pasted into the current buffer: the lines after the hand-over's marker line, or the whole buffer.
+---@return string
+local function pasted_answer()
+  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  for i = #lines, 1, -1 do
+    if lines[i]:match("^<!%-%- Paste the AI's answer below this line") then
+      return table.concat(vim.list_slice(lines, i + 1), "\n")
+    end
+  end
+  return table.concat(lines, "\n")
+end
+
+---`:Tasks sheet-ai draft|explain|accept|bug [<id>]`: stage 0 of the AI link for a live-check task. `draft` and
+---`explain` put a hand-over document (testing.nvim's `testing sheets prompt`) into a scratch buffer and onto the
+---clipboard; the person pastes it into an AI and the answer back below it. `accept` writes the sheet of that answer
+---(testing.nvim's `testing sheets accept`: only when it loads), `bug` creates the bug task it proposes; both ask first.
+---@param ctx table
+---@param system? function A stand-in for `vim.system` (specs).
+---@param confirm_fn? fun(msg: string, label: string, cb: fun(yes: boolean)) A stand-in for the dialog (specs).
+function M.task_sheet_ai(ctx, system, confirm_fn)
+  local step = ctx.args.step
+  if #ctx.rest > 0 or not require("tasks_nvim.sheet_run").AI[step] and step ~= "bug" then
+    notify.error("usage: :Tasks sheet-ai draft|explain|accept|bug [<id>]")
+    return
+  end
+  local id = ai_task_id(ctx)
+  if not id or not id:match("^[^/]+/[^/]+$") then
+    notify.error(
+      "sheet-ai: name a task (area/slug), or run it from a task's or a hand-over's buffer"
+    )
+    return
+  end
+  local root, rerr = require("tasks_nvim.vault").root()
+  if not root then
+    notify.error(tostring(rerr))
+    return
+  end
+  local sr = require("tasks_nvim.sheet_run")
+  local cfg = require("tasks_nvim.config").get().sheet_run or {}
+  local ask = confirm_fn
+    or function(msg, label, cb)
+      require("tasks_nvim.ui.confirm").yesno(msg, label, cb)
+    end
+  if step == "draft" or step == "explain" then
+    notify.info(
+      id .. (step == "draft" and ": building the hand-over ..." or ": running its sheets ...")
+    )
+    sr.ai(step, id, { vault = root, cli = cfg.testing_cli }, function(res)
+      if res.code ~= 0 then
+        notify.error(id .. ": " .. res.summary)
+      elseif (res.stdout or "") == "" then
+        notify.info(id .. ": " .. (res.lines[1] or "nothing to hand over"))
+      else
+        show_handover(step, id, res.stdout)
+        notify.info(
+          id .. ": hand-over in the buffer and on the clipboard; paste the answer below it"
+        )
+      end
+    end, system)
+    return
+  end
+  local answer = pasted_answer()
+  if step == "bug" then
+    local proposal = sr.task_block(answer)
+    if not proposal then
+      notify.error("sheet-ai bug: no ```task block (title:, summary:) in the answer")
+      return
+    end
+    ask(
+      ("Create the bug task %q in %s?"):format(proposal.title, id:match("^[^/]+")),
+      "create",
+      function(yes)
+        if not yes then
+          return
+        end
+        local made, merr = sr.create_bug(proposal, id, root)
+        if made then
+          notify.info("created " .. made.id)
+        else
+          notify.error("sheet-ai bug: " .. tostring(merr))
+        end
+      end
+    )
+    return
+  end
+  local lua = answer:match("```+lua[ \t]*\r?\n(.-)\r?\n```")
+  if not lua then
+    notify.error("sheet-ai accept: no ```lua block in the answer")
+    return
+  end
+  local preview = table.concat(vim.list_slice(vim.split(lua, "\n", { plain = true }), 1, 8), "\n")
+  ask("Write this sheet for " .. id .. "?\n" .. preview, "write", function(yes)
+    if not yes then
+      return
+    end
+    local tmp = vim.fn.tempname() .. ".md"
+    local f = assert(io.open(tmp, "wb"))
+    f:write("```lua\n" .. lua .. "\n```\n")
+    f:close()
+    sr.ai("accept", id, { vault = root, cli = cfg.testing_cli, from = tmp }, function(res)
+      os.remove(tmp)
+      if res.code == 0 then
+        notify.info(id .. ": " .. (res.lines[1] or "written"))
+      else
+        notify.error(id .. ": " .. res.summary)
+      end
+    end, system)
+  end)
+end
+
 ---`:Tasks task answer <id> [question=q1 option=2|clear]`: with both, the answer is written; without, the open questions
 ---are asked one after the other (the recommended option is marked), so a decision can be made from the editor.
 ---@param ctx table

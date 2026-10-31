@@ -33,6 +33,7 @@ return function(H)
       "task preview",
       "task quickwins",
       "task set",
+      "task sheet-ai",
       "task sheet-run",
       "task template",
       "tasks",
@@ -58,6 +59,7 @@ return function(H)
     "preview",
     "quickwins",
     "set",
+    "sheet-ai",
     "sheet-run",
     "template",
   }, "the flat grammar of `:Tasks`: no two routes share a path")
