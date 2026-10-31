@@ -458,6 +458,20 @@ return function(H)
         planned = v.filter
       end
       run("tasks lib.nvim --plan=lib.nvim/some-plan --phase=build,design")
+      -- a replaced hook with `--stale=refs` gets the list cut by refs, once the background check answered
+      local refs_view
+      cmd.dashboard = function(v)
+        refs_view = v
+      end
+      run("tasks lib.nvim --stale=refs")
+      ok(
+        vim.wait(10000, function()
+          return refs_view ~= nil
+        end, 10),
+        "the hook is called after the refs check"
+      )
+      eq(#refs_view.tasks, 0, "no fixture task carries refs: the hook gets no task")
+      eq(cmd.pending_ref_checks(), 0)
       cmd.dashboard = hook_before
       eq(planned.plan, { "lib.nvim/some-plan" }, "the plan filter reaches the list")
       eq(planned.phase, { "build", "design" }, "the phase filter reaches the list")

@@ -283,6 +283,107 @@ return function(H)
   has(got_err.notes[1], "dater exploded")
   eq(got_err.stale["lib.nvim/fresh"][1].source, "unverified")
 
+  -- a dater that raises for a later base (called from the previous base's callback): still fail open
+  local calls, got_late = 0, nil
+  staleness.compute_async(
+    tasks,
+    vim.tbl_extend("force", opts, {
+      git_dates_async = function(_, _, _, cb)
+        calls = calls + 1
+        if calls >= 2 then
+          error("late dater exploded")
+        end
+        vim.schedule(function()
+          cb({}, nil)
+        end)
+      end,
+    }),
+    function(r)
+      got_late = r
+    end
+  )
+  ok(
+    vim.wait(5000, function()
+      return got_late ~= nil
+    end, 5),
+    "a dater raising on the second base still delivers"
+  )
+  ok(calls >= 2, "two bases were dated")
+  has(got_late.notes[1], "late dater exploded")
+  eq(got_late.stale["lib.nvim/fresh"][1].source, "unverified")
+
+  -- a synchronous `git_dates` stub that raises: fail open, as `model.filter` does around `compute`
+  local got_sync_err
+  staleness.compute_async(
+    tasks,
+    vim.tbl_extend("force", opts, {
+      git_dates = function()
+        error("sync stub exploded")
+      end,
+    }),
+    function(r)
+      got_sync_err = r
+    end
+  )
+  ok(
+    vim.wait(5000, function()
+      return got_sync_err ~= nil
+    end, 5),
+    "a raising synchronous stub still delivers"
+  )
+  has(got_sync_err.notes[1], "sync stub exploded")
+  eq(got_sync_err.stale["lib.nvim/fresh"][1].source, "unverified")
+
+  -- git_dates_async: a raising `cb` is not swallowed by the guard of the git continuation
+  do
+    staleness.reset_cache()
+    local orig_schedule = vim.schedule
+    local raised = {}
+    vim.schedule = function(fn)
+      return orig_schedule(function()
+        local ran, e = pcall(fn)
+        if not ran then
+          raised[#raised + 1] = tostring(e)
+        end
+      end)
+    end
+    staleness.spawn = function(_, _, on_exit)
+      on_exit({ code = 0, stdout = "", stderr = "" })
+      return {}
+    end
+    local cb_calls = 0
+    staleness.git_dates_async(lib_repo, { "lua/a.lua" }, nil, function()
+      cb_calls = cb_calls + 1
+      error("cb exploded")
+    end)
+    local seen = vim.wait(5000, function()
+      return #raised > 0
+    end, 5)
+    vim.schedule = orig_schedule
+    staleness.spawn = orig_spawn
+    ok(seen, "the error of cb reaches the event loop")
+    has(raised[1], "cb exploded")
+    eq(cb_calls, 1, "cb ran once")
+  end
+
+  -- git_dates_async: a cancelled caller (`gopts.alive`) starts no further git call
+  staleness.reset_cache()
+  hold_git()
+  local alive_err
+  staleness.git_dates_async(lib_repo, { "lua/a.lua" }, {
+    alive = function()
+      return false
+    end,
+  }, function(_, e)
+    alive_err = e or "none"
+  end)
+  ok(vim.wait(5000, function()
+    return alive_err ~= nil
+  end, 5))
+  eq(spawned, 0, "a cancelled lookup starts no git call")
+  has(alive_err, "cancelled")
+  staleness.spawn = orig_spawn
+
   -- ── the dashboard: the list first, the refs answer redraws it ──────────
   do
     local dash = require("tasks_nvim.ui.dash")
@@ -347,6 +448,30 @@ return function(H)
     )
     has(text(), "stale-git", "the stale task stays")
     eq(state.ref_job, nil, "the redraw did not start another check")
+    vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "x", false)
+    vim.cmd("stopinsert")
+
+    -- turning `--stale=refs` off drops a running check; turning it on again starts from "checking"
+    pending = {}
+    state = dash.open(
+      { root = root, area = "lib.nvim", filter = vim.deepcopy(filter) },
+      { backend = "kit", persist = false }
+    )
+    ok(state.ref_job ~= nil, "a check runs")
+    local picker = { closed = false }
+    state.filter = { ref_opts = filter.ref_opts }
+    dash.refresh_if_changed(state, picker)
+    eq(state.ref_job, nil, "without the filter the running check is dropped")
+    while #pending > 0 do
+      table.remove(pending, 1)()
+    end
+    vim.wait(100)
+    ok(not state.ref_fresh, "the dropped check's answer is not kept")
+    eq(state.ref_stale, nil)
+    state.filter = vim.deepcopy(filter)
+    -- the stand-in picker cannot redraw; only the state the load leaves behind is looked at
+    pcall(dash.refresh_if_changed, state, picker)
+    ok(state.ref_job ~= nil, "the filter turned on again starts a new check")
     vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "x", false)
     vim.cmd("stopinsert")
     vim.notify = orig_notify

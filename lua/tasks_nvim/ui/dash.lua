@@ -252,6 +252,14 @@ local function load_state(state)
       check_refs(state, res.ref_candidates or {})
     end
     res.stale_report = state.ref_report
+  elseif not refs then
+    -- the filter was turned off: a running check is moot, and an old answer must not cut the list when it is
+    -- turned on again (that load starts from "checking", like the first one)
+    if state.ref_job then
+      state.ref_job.cancel()
+      state.ref_job = nil
+    end
+    state.ref_fresh, state.ref_stale, state.ref_report = false, nil, nil
   end
   return res, err
 end

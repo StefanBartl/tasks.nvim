@@ -40,7 +40,8 @@ local M = {}
 
 ---Dashboard seam. `:Tasks list` calls it instead of delivering a table
 ---when neither `--to=` nor `--format=` was given. It receives the filtered,
----sorted open tasks. `nil` (the default) means the interactive dashboard
+---sorted open tasks; with `--stale=refs` a replaced hook is called once the
+---background refs check answered (the built-in dashboard checks on its own). `nil` (the default) means the interactive dashboard
 ---(`tasks_dash`); assign a function to replace it, or `false` for the old
 ---behaviour, a scratch buffer.
 ---@type (fun(view: Tasks.View): any)|false|nil
@@ -910,20 +911,37 @@ function M.list(ctx)
 
   if flags.to == nil and flags.format == nil then
     local dash = M.dashboard
-    if dash == nil then
+    local builtin = dash == nil
+    if builtin then
       dash = function(v)
         return require("tasks_nvim.ui.dash").open(v)
       end
     end
     if dash then
-      -- the dashboard filters by refs on its own, in the background
-      dash({
-        tasks = model.sort(filtered, order),
-        area = area,
-        filter = filter,
-        sort = flags.sort ~= nil and order or nil,
-        root = root,
-      })
+      ---@param shown Tasks.Task[]
+      local function open_view(shown)
+        dash({
+          tasks = model.sort(shown, order),
+          area = area,
+          filter = filter,
+          sort = flags.sort ~= nil and order or nil,
+          root = root,
+        })
+      end
+      if not refs or builtin then
+        -- the built-in dashboard filters by refs on its own, in the background
+        open_view(filtered)
+        return
+      end
+      -- a replaced hook is promised the filtered tasks: it gets them once the background check answered
+      notify.info(
+        ("--stale=refs: checking the refs of %d task(s) in the background ..."):format(#filtered)
+      )
+      ref_checks = ref_checks + 1
+      staleness.compute_async(filtered, filter.ref_opts, function(rep)
+        ref_checks = ref_checks - 1
+        open_view(model.filter(filtered, { stale_refs = true, ref_stale = rep.stale }))
+      end)
       return
     end
   end

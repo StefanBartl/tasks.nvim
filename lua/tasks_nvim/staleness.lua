@@ -392,6 +392,7 @@ end
 
 ---@class Tasks.GitDatesOpts
 ---@field deadline? integer  # `uv.hrtime()` value after which no further git call is started.
+---@field alive? fun(): boolean  # `git_dates_async` only: false once the caller cancelled; no further git call is started.
 
 ---The date of the last commit touching each path, one `git log` per chunk of
 ---`GIT_CHUNK` paths. A path in `rels` that is a directory is matched by the files
@@ -483,8 +484,12 @@ function M.git_dates_async(base, rels, gopts, cb)
     return
   end
   local deadline = gopts and gopts.deadline
+  local alive = gopts and gopts.alive
   local result = {}
   local failed, first_err, stopped, finished = 0, nil, false, false
+  ---The answer `finish` decided on, handed to `cb` outside every pcall (a raising `cb` must not be swallowed).
+  ---@type { dates: table|nil, err: string|nil }|nil
+  local answer, answered = nil, false
   -- the chunks still to ask for, the next one last (a halved chunk pushes its halves, first half on top)
   ---@type string[][]
   local todo = {}
@@ -498,11 +503,22 @@ function M.git_dates_async(base, rels, gopts, cb)
     end
     finished = true
     if is_no_repo(base) then
-      cb(nil, "not a git repository")
+      answer = { dates = nil, err = "not a git repository" }
     elseif failed > 0 then
-      cb(result, ("%d path(s) not dated by git (%s)"):format(failed, tostring(first_err)))
+      answer = {
+        dates = result,
+        err = ("%d path(s) not dated by git (%s)"):format(failed, tostring(first_err)),
+      }
     else
-      cb(result, nil)
+      answer = { dates = result, err = nil }
+    end
+  end
+
+  ---Call `cb` once `finish` decided, outside the pcall of `guarded`.
+  local function flush()
+    if answer and not answered then
+      answered = true
+      cb(answer.dates, answer.err)
     end
   end
 
@@ -518,8 +534,13 @@ function M.git_dates_async(base, rels, gopts, cb)
       if not ran and not finished then
         stopped, failed = true, failed + pending
         first_err = first_err or tostring(err)
-        step()
+        local ran2, err2 = pcall(step)
+        if not ran2 and not finished then
+          first_err = first_err or tostring(err2)
+          finish()
+        end
       end
+      flush()
     end
   end
 
@@ -531,6 +552,10 @@ function M.git_dates_async(base, rels, gopts, cb)
       end
       local timeout = settings().git_timeout_ms
       local left = deadline and math.floor((deadline - uv.hrtime()) / 1e6)
+      if not stopped and alive and not alive() then
+        stopped = true
+        first_err = first_err or "cancelled"
+      end
       if stopped then
         failed = failed + #paths
       elseif left and left <= 0 then
@@ -583,7 +608,9 @@ function M.git_dates_async(base, rels, gopts, cb)
     end
   end
 
-  vim.schedule(step)
+  vim.schedule(guarded(0, function()
+    step()
+  end))
 end
 
 ---@param full string
@@ -829,17 +856,29 @@ end
 ---@param note fun(text: string)
 ---@param alive fun(): boolean  false once the run was cancelled: no further git call is started
 ---@param done fun(dated: table<string, table<string, Tasks.FileDate|false>>)
-local function date_files_async(found, dater, budget_ms, note, alive, done)
+---@param fail fun(err: any)  an error anywhere in the chain (a raising dater, for any base): the run ends here
+local function date_files_async(found, dater, budget_ms, note, alive, done, fail)
   ---@type table<string, table<string, Tasks.FileDate|false>>
   local dated = {}
   local deadline = uv.hrtime() + budget_ms * 1e6
   local out_of_time = false
+  local failed = false
   local i = 0
-  local function next_base()
+  ---@param err any
+  local function stop(err)
+    if not failed then
+      failed = true
+      fail(err)
+    end
+  end
+  local next_base
+  ---@return boolean|nil sync  true when the base was dated without a callback (the loop goes on)
+  local function one_base()
     i = i + 1
     local base = found.base_order[i]
     if not base or not alive() then
-      return done(dated)
+      done(dated)
+      return nil
     end
     local group = found.by_base[base]
     if uv.hrtime() > deadline then
@@ -848,15 +887,35 @@ local function date_files_async(found, dater, budget_ms, note, alive, done)
         note(("git time budget of %d ms used up; file times used for the rest"):format(budget_ms))
       end
       dated[base] = date_group(base, group.rels, nil)
-      return next_base()
+      return true
     end
-    dater(base, group.rels, { deadline = deadline }, function(git, err)
-      if err then
-        note(("%s: %s%s"):format(base, err, git and "" or " (file times used)"))
+    dater(base, group.rels, { deadline = deadline, alive = alive }, function(git, err)
+      if failed then
+        return
       end
-      dated[base] = date_group(base, group.rels, git)
+      local ok, perr = pcall(function()
+        if err then
+          note(("%s: %s%s"):format(base, err, git and "" or " (file times used)"))
+        end
+        dated[base] = date_group(base, group.rels, git)
+      end)
+      if not ok then
+        return stop(perr)
+      end
       next_base()
     end)
+    return nil
+  end
+  next_base = function()
+    while not failed do
+      local ok, again = pcall(one_base)
+      if not ok then
+        return stop(again)
+      end
+      if not again then
+        return
+      end
+    end
   end
   next_base()
 end
@@ -1060,7 +1119,13 @@ function M.compute_async(tasks, opts, cb)
       local sync = opts.git_dates
       dater = function(base, rels, gopts, k)
         vim.schedule(function()
-          k(sync(base, rels, gopts))
+          local ok, d, e = pcall(sync, base, rels, gopts)
+          if ok then
+            k(d, e)
+          else
+            -- a raising stub fails the check open, as `model.filter` does around the blocking `compute`
+            fail(d)
+          end
         end)
       end
     end
@@ -1084,7 +1149,8 @@ function M.compute_async(tasks, opts, cb)
         else
           fail(done_err)
         end
-      end
+      end,
+      fail
     )
   end)
   if not ok then
