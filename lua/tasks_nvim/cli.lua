@@ -122,6 +122,13 @@ commands:
                                           the newest image of the screenshot folder(s) (config attach.screenshot_dirs),
                                           only when modified within attach.max_age_s (300 s); older: nothing is guessed
   folderize <area>/<slug>                 turn a plain task file into a folder task
+  sheet-run <area>/<slug> [--testing-cli=<path>] [--dry-run]
+                                          run the test sheets of a live-check task now: testing.nvim's
+                                          `testing sheets run` runs them headless and writes their state into the
+                                          task's block (red: the first failure line); its exit code (0 green, 1 red,
+                                          2 refused: trust, workstation, no sheet; 3 testing.nvim or the engine
+                                          not reached). testing.nvim: --testing-cli, $TESTING_NVIM_DIR,
+                                          $REPOS_DIR/testing.nvim, <vault>/../testing.nvim, lazy
   check [<area>]                          rule check; exit 1 on any error
   template [--title=t] [--kind=k] [--prio=n] [--effort=e] [--tags=a,b] [--lang=de|en] [--with-plan]
   ci [--strict] [--no-lint] [--md-lint=<file>] [--trust-vault-lint]   CI gate: check + index --check + md_lint of the
@@ -308,6 +315,7 @@ local SPECS = {
   -- `latest` is both: `--latest` (the configured screenshot folders) and `--latest=<folder>`.
   attach = { value = { "name", "latest" }, flag = { "no-index", "clipboard", "latest" } },
   folderize = { value = {}, flag = { "no-index" } },
+  ["sheet-run"] = { value = { "testing-cli" }, flag = { "dry-run" } },
   check = { value = {}, flag = { "all" } },
   ci = { value = { "md-lint" }, flag = { "strict", "no-lint", "trust-vault-lint" } },
   template = {
@@ -1483,6 +1491,34 @@ function commands.folderize(ctx)
   ctx.say(("%s\t%s\t%s"):format(res.changed and "folderized" or "unchanged", res.id, res.path))
   report_index(ctx, res)
   return 0
+end
+
+---`sheet-run <area>/<slug> [--testing-cli=<path>] [--dry-run]`: run the task's test sheets now through testing.nvim's
+---`testing sheets run`, which writes their state into the task; its output and exit code are this command's.
+commands["sheet-run"] = function(ctx)
+  local args, eo = ctx.args, ctx.eo
+  local id = args.pos[1]
+  if not id or #args.pos > 1 or not vault.parse_id(id) then
+    ctx.warn("error: usage: sheet-run <area>/<slug> [--testing-cli=<path>] [--dry-run]")
+    return 2
+  end
+  local root, rerr = vault.root({ root = eo.root })
+  if not root then
+    ctx.warn("error: " .. tostring(rerr))
+    return 1
+  end
+  local res = require("tasks_nvim.sheet_run").run(id, {
+    vault = root,
+    cli = args.opt["testing-cli"] --[[@as string|nil]],
+    dry_run = args.opt["dry-run"] == true,
+  })
+  for _, line in ipairs(res.lines) do
+    ctx.say(line)
+  end
+  if res.code ~= 0 then
+    ctx.warn("sheet-run: " .. res.summary)
+  end
+  return res.code
 end
 
 function commands.check(ctx)

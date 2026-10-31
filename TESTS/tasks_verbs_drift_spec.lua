@@ -101,6 +101,8 @@ return function(H)
       cli = { "max-effort", "min-value", "stale-refs" },
     },
     ["set"] = { composer = {}, cli = { "no-index" } },
+    -- the editor takes testing.nvim's path from setup({ sheet_run = { testing_cli } })
+    ["sheet-run"] = { composer = {}, cli = { "testing-cli" } },
     ["template"] = {
       composer = { "force", "to" },
       cli = { "effort", "kind", "lang", "prio", "tags", "title" },

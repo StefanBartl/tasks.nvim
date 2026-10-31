@@ -805,6 +805,29 @@ local function nested_routes()
     },
 
     {
+      path = { "task", "sheet-run" },
+      args = {
+        {
+          name = "id",
+          type = "TASK_ID",
+          optional = true,
+          desc = "Id of the live-check task, as area/slug (default: the current buffer's)",
+        },
+      },
+      flags = {
+        {
+          name = "dry-run",
+          bool = true,
+          desc = "Run the sheets, but only say how the task's block would change",
+        },
+      },
+      desc = "Run the test sheets of a live-check task now: testing.nvim's `testing sheets run` runs them headless and writes their state into the task's block (red: the first failure line); trust and the workstation are testing.nvim's decision",
+      run = function(ctx)
+        cmd().task_sheet_run(ctx)
+      end,
+    },
+
+    {
       path = { "task", "done" },
       args = {
         {

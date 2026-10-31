@@ -1546,6 +1546,58 @@ local function write_answer(id, question, option)
   )
 end
 
+---The id of the task the current buffer shows, or nil.
+---@return string|nil
+local function buffer_task_id()
+  local name = vim.api.nvim_buf_get_name(0)
+  if name == "" or vim.bo.buftype ~= "" then
+    return nil
+  end
+  local want = fsio.norm(vim.fn.fnamemodify(name, ":p"))
+  for _, t in ipairs(scan.all() or {}) do
+    if t.path and fsio.norm(t.path) == want then
+      return t.id
+    end
+  end
+  return nil
+end
+
+---`:Tasks sheet-run [<id>] [--dry-run]`: run the test sheets of a live-check task now (`tasks_nvim.sheet_run`, which
+---starts testing.nvim's `testing sheets run`); the result is written into the task's block and said in one line.
+---@param ctx table
+---@param system? function A stand-in for `vim.system` (specs).
+function M.task_sheet_run(ctx, system)
+  if #ctx.rest > 0 then
+    notify.error("unexpected argument: " .. table.concat(ctx.rest, " "))
+    return
+  end
+  local id = ctx.args.id or buffer_task_id()
+  if not id then
+    notify.error("sheet-run: name a task (area/slug), or run it from a task's buffer")
+    return
+  end
+  local root, rerr = require("tasks_nvim.vault").root()
+  if not root then
+    notify.error(tostring(rerr))
+    return
+  end
+  local cfg = require("tasks_nvim.config").get().sheet_run or {}
+  notify.info(id .. ": running its test sheets ...")
+  require("tasks_nvim.sheet_run").run(id, {
+    vault = root,
+    cli = cfg.testing_cli,
+    dry_run = ctx.flags["dry-run"] == true,
+  }, function(res)
+    if res.code == 0 then
+      notify.info(id .. ": " .. res.summary)
+    else
+      notify.error(id .. ": " .. res.summary)
+    end
+    -- the engine rewrote the task file: an open buffer of it shows the new block
+    pcall(vim.cmd.checktime)
+  end, system)
+end
+
 ---`:Tasks task answer <id> [question=q1 option=2|clear]`: with both, the answer is written; without, the open questions
 ---are asked one after the other (the recommended option is marked), so a decision can be made from the editor.
 ---@param ctx table

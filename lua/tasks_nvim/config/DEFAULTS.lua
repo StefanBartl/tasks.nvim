@@ -64,6 +64,7 @@
 ---@field lists table<string, Tasks.ListDef>  Named lists (a filter combination plus a sort order): `{ ["my-list"] = { effort = "<=S", value = ">=4", sort = "roi" } }`. See `tasks_nvim.lists`.
 ---@field area_groups table<string, Tasks.AreaGroupDef>  Area groups on top of `<vault>/area-groups.json` (same shape, a group here wins by name; only inside Neovim, the headless CLI and tasks-desktop read the file): `{ nvim = { include = { "*.nvim" } } }`. A group is a filter name for `list`, `next`, `plans` and the dashboard. See `tasks_nvim.area_groups`.
 ---@field steps Tasks.StepsConfig
+---@field sheet_run { testing_cli?: string }  `:Tasks sheet-run`: the path of testing.nvim's `scripts/testing.lua` (default: found like a dependency, `tasks_nvim.sheet_run`).
 ---@field reminders Tasks.RemindersConfig
 ---@field attach Tasks.AttachConfig
 ---@field completion Tasks.CompletionConfig
@@ -87,6 +88,7 @@ return {
   lists = {},
   area_groups = {},
   steps = { ask_finish = false },
+  sheet_run = { testing_cli = nil },
   reminders = { on_start = true },
   attach = { screenshot_dirs = {}, max_age_s = 300 },
   completion = { finished = true },

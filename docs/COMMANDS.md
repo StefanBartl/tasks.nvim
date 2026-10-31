@@ -312,6 +312,22 @@ Answers a question of the `## Offene Fragen` section of an open task ([the forma
 (`option=clear` takes it back). Without them the open questions are asked one after the other, with the options as a choice list; the recommended option is
 marked `(recommended)`. The status and the actor of the task stay as they are. Command line: `answer <id> <q1|#n> <n|clear>`.
 
+### `:Tasks sheet-run [<id>] [--dry-run]`
+
+Runs the test sheets of a live-check task now, without starting a suite: testing.nvim's
+`testing sheets run --task <id> --tasks <vault>` finds the sheets that name the task (in the area's repository), runs
+them headless and writes their state into the task's block, the one `show`, the dashboard and `list --sheet=` read
+(a red sheet: its first failure line). Without an id: the task of the current buffer. The result comes back as one
+notification (green, red with why, refused); an open buffer of the task is reloaded. `--dry-run` runs the sheets but
+only says how the block would change.
+
+Whether a sheet may run is testing.nvim's decision: the workspace trust of the repository, and on the workstation
+(`NVIM_MACHINE_ROLE=workstation`) only with `TESTING_ALLOW_WORKSTATION=1`. testing.nvim is found by
+`setup({ sheet_run = { testing_cli = <path to scripts/testing.lua> } })`, `$TESTING_NVIM_DIR`, `$REPOS_DIR/testing.nvim`,
+`<vault>/../testing.nvim` or `stdpath('data')/lazy/testing.nvim`. Command line: `sheet-run <id> [--testing-cli=<path>]
+[--dry-run]`, with the exit code of `testing sheets run` (0 green, 1 red or not written, 2 refused or no sheet, 3
+testing.nvim or the engine not reached).
+
 ### `:Tasks attach <id> <file> [name=<file name>]` / `attach <id> from=clipboard|latest [dir=<folder>]` / `task folderize <id>`
 
 A task may be a folder `tasks/<slug>/<slug>.md` that holds assets (concept section 12.2).

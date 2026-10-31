@@ -34,6 +34,7 @@ local SCHEMA = {
   lists = "lists",
   area_groups = "area_groups",
   steps = { ask_finish = "boolean" },
+  sheet_run = { testing_cli = "string" },
   reminders = { on_start = "boolean" },
   attach = { screenshot_dirs = "string_list", max_age_s = "posint" },
   completion = { finished = "finished_window" },
