@@ -1504,7 +1504,7 @@ end
 commands["sheet-run"] = function(ctx)
   local args, eo = ctx.args, ctx.eo
   local id = args.pos[1]
-  if not id or #args.pos > 1 or not id:match("^[^/]+/[^/]+$") or not vault.parse_id(id) then
+  if not id or #args.pos > 1 or not id:match("^[%w_][^/]*/[^/]+$") or not vault.parse_id(id) then
     ctx.warn("error: usage: sheet-run <area>/<slug> [--testing-cli=<path>] [--dry-run]")
     return 2
   end
@@ -1539,7 +1539,7 @@ commands["sheet-ai"] = function(ctx)
   if
     #args.pos ~= 2
     or not (sr.AI[step] or step == "bug")
-    or not id:match("^[^/]+/[^/]+$")
+    or not id:match("^[%w_][^/]*/[^/]+$")
     or ((step == "accept" or step == "bug") and not args.opt.from)
   then
     ctx.warn(usage)
@@ -1594,20 +1594,26 @@ commands["sheet-ai"] = function(ctx)
     ctx.say("created\t" .. made.id .. "\t" .. made.path)
     return 0
   end
+  local lua = sr.lua_block(answer)
+  if not lua then
+    ctx.warn("error: no ```lua block in " .. from)
+    return 1
+  end
   if not args.opt.yes then
-    local lua = answer:match("```+lua[ \t]*\r?\n(.-)\r?\n```") or answer
     ctx.say("would write the sheet:")
     ctx.out(lua .. "\n")
     ctx.say("(add --yes to write it; testing.nvim writes it only when it loads)")
     return 0
   end
-  opts.from = from
+  -- exactly the block shown above goes to testing.nvim, in a file of its own
+  opts.from = sr.sheet_file(lua)
   local res = sr.ai("accept", id, opts)
+  os.remove(opts.from)
   for _, line in ipairs(res.lines) do
     ctx.say(line)
   end
   if res.code ~= 0 then
-    ctx.warn("sheet-ai: " .. res.summary)
+    ctx.warn("sheet-ai: " .. sr.accept_reason(res))
   end
   return res.code
 end

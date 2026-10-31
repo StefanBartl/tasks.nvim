@@ -337,8 +337,10 @@ Stage 0 of the AI link for a live-check task (no model is called; ai.nvim's head
 * `draft` puts a hand-over document into a scratch buffer of its own (`tasks://sheet-ai/draft/<id>`) and onto the
   clipboard: the task, the rules of the sheet format and the skeleton (testing.nvim's `testing sheets prompt draft`).
   Paste it into the AI of your choice and its answer below the marker line of the buffer.
-* `accept` (in that buffer) shows the answer's ```lua block and, after you confirm, hands it to `testing sheets accept`,
-  which writes `TESTS/sheets/<id>.sheet.lua` only when it loads, names the task and no such sheet exists.
+* `accept` (in that buffer) shows the whole sheet of the answer (its last ```lua block, any case) and, after you
+  confirm, hands exactly that to `testing sheets accept`, which writes `TESTS/sheets/<id>.sheet.lua` only when it
+  loads, names the task and no such sheet exists. A second `draft` of the same task reuses its buffer; the buffer is
+  hidden, not wiped, when its window goes, so a pasted answer is not lost.
 * `explain` runs the task's sheets (as `sheet-run` does, writing nothing) and puts the red ones into a hand-over:
   failure lines, snapshot files, the sheet's source (`testing sheets prompt explain`).
 * `bug` (in that buffer) reads the answer's ```task block (`title:`, `summary:`) and, after you confirm, creates a

@@ -254,7 +254,7 @@ function M.ai_argv(sub, id, cli, opts)
   else
     -- one value: assert returns its message too, which would become an argument
     local from = assert(opts.from, "accept needs from")
-    vim.list_extend(argv, { "accept", "--task", id, "--from", from })
+    vim.list_extend(argv, { "accept", "--task", id, "--from", from, "--vault", opts.vault })
   end
   return argv
 end
@@ -272,23 +272,95 @@ function M.ai(sub, id, opts, on_done, system)
   end, opts, on_done, system)
 end
 
----The bug task an AI proposed: the first ```task block of its answer (`title:`, `summary:`), or nil.
+---The fenced blocks of an answer whose info string is `lang` (any case), opening and closing at the start of a line
+---(indented as in a list too), in order.
+---@param text string
+---@param lang string
+---@return string[]
+local function blocks(text, lang)
+  local out, fence, body = {}, nil, nil
+  for line in (text:gsub("\r\n?", "\n") .. "\n"):gmatch("(.-)\n") do
+    if fence then
+      local close = line:match("^%s*(`+)%s*$")
+      if close and #close >= #fence then
+        out[#out + 1] = table.concat(body, "\n")
+        fence = nil
+      else
+        body[#body + 1] = line
+      end
+    else
+      local open, info = line:match("^%s*(```+)%s*(%S*)%s*$")
+      if open and info:lower() == lang then
+        fence, body = open, {}
+      end
+    end
+  end
+  return out
+end
+
+---A file holding just `lua` in a fence no line of it can close: what testing.nvim's `accept` then reads is exactly
+---what was shown. The caller removes it.
+---@param lua string
+---@return string path
+function M.sheet_file(lua)
+  local longest = 2
+  for run in lua:gmatch("`+") do
+    longest = math.max(longest, #run)
+  end
+  local fence = ("`"):rep(longest + 1)
+  local path = vim.fn.tempname() .. ".md"
+  local f = assert(io.open(path, "wb"))
+  f:write(fence .. "lua\n" .. lua .. "\n" .. fence .. "\n")
+  f:close()
+  return path
+end
+
+---Why `accept` did not write: its own line (it says `testing sheets: ...`), else the summary.
+---@param res Tasks.SheetRunResult
+---@return string
+function M.accept_reason(res)
+  for _, line in ipairs(res.lines) do
+    if line:match("^testing sheets: ") then
+      return "not written: " .. line
+    end
+  end
+  return "not written: " .. res.summary
+end
+
+---The sheet of an AI's answer as testing.nvim's `accept` reads it: the last ```lua block (any case), or nil.
+---@param text string
+---@return string|nil
+function M.lua_block(text)
+  local all = blocks(text, "lua")
+  return all[#all]
+end
+
+---The bug task an AI proposed: the last ```task block of its answer (`title:`, `summary:`, any case, the summary may
+---go on over several lines), or nil. The template of the hand-over (`<one line>`) is no proposal.
 ---@param text string
 ---@return { title: string, summary: string }|nil
 function M.task_block(text)
-  local body = text:gsub("\r\n?", "\n"):match("```+task[ \t]*\n(.-)\n```")
+  local all = blocks(text, "task")
+  local body = all[#all]
   if not body then
     return nil
   end
-  local title = body:match("^title:%s*([^\n]-)%s*\n")
-    or body:match("\ntitle:%s*([^\n]-)%s*\n")
-    or body:match("^title:%s*([^\n]-)%s*$")
-    or body:match("\ntitle:%s*([^\n]-)%s*$")
-  local summary = body:match("summary:%s*(.-)%s*$")
-  if not title or title == "" then
+  local fields, key = {}, nil
+  for line in (body .. "\n"):gmatch("(.-)\n") do
+    local k, v = line:match("^%s*(%a+)%s*:%s*(.-)%s*$")
+    if k and (k:lower() == "title" or k:lower() == "summary") then
+      key = k:lower()
+      fields[key] = v
+    elseif key == "summary" and vim.trim(line) ~= "" then
+      fields.summary = fields.summary .. " " .. vim.trim(line)
+    end
+  end
+  local title = fields.title
+  if not title or title == "" or title:match("^<.*>$") then
     return nil
   end
-  return { title = title, summary = summary and summary:gsub("%s*\n%s*", " ") or "" }
+  local summary = fields.summary or ""
+  return { title = title, summary = summary:match("^<.*>$") and "" or summary }
 end
 
 ---Create the bug task an AI proposed for the red sheet of `id`: in `id`'s area, `kind: bug`, the summary and a body
@@ -305,8 +377,6 @@ function M.create_bug(proposal, id, root)
     kind = "bug",
     summary = proposal.summary ~= "" and proposal.summary or nil,
     body = table.concat({
-      proposal.summary,
-      "",
       "## Kontext",
       "",
       ("Vorgeschlagen von einer KI aus dem roten Testblatt der Live-Check-Task `%s` (`:Tasks sheet-ai explain`)."):format(

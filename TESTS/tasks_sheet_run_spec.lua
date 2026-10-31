@@ -292,7 +292,7 @@ return function(H)
       sr.ai_argv("accept", "a/b", "/t/testing.lua", { vault = vault, from = "/x.md" }),
       7
     ),
-    { "sheets", "accept", "--task", "a/b", "--from", "/x.md" },
+    { "sheets", "accept", "--task", "a/b", "--from", "/x.md", "--vault", vault },
     "accept: testing sheets accept"
   )
   eq(
@@ -303,6 +303,44 @@ return function(H)
     "the proposed bug task"
   )
   ok(sr.task_block("no block") == nil, "no block")
+  -- review of a269f86: answers as models write them
+  eq(
+    sr.task_block("```Task\nTitle: Keys lost\nSummary: one\n  two\n```"),
+    { title = "Keys lost", summary = "one two" },
+    "any case, a summary over two lines"
+  )
+  eq(
+    sr.task_block("- proposal:\n  ```task\n  summary: s first\n  title: T\n  ```"),
+    { title = "T", summary = "s first" },
+    "indented in a list, summary before title"
+  )
+  eq(
+    sr.task_block("```task\ntitle: Fix summary: wrong count\nsummary: off by one\n```"),
+    { title = "Fix summary: wrong count", summary = "off by one" },
+    "a title that says summary:"
+  )
+  eq(
+    sr.task_block(
+      "The template:\n```task\ntitle: <one line>\nsummary: <one or two sentences>\n```\nMine:\n```task\ntitle: Real\nsummary: r\n```"
+    ),
+    { title = "Real", summary = "r" },
+    "the last block, not the template"
+  )
+  ok(sr.task_block("```task\ntitle: <one line>\n```") == nil, "the template alone is no proposal")
+  eq(
+    sr.lua_block("echo:\n```lua\nreturn 'skel'\n```\nfull:\n```Lua\r\nreturn 'full'\r\n```"),
+    "return 'full'",
+    "the last lua block, any case"
+  )
+  eq(
+    sr.lua_block("````lua\nreturn [[\n```\n]]\n````"),
+    "return [[\n```\n]]",
+    "a ``` line inside a longer fence"
+  )
+  local sf = sr.sheet_file("return [[\n```\n]]")
+  local sf_text = H.read(sf)
+  os.remove(sf)
+  eq(sf_text, "````lua\nreturn [[\n```\n]]\n````\n", "the file for accept: a fence no line closes")
   ok(sr.task_block("```task\nsummary: s\n```") == nil, "a block without a title")
 
   -- the CLI verb, with a stand-in testing.lua that prints a document
@@ -336,6 +374,17 @@ return function(H)
   local bug_text = H.read(root .. "/lib.nvim/ROADMAP/tasks/slots-bar-flickers.md")
   has(bug_text, "kind: bug", "as a bug")
   has(bug_text, "Live-Check-Task `lib.nvim/live`", "naming the live check it came from")
+  local _, n_summary = bug_text:gsub("The bar redraws twice%.", "")
+  eq(
+    n_summary,
+    1,
+    "the summary once, in the frontmatter (mutate.new writes it), not again in the body"
+  )
+  eq(
+    run({ "sheet-ai", "draft", "../x", "--testing-cli=" .. doc_stand_in }).code,
+    2,
+    "an area that is a path step is no task id"
+  )
   local dry_accept = run({
     "sheet-ai",
     "accept",
@@ -355,7 +404,7 @@ return function(H)
   })
   has(
     yes_accept.out,
-    "sheets accept --task lib.nvim/live --from " .. answer_file,
+    "sheets accept --task lib.nvim/live --from ",
     "with --yes: testing sheets accept"
   )
   eq(run({ "sheet-ai", "bug", "lib.nvim/live" }).code, 2, "bug needs --from")
@@ -389,6 +438,20 @@ return function(H)
     "and what to do next"
   )
   has(vim.fn.getreg('"'), "# Draft a test sheet", "and the document in a register")
+  eq(vim.bo.bufhidden, "hide", "hidden, not wiped, when its window goes")
+  local first_buf = vim.api.nvim_get_current_buf()
+  quiet(function()
+    cmd.task_sheet_ai(
+      { args = { step = "draft", id = "lib.nvim/live" }, flags = {}, rest = {} },
+      fake(0, "# Draft a test sheet\n\n```lua\nreturn { id = 'skeleton' }\n```\n")
+    )
+  end)
+  eq(
+    vim.api.nvim_get_current_buf(),
+    first_buf,
+    "a second draft of the same task takes the same buffer"
+  )
+  eq(vim.api.nvim_buf_get_name(0), "tasks://sheet-ai/draft/lib.nvim/live", "keeping its name")
   vim.api.nvim_buf_set_lines(0, -1, -1, false, { "```lua", "return { id = 'x' }", "```" })
   seen = nil
   quiet(function()

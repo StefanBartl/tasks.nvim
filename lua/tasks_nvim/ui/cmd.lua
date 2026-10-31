@@ -1583,7 +1583,7 @@ function M.task_sheet_run(ctx, system)
     notify.error("sheet-run: name a task (area/slug), or run it from a task's buffer")
     return
   end
-  if not id:match("^[^/]+/[^/]+$") then
+  if not id:match("^[%w_][^/]*/[^/]+$") then
     notify.error("sheet-run: " .. id .. " is no task id (area/slug)")
     return
   end
@@ -1626,12 +1626,31 @@ end
 ---@param id string
 ---@param doc string
 local function show_handover(step, id, doc)
-  vim.cmd("botright new")
-  local buf = vim.api.nvim_get_current_buf()
-  vim.bo[buf].buftype = "nofile"
-  vim.bo[buf].bufhidden = "wipe"
-  vim.bo[buf].filetype = "markdown"
-  pcall(vim.api.nvim_buf_set_name, buf, ("tasks://sheet-ai/%s/%s"):format(step, id))
+  local name = ("tasks://sheet-ai/%s/%s"):format(step, id)
+  -- a second hand-over of the same step and task takes the buffer of the first (a name is unique)
+  local buf = -1
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_get_name(b) == name then
+      buf = b
+    end
+  end
+  if buf > 0 and vim.api.nvim_buf_is_valid(buf) then
+    local win = vim.fn.bufwinid(buf)
+    if win ~= -1 then
+      vim.api.nvim_set_current_win(win)
+    else
+      vim.cmd("botright sbuffer " .. buf)
+    end
+  else
+    vim.cmd("botright new")
+    buf = vim.api.nvim_get_current_buf()
+    vim.bo[buf].buftype = "nofile"
+    -- hidden, not wiped: a pasted answer survives leaving the window
+    vim.bo[buf].bufhidden = "hide"
+    vim.bo[buf].swapfile = false
+    vim.bo[buf].filetype = "markdown"
+    vim.api.nvim_buf_set_name(buf, name)
+  end
   local lines = vim.split(doc:gsub("\n$", ""), "\n", { plain = true })
   vim.list_extend(lines, {
     "",
@@ -1671,7 +1690,7 @@ function M.task_sheet_ai(ctx, system, confirm_fn)
     return
   end
   local id = ai_task_id(ctx)
-  if not id or not id:match("^[^/]+/[^/]+$") then
+  if not id or not id:match("^[%w_][^/]*/[^/]+$") then
     notify.error(
       "sheet-ai: name a task (area/slug), or run it from a task's or a hand-over's buffer"
     )
@@ -1730,26 +1749,23 @@ function M.task_sheet_ai(ctx, system, confirm_fn)
     )
     return
   end
-  local lua = answer:match("```+lua[ \t]*\r?\n(.-)\r?\n```")
+  local lua = sr.lua_block(answer)
   if not lua then
     notify.error("sheet-ai accept: no ```lua block in the answer")
     return
   end
-  local preview = table.concat(vim.list_slice(vim.split(lua, "\n", { plain = true }), 1, 8), "\n")
-  ask("Write this sheet for " .. id .. "?\n" .. preview, "write", function(yes)
+  -- the whole sheet is shown: what is confirmed is what is written
+  ask("Write this sheet for " .. id .. "?\n" .. lua, "write", function(yes)
     if not yes then
       return
     end
-    local tmp = vim.fn.tempname() .. ".md"
-    local f = assert(io.open(tmp, "wb"))
-    f:write("```lua\n" .. lua .. "\n```\n")
-    f:close()
+    local tmp = sr.sheet_file(lua)
     sr.ai("accept", id, { vault = root, cli = cfg.testing_cli, from = tmp }, function(res)
       os.remove(tmp)
       if res.code == 0 then
         notify.info(id .. ": " .. (res.lines[1] or "written"))
       else
-        notify.error(id .. ": " .. res.summary)
+        notify.error(id .. ": " .. sr.accept_reason(res))
       end
     end, system)
   end)
